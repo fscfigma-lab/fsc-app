@@ -744,6 +744,9 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
         <div id="backup-btn" class="nb-wrap" onclick="showBackupModal()" title="Резервные копии" style="display:none;cursor:pointer">
           <span class="nb-icon">🗄️</span>
         </div>
+        <div id="settings-btn" class="nb-wrap" onclick="showSettingsModal()" title="Настройки" style="display:none;cursor:pointer">
+          <span class="nb-icon">⚙️</span>
+        </div>
       </div>
     </div>
   </aside>
@@ -1084,6 +1087,17 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
       <button class="btn btn-d" id="s-del-btn" style="display:none;margin-right:auto" onclick="deleteStageFromModal()">Удалить</button>
       <button class="btn btn-s" onclick="closeM('m-stage')">Отмена</button>
       <button class="btn btn-p" onclick="saveStageModal()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: SETTINGS -->
+<div class="moverlay" id="m-settings">
+  <div class="modal" style="max-width:480px">
+    <div class="mtitle">⚙️ Настройки</div>
+    <div id="m-settings-body"><div style="color:var(--t3)">Загрузка…</div></div>
+    <div class="mfoot">
+      <button class="btn btn-s" onclick="closeM('m-settings')">Закрыть</button>
     </div>
   </div>
 </div>
@@ -1757,6 +1771,9 @@ function applyPermissions(){
   // Кнопка бэкапов — только admin
   const bkBtn=$('backup-btn');
   if(bkBtn)bkBtn.style.display=isAdmin()?'flex':'none';
+  // Кнопка настроек — только admin
+  const stBtn=$('settings-btn');
+  if(stBtn)stBtn.style.display=isAdmin()?'flex':'none';
 }
 
 /* ═══════════════════════════════════════
@@ -2742,6 +2759,7 @@ function saveTask(){
   const name=$('t-name').value.trim();if(!name){toast('Введи название','err');return}
   const t={id:tedit||uid(),name,pid:$('t-proj').value||null,dead:$('t-dead').value||null,
     who:$('t-who').value||null,prio:$('t-prio').value,done:false};
+  const isNew=!tedit;
   if(tedit){const idx=D.tasks.findIndex(x=>x.id===tedit);if(idx>=0){t.done=D.tasks[idx].done;D.tasks[idx]=t}}
   else D.tasks.push(t);
   const proj=t.pid?D.projects.find(p=>p.id===t.pid):null;
@@ -2749,6 +2767,8 @@ function saveTask(){
                `📌 Новая задача: «${t.name}»${proj?' → '+proj.name:''}${t.who?' · '+t.who:''}`,t.pid);
   save();closeM('m-task');render(curPage);
   toast(tedit?'✏️ Задача обновлена':'✅ Задача создана','ok');
+  // Push при создании новой задачи с исполнителем
+  if(isNew&&t.who) pushTaskAssigned(t);
 }
 
 function deleteTask(){
@@ -3063,33 +3083,195 @@ document.addEventListener('DOMContentLoaded',async()=>{
   try{
     const {data,error}=await sb.from('app_data').select('data').eq('id','main').maybeSingle();
     if(!error&&data&&data.data&&data.data.projects){
-      // Cloud has data — use it
       D=data.data;
       if(!D.stages)D.stages=[];
       if(!D.log)D.log=[];
-      // currentUser — только из локального хранилища этого устройства
       const localUser=localStorage.getItem('fsc4_user');
       D.currentUser=localUser?JSON.parse(localUser):null;
       localStorage.setItem('fsc4',JSON.stringify(D));
     } else {
-      // Cloud is empty — push local data to Supabase (без currentUser)
       const cloudD=Object.assign({},D); delete cloudD.currentUser;
       await sb.from('app_data').upsert({id:'main',data:cloudD,updated_at:new Date().toISOString()});
     }
   }catch(e){console.warn('Offline, using local data');}
 
-  // Hide loading overlay
+  // 1. Persistent Storage — просим браузер никогда не удалять данные
+  requestPersistentStorage();
+
+  // 2. Запрашиваем разрешение на уведомления
+  if('Notification' in window && Notification.permission==='default'){
+    setTimeout(()=>Notification.requestPermission(),3000);
+  }
+
   const lo=$('supa-loading');if(lo)lo.style.display='none';
 
-  // Show login or app
   if(!D.currentUser){
     showLoginScreen();
   } else {
-    applyUser();   // also shows mob-ubar on mobile
+    applyUser();
     rDash();
     checkNotifs();
+    // Проверяем просроченные задачи и шлём push
+    setTimeout(()=>checkOverduePush(),5000);
   }
 });
+
+/* ═══════════════════════════════════════
+   PERSISTENT STORAGE
+═══════════════════════════════════════ */
+async function requestPersistentStorage(){
+  if(!navigator.storage?.persist)return;
+  const already=await navigator.storage.persisted();
+  if(already)return; // уже защищено
+  const granted=await navigator.storage.persist();
+  if(granted){
+    console.log('✅ Persistent storage granted — данные защищены от удаления браузером');
+  }
+}
+
+async function getStorageInfo(){
+  if(!navigator.storage?.estimate)return null;
+  const {usage,quota}=await navigator.storage.estimate();
+  const persisted=navigator.storage.persisted?await navigator.storage.persisted():false;
+  return{
+    used:Math.round(usage/1024/1024*10)/10,
+    total:Math.round(quota/1024/1024),
+    persisted
+  };
+}
+
+/* ═══════════════════════════════════════
+   PUSH NOTIFICATIONS (ntfy.sh)
+═══════════════════════════════════════ */
+async function sendPush(title, body, tags='fsc'){
+  const topic=D.ntfyTopic;
+  if(!topic)return;
+  try{
+    await fetch(`https://ntfy.sh/${topic}`,{
+      method:'POST',
+      headers:{
+        'Title': title,
+        'Tags': tags,
+        'Priority': tags.includes('warning')||tags.includes('skull')?'high':'default',
+        'Content-Type':'text/plain; charset=utf-8'
+      },
+      body
+    });
+  }catch(e){console.warn('Push failed:',e);}
+}
+
+// Проверка просроченных задач — шлём push при открытии приложения
+let _lastOverduePush=0;
+async function checkOverduePush(){
+  if(!D.ntfyTopic)return;
+  const now=Date.now();
+  // Не чаще раза в час
+  const lastCheck=parseInt(localStorage.getItem('fsc4_last_push')||'0');
+  if(now-lastCheck<3600000)return;
+  localStorage.setItem('fsc4_last_push',String(now));
+
+  const today=TODAY();
+  const overdue=D.tasks.filter(t=>!t.done&&t.dead&&t.dead<today);
+  const todayTasks=D.tasks.filter(t=>!t.done&&t.dead===today);
+
+  if(overdue.length>0){
+    await sendPush(
+      `⚠️ ${overdue.length} просроченных задач`,
+      overdue.slice(0,3).map(t=>`• ${t.title||t.name} (${t.who||'—'})`).join('\n')+(overdue.length>3?`\n...и ещё ${overdue.length-3}`:''),
+      'warning,construction'
+    );
+  }
+  if(todayTasks.length>0){
+    await sendPush(
+      `📅 Сегодня дедлайн: ${todayTasks.length} задач`,
+      todayTasks.slice(0,3).map(t=>`• ${t.title||t.name} (${t.who||'—'})`).join('\n'),
+      'calendar,construction'
+    );
+  }
+}
+
+// Уведомление при назначении задачи
+async function pushTaskAssigned(task){
+  if(!D.ntfyTopic)return;
+  if(!task.who)return;
+  await sendPush(
+    `📌 Новая задача: ${task.title||task.name}`,
+    `Исполнитель: ${task.who}\nДедлайн: ${fdate(task.dead)||'не указан'}\nПроект: ${D.projects.find(p=>p.id===task.pid)?.name||'—'}`,
+    'memo,construction'
+  );
+}
+
+// Уведомление о выполненном этапе
+async function pushStageCompleted(stage){
+  if(!D.ntfyTopic)return;
+  const proj=D.projects.find(p=>p.id===stage.pid);
+  await sendPush(
+    `✅ Этап выполнен: ${stage.name}`,
+    `Проект: ${proj?.name||'—'}\nЭтап: ${stage.icon||''} ${stage.name}`,
+    'white_check_mark,construction'
+  );}
+
+/* ═══════════════════════════════════════
+   SETTINGS MODAL
+═══════════════════════════════════════ */
+async function showSettingsModal(){
+  const storage=await getStorageInfo();
+  const persisted=storage?.persisted;
+  const topic=D.ntfyTopic||'';
+
+  $('m-settings-body').innerHTML=`
+    <div class="sec-title">💾 Защита данных</div>
+    <div class="bk-row">
+      <div>
+        <div class="bk-time">Постоянное хранилище</div>
+        <div class="bk-meta">${storage?`${storage.used} МБ из ${storage.total} МБ`:'Недоступно'}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:12px;padding:3px 10px;border-radius:8px;${persisted?'background:var(--grn-bg);color:var(--grn)':'background:var(--yel-bg);color:var(--yel)'}">
+          ${persisted?'✅ Защищено':'⚠️ Не защищено'}
+        </span>
+        ${!persisted?`<button class="bk-restore" onclick="requestPersistentStorage().then(()=>showSettingsModal())">Запросить</button>`:''}
+      </div>
+    </div>
+
+    <div class="sec-title" style="margin-top:16px">🔔 Push-уведомления (ntfy.sh)</div>
+    <div style="font-size:12px;color:var(--t2);margin-bottom:10px;line-height:1.5">
+      Бесплатные push-уведомления на телефон — даже когда приложение закрыто.<br>
+      Команда устанавливает <strong>приложение ntfy</strong> и подписывается на ваш канал.
+    </div>
+    <div class="fg">
+      <label class="fl">Название канала (придумайте уникальное)</label>
+      <input type="text" class="fi" id="ntfy-topic" value="${topic}" placeholder="fsc-tasks-2025-abc123"
+        style="font-family:monospace;font-size:13px">
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <button class="btn btn-p" style="font-size:12px" onclick="saveNtfyTopic()">Сохранить канал</button>
+      ${topic?`<button class="btn btn-s" style="font-size:12px" onclick="testPush()">🔔 Тест</button>
+      <a href="https://ntfy.sh/${topic}" target="_blank" class="btn btn-s" style="font-size:12px;text-decoration:none">Открыть канал ↗</a>`:''}
+    </div>
+    ${topic?`<div style="margin-top:12px;padding:10px 12px;background:var(--s2);border-radius:8px;font-size:11px;color:var(--t2);line-height:1.6">
+      <strong>Как подключить команду:</strong><br>
+      1. Установить приложение <strong>ntfy</strong> (iOS App Store / Google Play)<br>
+      2. Нажать + и подписаться на канал: <code style="background:var(--s3);padding:1px 5px;border-radius:3px">${topic}</code><br>
+      3. Готово — уведомления будут приходить автоматически
+    </div>`:''}`;
+
+  openM('m-settings');
+}
+
+function saveNtfyTopic(){
+  const val=$('ntfy-topic').value.trim().replace(/[^a-zA-Z0-9_-]/g,'');
+  if(!val){toast('Введи название канала','err');return;}
+  D.ntfyTopic=val;
+  save();
+  toast('✅ Канал сохранён','ok');
+  showSettingsModal();
+}
+
+async function testPush(){
+  await sendPush('🔔 Тест FSC уведомлений','Если видишь это — push работает! ✅','white_check_mark');
+  toast('Push отправлен — проверь телефон','ok');
+}
 
 /* ═══════════════════════════════════════
    VOICE ASSISTANT

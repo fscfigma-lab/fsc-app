@@ -1987,64 +1987,94 @@ function toggleProjGantt(pid){
 /* ── MINI GANTT PER PROJECT ── */
 function projectGanttHTML(pid){
   const p=D.projects.find(x=>x.id===pid);
-  const tasks=D.tasks.filter(t=>t.pid===pid&&t.dead).sort((a,b)=>a.dead.localeCompare(b.dead));
-  if(!tasks.length)return'<div style="font-size:12px;color:var(--t3);padding:8px 0">Нет задач со сроками — добавь дедлайны для отображения на графике</div>';
-
   const today=TODAY();
-  const allDates=tasks.map(t=>t.dead);
+
+  // Собираем этапы (s.deadline) и задачи с дедлайном (t.dead)
+  const stages=D.stages.filter(s=>s.pid===pid&&s.deadline).sort((a,b)=>a.deadline.localeCompare(b.deadline));
+  const tasks=D.tasks.filter(t=>t.pid===pid&&t.dead).sort((a,b)=>a.dead.localeCompare(b.dead));
+
+  if(!stages.length&&!tasks.length)
+    return'<div style="font-size:12px;color:var(--t3);padding:8px 0">Нет этапов или задач со сроками</div>';
+
+  // Диапазон дат
+  const allDates=[...stages.map(s=>s.deadline),...tasks.map(t=>t.dead)];
   if(p&&p.start_date)allDates.push(p.start_date);
   if(p&&p.deadline)allDates.push(p.deadline);
+  allDates.push(today);
 
   const rawMin=allDates.reduce((a,b)=>a<b?a:b);
   const rawMax=allDates.reduce((a,b)=>a>b?a:b);
-  const gStart=addDays(rawMin<today?rawMin:today,-7);
-  const gEnd=addDays(rawMax>today?rawMax:today,7);
+  const gStart=addDays(rawMin,-5);
+  const gEnd=addDays(rawMax,5);
   const totalDays=Math.max(1,Math.round((pd(gEnd)-pd(gStart))/86400000));
   const todayOff=Math.round((pd(today)-pd(gStart))/86400000);
   const todayPct=Math.max(0,Math.min(100,(todayOff/totalDays)*100));
 
-  // Axis labels: every ~14 days
-  const step=Math.max(7,Math.ceil(totalDays/6));
+  // Ось дат
+  const step=Math.max(5,Math.ceil(totalDays/5));
   let axisHTML='';
   for(let d=0;d<=totalDays;d+=step){
-    const lbl=fdate(addDays(gStart,d),true);
-    axisHTML+=`<div class="pg-axis-lbl" style="left:${(d/totalDays)*100}%">${lbl}</div>`;
+    const pct=(d/totalDays)*100;
+    axisHTML+=`<div class="pg-axis-lbl" style="left:${pct.toFixed(1)}%">${fdate(addDays(gStart,d),true)}</div>`;
   }
 
-  // Sort by priority then deadline
-  const byPrio={high:[],medium:[],low:[]};
-  tasks.forEach(t=>{const k=t.prio||'medium';(byPrio[k]=byPrio[k]||[]).push(t);});
-  const prioLabel={high:'🔴 Высокий приоритет',medium:'🟡 Средний',low:'🟢 Низкий'};
-  const prioKeys=['high','medium','low'].filter(k=>byPrio[k]&&byPrio[k].length);
+  // Функция строки
+  function pgRow(name, dateStr, done, ds, color){
+    const off=Math.round((pd(dateStr)-pd(gStart))/86400000);
+    const barW=Math.max(2,Math.ceil(totalDays*0.04));
+    const barEnd=(off/totalDays)*100;
+    const barStart=Math.max(0,((off-barW)/totalDays)*100);
+    const w=Math.max(0.5,barEnd-barStart);
+    const lbl=name.length>18?name.slice(0,16)+'…':name;
+    return`<div class="pg-row">
+      <div class="pg-lbl ${done?'done':''}" title="${name}">${lbl}</div>
+      <div class="pg-track">
+        <div class="pg-bar" style="left:${barStart.toFixed(1)}%;width:${w.toFixed(1)}%;background:${color};opacity:${done?0.4:1}" title="${name}: ${fdate(dateStr,true)}"></div>
+        <div class="pg-now" style="left:${todayPct.toFixed(1)}%"></div>
+      </div>
+    </div>`;
+  }
 
-  const rowsHTML=prioKeys.map(prio=>{
-    const sect=byPrio[prio].map(t=>{
-      const ds=dlStatus(t.dead,t.done);
-      const deadOff=Math.round((pd(t.dead)-pd(gStart))/86400000);
-      // Bar width 3-7 days, ending at deadline
-      const barW=Math.max(3,Math.min(7,Math.ceil(totalDays*0.05)));
-      const barEnd=deadOff/totalDays*100;
-      const barStart=Math.max(0,(deadOff-barW)/totalDays*100);
-      const barWidth=barEnd-barStart;
-      const barColor=t.done?'var(--t3)':ds==='overdue'?'var(--red)':ds==='today'||ds==='soon'?'var(--yel)':'var(--grn)';
-      const opacity=t.done?0.4:1;
-      return`<div class="pg-row">
-        <div class="pg-lbl ${t.done?'done':''}" onclick="openTaskDetail&&openTaskDetail('${t.id}')" title="${t.title}">${t.title.length>18?t.title.slice(0,16)+'…':t.title}</div>
-        <div class="pg-track">
-          <div class="pg-bar" style="left:${barStart.toFixed(1)}%;width:${Math.max(.5,barWidth).toFixed(1)}%;background:${barColor};opacity:${opacity}" title="${t.title}: ${fdate(t.dead,true)}"></div>
-          <div class="pg-now" style="left:${todayPct.toFixed(1)}%"></div>
-        </div>
-      </div>`;
+  function dsColor(ds,done){
+    if(done)return'var(--t3)';
+    if(ds==='overdue')return'var(--red)';
+    if(ds==='today'||ds==='soon')return'var(--yel)';
+    return'var(--grn)';
+  }
+
+  let html='';
+
+  // Секция этапов
+  if(stages.length){
+    html+=`<div class="pg-section">📋 Этапы производства</div>`;
+    html+=stages.map(s=>{
+      const ds=dlStatus(s.deadline,s.done);
+      return pgRow((s.icon?s.icon+' ':'')+s.name,s.deadline,s.done,ds,dsColor(ds,s.done));
     }).join('');
-    return`<div class="pg-section">${prioLabel[prio]}</div>${sect}`;
-  }).join('');
+  }
+
+  // Секция задач (только со сроками)
+  if(tasks.length){
+    // Группируем по приоритету
+    const byPrio={high:[],medium:[],low:[]};
+    tasks.forEach(t=>{(byPrio[t.prio||'medium']).push(t);});
+    const prioLabel={high:'🔴 Высокий приоритет',medium:'🟡 Средний приоритет',low:'🟢 Низкий приоритет'};
+    ['high','medium','low'].forEach(prio=>{
+      if(!byPrio[prio].length)return;
+      html+=`<div class="pg-section">${prioLabel[prio]}</div>`;
+      html+=byPrio[prio].map(t=>{
+        const ds=dlStatus(t.dead,t.done);
+        return pgRow(t.title||t.name,t.dead,t.done,ds,dsColor(ds,t.done));
+      }).join('');
+    });
+  }
 
   return`<div class="pg-wrap">
     <div class="pg-header">
-      <div class="pg-lcol">Задача</div>
+      <div class="pg-lcol">Этап / Задача</div>
       <div style="flex:1;position:relative;height:18px">${axisHTML}</div>
     </div>
-    ${rowsHTML}
+    ${html}
   </div>`;
 }
 

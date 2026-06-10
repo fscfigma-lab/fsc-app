@@ -276,6 +276,33 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 .tcard-role{font-size:10px;color:var(--t3);margin-bottom:10px;letter-spacing:.4px;text-transform:uppercase}
 
 /* ── FILTER BAR ── */
+/* ── PROJECT MINI GANTT ── */
+.pg-wrap{overflow-x:auto;margin:0 -2px;padding:0 2px;-webkit-overflow-scrolling:touch}
+.pg-header{display:flex;margin-bottom:4px}
+.pg-lcol{width:130px;flex-shrink:0;font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;padding-top:2px}
+.pg-axis{flex:1;display:flex;position:relative;height:18px}
+.pg-axis-lbl{position:absolute;font-size:9px;color:var(--t3);transform:translateX(-50%);white-space:nowrap}
+.pg-row{display:flex;align-items:center;margin-bottom:3px;min-height:24px}
+.pg-lbl{width:130px;flex-shrink:0;font-size:11px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px;cursor:pointer}
+.pg-lbl.done{color:var(--t3);text-decoration:line-through}
+.pg-track{flex:1;position:relative;height:20px;background:var(--s2);border-radius:3px}
+.pg-bar{position:absolute;height:14px;top:3px;border-radius:3px;min-width:4px;transition:opacity .2s}
+.pg-now{position:absolute;top:0;bottom:0;width:1.5px;background:var(--red);opacity:.7;z-index:2}
+.pg-prio-high .pg-bar{background:var(--red)}
+.pg-prio-medium .pg-bar{background:var(--yel)}
+.pg-prio-low .pg-bar{background:var(--grn)}
+.pg-done .pg-bar{background:var(--t3);opacity:.5}
+.pg-section{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;padding:6px 0 3px;font-weight:600}
+.pg-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--t2);font-size:11px;padding:6px 0;user-select:none}
+.pg-toggle:hover{color:var(--t1)}
+/* ── BACKUP ── */
+.bk-row{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;
+  background:var(--s2);border-radius:8px;margin-bottom:6px;gap:10px}
+.bk-time{font-size:11px;color:var(--t2)}
+.bk-meta{font-size:10px;color:var(--t3)}
+.bk-restore{background:none;border:1px solid var(--b1);color:var(--t3);border-radius:8px;
+  padding:3px 10px;font-size:10px;cursor:pointer;font-family:inherit;transition:all .15s}
+.bk-restore:hover{border-color:var(--t1);color:var(--t1)}
 .fb{display:flex;gap:7px;margin-bottom:16px;flex-wrap:wrap}
 .fc{padding:5px 14px;border-radius:24px;font-size:10px;font-weight:500;cursor:pointer;
   border:1.5px solid var(--b1);color:var(--t2);background:var(--s1);transition:all .15s;
@@ -678,6 +705,9 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
           <span class="nb-icon">🔔</span>
           <span class="nb-dot" id="notif-dot"></span>
         </div>
+        <div id="backup-btn" class="nb-wrap" onclick="showBackupModal()" title="Резервные копии" style="display:none;cursor:pointer">
+          <span class="nb-icon">🗄️</span>
+        </div>
       </div>
     </div>
   </aside>
@@ -985,6 +1015,17 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   </div>
 </div>
 
+<!-- MODAL: BACKUP -->
+<div class="moverlay" id="m-backup">
+  <div class="modal" style="max-width:480px">
+    <div class="mtitle">🗄️ Резервные копии</div>
+    <div id="m-backup-body"><div style="color:var(--t3)">Загрузка…</div></div>
+    <div class="mfoot">
+      <button class="btn btn-s" onclick="closeM('m-backup')">Закрыть</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1223,15 +1264,117 @@ const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
 ═══════════════════════════════════════ */
 function loadLocal(){try{const s=localStorage.getItem('fsc4');if(s)return JSON.parse(s)}catch(e){}
   return JSON.parse(JSON.stringify(DEFAULTS))}
+let _saveCount=0;
 function save(){
-  // currentUser — только локально на устройстве, не в облако
   localStorage.setItem('fsc4_user', D.currentUser ? JSON.stringify(D.currentUser) : '');
   localStorage.setItem('fsc4', JSON.stringify(D));
-  // В Supabase — всё кроме currentUser (он у каждого свой)
   const cloudD = Object.assign({}, D);
   delete cloudD.currentUser;
   sb.from('app_data').upsert({id:'main',data:cloudD,updated_at:new Date().toISOString()})
     .then(({error})=>{if(error)console.error('Supabase save error:',error)});
+  // Авто-бэкап каждые 20 сохранений
+  _saveCount++;
+  if(_saveCount%20===0)autoBackup();
+}
+
+/* ═══════════════════════════════════════
+   BACKUP SYSTEM
+═══════════════════════════════════════ */
+function autoBackup(){
+  const cloudD=Object.assign({},D); delete cloudD.currentUser;
+  const ts=new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+  const bkId='bk_'+ts;
+  sb.from('app_data').upsert({id:bkId,data:cloudD,updated_at:new Date().toISOString()})
+    .then(({error})=>{
+      if(!error){
+        console.log('✅ Авто-бэкап создан:',bkId);
+        cleanOldBackups();
+      }
+    });
+}
+
+function cleanOldBackups(){
+  // Оставляем только последние 10 бэкапов
+  sb.from('app_data').select('id,updated_at').like('id','bk_%').order('updated_at',{ascending:false})
+    .then(({data})=>{
+      if(data&&data.length>10){
+        const toDelete=data.slice(10).map(x=>x.id);
+        toDelete.forEach(id=>sb.from('app_data').delete().eq('id',id).then(()=>{}));
+      }
+    });
+}
+
+function exportJSON(){
+  const cloudD=Object.assign({},D); delete cloudD.currentUser;
+  const blob=new Blob([JSON.stringify(cloudD,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  const ts=new Date().toLocaleDateString('ru-RU').replace(/\./g,'-');
+  a.download=`FSC_backup_${ts}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('📦 Резервная копия скачана','ok');
+}
+
+function importJSON(){
+  const input=document.createElement('input');
+  input.type='file';input.accept='.json';
+  input.onchange=async e=>{
+    const file=e.target.files[0];if(!file)return;
+    const text=await file.text();
+    try{
+      const imported=JSON.parse(text);
+      if(!imported.projects||!imported.team)throw new Error('Неверный формат');
+      if(!confirm(`Восстановить данные из файла ${file.name}?\n\nТекущие данные будут заменены.`))return;
+      const user=D.currentUser;
+      Object.assign(D,imported);
+      D.currentUser=user;
+      save();render(curPage);
+      toast('✅ Данные восстановлены из файла','ok');
+    }catch(err){
+      toast('❌ Ошибка: '+err.message,'err');
+    }
+  };
+  input.click();
+}
+
+async function listBackups(){
+  const {data,error}=await sb.from('app_data').select('id,updated_at').like('id','bk_%').order('updated_at',{ascending:false}).limit(10);
+  return error?[]:data||[];
+}
+
+async function restoreFromBackup(bkId){
+  if(!confirm(`Восстановить данные из копии?\n\nТекущие данные будут заменены.`))return;
+  const {data,error}=await sb.from('app_data').select('data').eq('id',bkId).maybeSingle();
+  if(error||!data){toast('❌ Не удалось загрузить копию','err');return;}
+  const user=D.currentUser;
+  Object.assign(D,data.data);
+  D.currentUser=user;
+  save();render(curPage);
+  toast('✅ Данные восстановлены','ok');
+}
+
+async function showBackupModal(){
+  const backups=await listBackups();
+  const rows=backups.length?backups.map(b=>{
+    const dt=new Date(b.updated_at);
+    const dtStr=dt.toLocaleDateString('ru-RU')+' '+dt.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+    return`<div class="bk-row">
+      <div><div class="bk-time">${dtStr}</div><div class="bk-meta">Авто-бэкап</div></div>
+      <button class="bk-restore" onclick="restoreFromBackup('${b.id}')">Восстановить</button>
+    </div>`;
+  }).join(''):'<div style="color:var(--t3);font-size:13px;padding:8px 0">Авто-бэкапы создаются каждые 20 сохранений</div>';
+
+  $('m-backup-body').innerHTML=`
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="btn btn-p" style="font-size:12px" onclick="exportJSON()">📥 Скачать JSON</button>
+      <button class="btn btn-s" style="font-size:12px" onclick="importJSON()">📤 Загрузить JSON</button>
+      <button class="btn btn-s" style="font-size:12px" onclick="autoBackup();toast('Бэкап создан','ok')">🔄 Создать сейчас</button>
+    </div>
+    <div class="sec-title">Авто-бэкапы в облаке</div>
+    ${rows}`;
+  openM('m-backup');
 }
 let D=loadLocal();
 if(!D.stages)D.stages=[];
@@ -1534,12 +1677,13 @@ function render(page){
 }
 
 function applyPermissions(){
-  // Кнопка "+ Проект" — admin + management
   const pAct=$('proj-ph-actions');
   if(pAct)pAct.style.display=canCreateProject()?'':'none';
-  // Кнопка "+ Сотрудник" — только admin
   const teamBtn=document.querySelector('#p-team .ph-actions');
   if(teamBtn)teamBtn.style.display=canManageTeam()?'':'none';
+  // Кнопка бэкапов — только admin
+  const bkBtn=$('backup-btn');
+  if(bkBtn)bkBtn.style.display=isAdmin()?'flex':'none';
 }
 
 /* ═══════════════════════════════════════
@@ -1819,6 +1963,10 @@ function showProjectDetail(pid){
         <div class="pb"><div class="pbf ${r==='critical'?'r':p.pct>=100?'g':''}" style="width:${p.pct||0}%"></div></div>
       </div>
     </div>
+    <div class="pg-toggle" onclick="toggleProjGantt('${pid}')">
+      <span id="pg-arrow-${pid}">▶</span> <span>График задач по критичности</span>
+    </div>
+    <div id="pg-chart-${pid}" style="display:none;margin-bottom:16px">${projectGanttHTML(pid)}</div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <div class="sec-title" style="margin:0">Задачи проекта</div>
       <button class="btn btn-p" style="font-size:12px" onclick="openTaskModal('',pid)">+ Задача</button>
@@ -1828,6 +1976,77 @@ function showProjectDetail(pid){
 }
 
 function closeDetail(){curProjDetail=null;rProj()}
+function toggleProjGantt(pid){
+  const chart=$('pg-chart-'+pid),arrow=$('pg-arrow-'+pid);
+  if(!chart)return;
+  const open=chart.style.display==='none';
+  chart.style.display=open?'':'none';
+  if(arrow)arrow.textContent=open?'▼':'▶';
+}
+
+/* ── MINI GANTT PER PROJECT ── */
+function projectGanttHTML(pid){
+  const p=D.projects.find(x=>x.id===pid);
+  const tasks=D.tasks.filter(t=>t.pid===pid&&t.dead).sort((a,b)=>a.dead.localeCompare(b.dead));
+  if(!tasks.length)return'<div style="font-size:12px;color:var(--t3);padding:8px 0">Нет задач со сроками — добавь дедлайны для отображения на графике</div>';
+
+  const today=TODAY();
+  const allDates=tasks.map(t=>t.dead);
+  if(p&&p.start_date)allDates.push(p.start_date);
+  if(p&&p.deadline)allDates.push(p.deadline);
+
+  const rawMin=allDates.reduce((a,b)=>a<b?a:b);
+  const rawMax=allDates.reduce((a,b)=>a>b?a:b);
+  const gStart=addDays(rawMin<today?rawMin:today,-7);
+  const gEnd=addDays(rawMax>today?rawMax:today,7);
+  const totalDays=Math.max(1,Math.round((pd(gEnd)-pd(gStart))/86400000));
+  const todayOff=Math.round((pd(today)-pd(gStart))/86400000);
+  const todayPct=Math.max(0,Math.min(100,(todayOff/totalDays)*100));
+
+  // Axis labels: every ~14 days
+  const step=Math.max(7,Math.ceil(totalDays/6));
+  let axisHTML='';
+  for(let d=0;d<=totalDays;d+=step){
+    const lbl=fdate(addDays(gStart,d),true);
+    axisHTML+=`<div class="pg-axis-lbl" style="left:${(d/totalDays)*100}%">${lbl}</div>`;
+  }
+
+  // Sort by priority then deadline
+  const byPrio={high:[],medium:[],low:[]};
+  tasks.forEach(t=>{const k=t.prio||'medium';(byPrio[k]=byPrio[k]||[]).push(t);});
+  const prioLabel={high:'🔴 Высокий приоритет',medium:'🟡 Средний',low:'🟢 Низкий'};
+  const prioKeys=['high','medium','low'].filter(k=>byPrio[k]&&byPrio[k].length);
+
+  const rowsHTML=prioKeys.map(prio=>{
+    const sect=byPrio[prio].map(t=>{
+      const ds=dlStatus(t.dead,t.done);
+      const deadOff=Math.round((pd(t.dead)-pd(gStart))/86400000);
+      // Bar width 3-7 days, ending at deadline
+      const barW=Math.max(3,Math.min(7,Math.ceil(totalDays*0.05)));
+      const barEnd=deadOff/totalDays*100;
+      const barStart=Math.max(0,(deadOff-barW)/totalDays*100);
+      const barWidth=barEnd-barStart;
+      const barColor=t.done?'var(--t3)':ds==='overdue'?'var(--red)':ds==='today'||ds==='soon'?'var(--yel)':'var(--grn)';
+      const opacity=t.done?0.4:1;
+      return`<div class="pg-row">
+        <div class="pg-lbl ${t.done?'done':''}" onclick="openTaskDetail&&openTaskDetail('${t.id}')" title="${t.title}">${t.title.length>18?t.title.slice(0,16)+'…':t.title}</div>
+        <div class="pg-track">
+          <div class="pg-bar" style="left:${barStart.toFixed(1)}%;width:${Math.max(.5,barWidth).toFixed(1)}%;background:${barColor};opacity:${opacity}" title="${t.title}: ${fdate(t.dead,true)}"></div>
+          <div class="pg-now" style="left:${todayPct.toFixed(1)}%"></div>
+        </div>
+      </div>`;
+    }).join('');
+    return`<div class="pg-section">${prioLabel[prio]}</div>${sect}`;
+  }).join('');
+
+  return`<div class="pg-wrap">
+    <div class="pg-header">
+      <div class="pg-lcol">Задача</div>
+      <div style="flex:1;position:relative;height:18px">${axisHTML}</div>
+    </div>
+    ${rowsHTML}
+  </div>`;
+}
 
 function toggleStage(id,event){
   if(event)event.stopPropagation();

@@ -289,6 +289,12 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23999'/%3E%3C/svg%3E");
   background-repeat:no-repeat;background-position:right 9px center}
 .fc-select:focus,.fc-select.active{border-color:var(--t1);color:var(--t1)}
+.proj-search-row{margin-bottom:10px}
+.proj-search-inp{width:100%;box-sizing:border-box;background:var(--s1);border:1.5px solid var(--b1);
+  border-radius:10px;padding:9px 14px;font-size:13px;color:var(--t1);font-family:inherit;outline:none;
+  transition:border-color .15s}
+.proj-search-inp::placeholder{color:var(--t3)}
+.proj-search-inp:focus{border-color:#444}
 
 /* ── MODAL ── */
 .moverlay{position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:1000;
@@ -730,7 +736,11 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
         <div id="proj-detail-wrap" style="display:none"></div>
         <!-- Project list -->
         <div id="proj-list-wrap">
+          <div class="proj-search-row">
+            <input class="proj-search-inp" id="proj-search" type="search" placeholder="Поиск по названию или клиенту…" oninput="setPSearch(this.value)">
+          </div>
           <div class="fb" id="proj-filters"></div>
+          <div id="proj-mgr-row" style="display:none" class="fb"></div>
           <div class="card-grid" id="proj-grid"></div>
         </div>
       </div>
@@ -1646,7 +1656,11 @@ function updateBadges(n){
    PROJECTS
 ═══════════════════════════════════════ */
 let pfilt='all';
+let pSearch='';
+let pMgrFilt='';
 const PSTATUS={active:'Активен',overdue:'Просрочен',paused:'На паузе',done:'Завершён'};
+
+function setPSearch(v){pSearch=v;curProjDetail=null;rProj();}
 
 function rProj(){
   // If detail is open, show it
@@ -1655,21 +1669,54 @@ function rProj(){
   $('proj-list-wrap').style.display='';
   $('proj-ph-title').textContent='Проекты';
 
-  const filters=[{id:'all',label:'Все'},{id:'active',label:'Активные'},{id:'done',label:'Завершённые'}];
+  // Поле поиска — сохраняем текущее значение
+  const si=$('proj-search');
+  if(si&&si.value!==pSearch)si.value=pSearch;
+
+  // Статусные фильтры
+  const filters=[
+    {id:'all',label:'Все'},
+    {id:'active',label:'Активные'},
+    {id:'overdue',label:'Просроченные'},
+    {id:'paused',label:'На паузе'},
+    {id:'done',label:'Завершённые'}
+  ];
   $('proj-filters').innerHTML=filters.map(f=>
     `<div class="fc ${pfilt===f.id?'active':''}" onclick="setPF('${f.id}')">${f.label}</div>`
   ).join('');
 
-  let projs=visibleProjects();
-  if(pfilt==='active')projs=projs.filter(p=>p.status!=='done');
-  else if(pfilt==='done')projs=projs.filter(p=>p.status==='done');
-  // Фильтр по менеджеру (из дашборда руководства)
-  if(_projMgrFilter){
-    projs=projs.filter(p=>p.manager===_projMgrFilter);
-    $('proj-ph-title').textContent=_projMgrFilter;
+  // Фильтр по менеджеру — только для admin/management
+  const mgrRow=$('proj-mgr-row');
+  if(mgrRow){
+    if(canSeeAll()){
+      const mgrs=[...new Set(visibleProjects().map(p=>p.manager).filter(Boolean))].sort();
+      mgrRow.style.display=mgrs.length?'':'none';
+      mgrRow.innerHTML=`<div class="fc ${!pMgrFilt?'active':''}" onclick="setPMgr('')">Все РП</div>`+
+        mgrs.map(m=>`<div class="fc ${pMgrFilt===m?'active':''}" onclick="setPMgr('${m}')">${m.split(' ')[0]}</div>`).join('');
+    } else {
+      mgrRow.style.display='none';
+    }
   }
-  $('proj-sub').textContent=(_projMgrFilter?'Проекты менеджера · ':'')+decl(projs.length,'объект','объекта','объектов')+
-    (_projMgrFilter?` <span style="cursor:pointer;color:var(--t3);font-size:10px" onclick="_projMgrFilter=null;rProj()">✕ сбросить</span>`:'');
+
+  let projs=visibleProjects();
+  // Фильтр по статусу
+  if(pfilt==='active')projs=projs.filter(p=>p.status!=='done'&&p.status!=='paused');
+  else if(pfilt==='done')projs=projs.filter(p=>p.status==='done');
+  else if(pfilt==='overdue')projs=projs.filter(p=>p.status==='overdue');
+  else if(pfilt==='paused')projs=projs.filter(p=>p.status==='paused');
+  // Фильтр по менеджеру (из строки фильтров или из дашборда)
+  const mf=pMgrFilt||_projMgrFilter;
+  if(mf){
+    projs=projs.filter(p=>p.manager===mf);
+    if(_projMgrFilter)$('proj-ph-title').textContent=_projMgrFilter;
+  }
+  // Поиск по названию/клиенту
+  if(pSearch.trim()){
+    const q=pSearch.trim().toLowerCase();
+    projs=projs.filter(p=>(p.name||'').toLowerCase().includes(q)||(p.client||'').toLowerCase().includes(q));
+  }
+  $('proj-sub').textContent=decl(projs.length,'объект','объекта','объектов')+
+    (mf&&_projMgrFilter?` · ${_projMgrFilter} <span style="cursor:pointer;color:var(--t3);font-size:10px" onclick="_projMgrFilter=null;pMgrFilt='';rProj()">✕</span>`:'');
 
   $('proj-grid').innerHTML=projs.length?projs.map(p=>{
     const ds=dlStatus(p.deadline,p.status==='done');
@@ -1704,6 +1751,7 @@ function rProj(){
 }
 
 function setPF(f){pfilt=f;curProjDetail=null;rProj()}
+function setPMgr(m){pMgrFilt=m;_projMgrFilter=null;curProjDetail=null;rProj()}
 
 function stagePipelineHTML(pid,mini=false){
   const stages=D.stages.filter(s=>s.pid===pid).sort((a,b)=>a.order-b.order);

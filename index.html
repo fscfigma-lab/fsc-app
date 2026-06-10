@@ -164,6 +164,9 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 .back-btn{display:flex;align-items:center;gap:6px;color:var(--t3);font-size:10px;
   cursor:pointer;margin-bottom:16px;padding:4px 0;letter-spacing:.8px;text-transform:uppercase}
 .back-btn:hover{color:var(--t1)}
+@media(max-width:768px){
+  .back-btn{font-size:14px;padding:12px 0;color:#bbb;letter-spacing:.2px;text-transform:none;font-weight:500;min-height:44px;align-items:center}
+}
 
 /* ── TASKS ── */
 .tgroup{margin-bottom:20px}
@@ -1338,7 +1341,8 @@ function updatePinDots(){
 function checkPin(){
   if(_pinVal===_pinUser.pin){
     D.currentUser={id:_pinUser.id,name:_pinUser.name,role:_pinUser.role,role_key:_pinUser.role_key,ini:_pinUser.ini};
-    save();hideLoginScreen();applyUser();render(curPage);
+    curProjDetail=null; curPage='dashboard'; // сбрасываем состояние прошлого пользователя
+    save();hideLoginScreen();applyUser();nav('dashboard');
     setTimeout(()=>showMorningBrief(),400);
     toast(`👋 Привет, ${_pinUser.name}!`,'ok');
   } else {
@@ -2054,6 +2058,9 @@ function toggleTask(id,event){
 ═══════════════════════════════════════ */
 function rTeam(){
   $('member-detail').style.display='none';
+  // Показываем кнопку "+ Сотрудник" только для admin
+  const teamBtn=document.querySelector('#p-team .ph-actions');
+  if(teamBtn)teamBtn.style.display=canManageTeam()?'':'none';
   const t=TODAY();
   $('team-grid').innerHTML=D.team.length?D.team.map(m=>{
     const tc=D.tasks.filter(x=>x.who===m.name&&!x.done).length;

@@ -617,6 +617,152 @@ body{background:var(--bg);
   .brief-foot{padding:10px 14px 24px}
 }
 
+/* ════════════════════════════════════════════════════
+   RESPONSIVE — ПОЛНАЯ СИСТЕМА БРЕЙКПОИНТОВ
+   XS  < 380px   — маленькие телефоны (iPhone SE, Galaxy A)
+   SM  380–767px — смартфоны            ← 768px уже есть выше
+   MD  768–1023px— планшеты (iPad, Android tablet)
+   LG  1024–1279px— ноутбуки 13–14"
+   XL  1280–1535px— десктоп
+   2XL 1536px+   — большие мониторы
+════════════════════════════════════════════════════ */
+
+/* ── 2XL: Большие мониторы 1536px+ ── */
+@media(min-width:1536px){
+  .pc{padding:28px 56px}
+  .ph{padding:22px 56px 18px}
+  .card-grid{grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}
+  .stats{gap:18px}
+}
+
+/* ── XL: Стандартный десктоп 1280–1535px ── */
+@media(min-width:1280px) and (max-width:1535px){
+  .card-grid{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+}
+
+/* ── LG: Ноутбуки 1024–1279px ── */
+@media(min-width:1024px) and (max-width:1279px){
+  :root{--sw:200px}
+  .pc{padding:18px 22px}
+  .ph{padding:18px 24px 14px}
+  .stats{gap:10px}
+  .sc{padding:16px 16px}
+  .card-grid{grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+}
+
+/* ── MD: Планшеты 768–1023px — иконочный сайдбар ── */
+@media(min-width:768px) and (max-width:1023px){
+  :root{--sw:64px}
+
+  /* Сайдбар — только иконки */
+  .sidebar{width:64px}
+  .sb-logo{padding:18px 0;justify-content:center}
+  .sb-logo::after{content:'';display:none}
+  /* Скрываем текст «FSC Задачи» — он idirect text node, убираем через font-size:0 */
+  .sb-logo{font-size:0}
+  .logo-box{font-size:14px;width:36px;height:36px}
+  .sb-nav{padding:8px 0}
+  /* Скрываем текст пунктов меню */
+  .ni{font-size:0;padding:13px 0;justify-content:center;
+      border-left:none;border-right:3px solid transparent;
+      margin-right:0;border-radius:0}
+  .ni-icon{font-size:18px;width:auto}
+  .ni.active{border-left:none;border-right:3px solid var(--acc);
+             background:rgba(59,130,246,0.12)}
+  .ni-badge{position:absolute;top:8px;right:6px;
+            padding:0 4px;min-width:14px;font-size:10px}
+  /* Нижний блок — центрируем иконки */
+  .sb-foot{padding:8px 0}
+  .sb-foot>div{flex-direction:column;align-items:center;gap:6px;padding:4px 0}
+  .uc{flex-direction:column;padding:6px 0;justify-content:center}
+  .uc-name,.uc-role{display:none}
+  .ava{width:34px;height:34px}
+  .nb-wrap{padding:6px;justify-content:center;width:100%}
+
+  /* Основной контент */
+  .main{margin-left:64px}
+  .ph{padding:16px 20px 12px}
+  .pc{padding:16px 18px}
+
+  /* Статистика — 2×2 */
+  .stats{grid-template-columns:repeat(2,1fr);gap:12px}
+
+  /* Карточки — 2 колонки */
+  .card-grid{grid-template-columns:repeat(2,1fr);gap:12px}
+
+  /* Команда — 3 колонки */
+  .tgrid{grid-template-columns:repeat(3,1fr)}
+
+  /* Risk cards — строка */
+  .risk-row{flex-wrap:nowrap}
+  .risk-card{flex:1;min-width:0}
+
+  /* Модальные — немного меньше */
+  .modal{max-width:480px}
+
+  /* Шапка страницы */
+  .ph-title{font-size:20px}
+}
+
+/* ── SM: Большие телефоны 480–767px ── */
+@media(min-width:480px) and (max-width:767px){
+  /* 2 колонки для карточек на широком телефоне */
+  .card-grid{grid-template-columns:repeat(2,1fr);gap:10px}
+  .tgrid{grid-template-columns:repeat(3,1fr)}
+  /* Risk в строку */
+  .risk-row{flex-wrap:nowrap;gap:8px}
+  .risk-card{flex:1;min-width:0;width:auto}
+}
+
+/* ── XS: Маленькие телефоны < 380px ── */
+@media(max-width:379px){
+  .stats{grid-template-columns:repeat(2,1fr);gap:6px}
+  .sc{padding:10px 10px}
+  .sc-val{font-size:22px}
+  .sc-label{font-size:8px}
+  .ph-title{font-size:17px}
+  .ph{padding:10px 12px}
+  .pc{padding:10px 10px}
+  .risk-card{padding:12px}
+  .risk-n{font-size:28px}
+  .card-grid{grid-template-columns:1fr;gap:8px}
+  .pcard{padding:14px}
+  .btn{padding:6px 12px;font-size:9px;letter-spacing:.5px}
+  .modal{padding:16px 12px 24px}
+  .mtitle{font-size:17px}
+  .tgrid{grid-template-columns:repeat(2,1fr);gap:8px}
+  .tcard{padding:16px 10px}
+  .bni-label{font-size:8px}
+  .bni-icon{font-size:18px}
+  .stats{margin-bottom:14px}
+  .ph-actions .btn{padding:5px 10px;font-size:8px}
+}
+
+/* ── Исправление warn-box под тёмную тему ── */
+.warn-box{background:var(--org-bg);border:1px solid rgba(251,146,60,.3);
+  border-radius:8px;padding:10px 12px;font-size:12px;color:var(--org);margin-top:10px;display:none}
+.plan-preview{background:rgba(255,255,255,.04);border:1px solid var(--b1);
+  border-radius:10px;padding:14px;margin-top:12px}
+
+/* ── Touch: убираем hover-эффекты на устройствах без мыши ── */
+@media(hover:none){
+  .pcard:hover,.sc:hover,.tcard:hover,.risk-card:hover{transform:none;box-shadow:none}
+  .btn-p:hover{transform:none}
+  /* Tap highlight */
+  .pcard:active{background:rgba(59,130,246,0.08);border-color:var(--acc-bd)}
+  .sc:active{transform:scale(.98)}
+  .btn-p:active{transform:scale(.97)}
+  .btn-s:active{background:var(--acc-bg);border-color:var(--acc-bd);color:var(--acc)}
+}
+
+/* ── Print ── */
+@media print{
+  .sidebar,.bnav,.fab,.voice-btn,.mob-ubar,.ph-actions{display:none!important}
+  .main{margin-left:0}
+  .page.active{display:block!important}
+  body{background:#fff;color:#000}
+}
+
 /* ── VOICE ASSISTANT ── */
 .voice-btn{position:fixed;right:18px;bottom:136px;width:50px;height:50px;
   border-radius:50%;background:var(--t1);color:#fff;border:none;font-size:20px;

@@ -164,6 +164,18 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 .back-btn{display:flex;align-items:center;gap:6px;color:var(--t3);font-size:10px;
   cursor:pointer;margin-bottom:16px;padding:4px 0;letter-spacing:.8px;text-transform:uppercase}
 .back-btn:hover{color:var(--t1)}
+/* Stage edit controls */
+.stage-edit-btn{background:none;border:none;cursor:pointer;color:var(--t3);font-size:13px;
+  padding:2px 4px;line-height:1;border-radius:4px;transition:color .15s;flex-shrink:0}
+.stage-edit-btn:hover{color:var(--t1)}
+.stage-del-btn{background:none;border:none;cursor:pointer;color:var(--t3);font-size:11px;
+  padding:2px 4px;line-height:1;border-radius:4px;transition:color .15s;flex-shrink:0}
+.stage-del-btn:hover{color:var(--red)}
+.stage-item{position:relative}
+.stage-item:hover .stage-actions{opacity:1}
+.stage-actions{opacity:0;transition:opacity .15s;display:flex;gap:2px;align-items:center;margin-left:auto}
+@media(max-width:768px){.stage-actions{opacity:1}}
+.add-stage-row{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--b1)}
 .back-btn-bottom{display:none;align-items:center;gap:6px;color:#bbb;font-size:14px;
   cursor:pointer;margin-top:24px;padding:14px 0;font-weight:500;
   border-top:1px solid var(--b1)}
@@ -1041,6 +1053,38 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
     <div class="mtitle">Кто я?</div>
     <div id="user-list" style="display:flex;flex-direction:column;gap:8px"></div>
     <div class="mfoot"><button class="btn btn-s" onclick="closeM('m-user')">Отмена</button></div>
+  </div>
+</div>
+
+<!-- MODAL: STAGE -->
+<div class="moverlay" id="m-stage">
+  <div class="modal" style="max-width:400px">
+    <div class="mtitle" id="m-stage-title">Этап производства</div>
+    <div class="fg">
+      <label class="fl">Название этапа *</label>
+      <input type="text" class="fi" id="s-name" placeholder="Согласование, Монтаж...">
+    </div>
+    <div class="fg">
+      <label class="fl">Иконка</label>
+      <select class="fi" id="s-icon">
+        <option value="📐">📐 Согласование</option>
+        <option value="🛒">🛒 Заказ материала</option>
+        <option value="🚛">🚛 Доставка</option>
+        <option value="🔨">🔨 Монтаж</option>
+        <option value="🎨">🎨 Отделка</option>
+        <option value="✅">✅ Сдача</option>
+        <option value="📋">📋 Другое</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label class="fl">Дедлайн *</label>
+      <input type="date" class="fi" id="s-deadline">
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-d" id="s-del-btn" style="display:none;margin-right:auto" onclick="deleteStageFromModal()">Удалить</button>
+      <button class="btn btn-s" onclick="closeM('m-stage')">Отмена</button>
+      <button class="btn btn-p" onclick="saveStageModal()">Сохранить</button>
+    </div>
   </div>
 </div>
 
@@ -1937,15 +1981,23 @@ function stagePipelineHTML(pid,mini=false){
       return`<div title="${s.name}: ${fdate(s.deadline,true)}" style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></div>`;
     }).join('')}</div>`;
   }
+  const canEdit=canCreateProject();
   return`<div class="pipeline">${stages.map(s=>{
     const ds=dlStatus(s.deadline,s.done);
     const cls=s.done?'done':ds==='overdue'?'overdue':ds==='today'||ds==='soon'?'active':'';
     return`<div class="stage-item">
-      <div class="stage-dot ${cls}" onclick="toggleStage('${s.id}',event)" title="${s.done?'✓ Выполнено — нажми чтобы отменить':'Нажми чтобы отметить выполненным'}">${s.icon||'○'}</div>
+      <div class="stage-dot ${cls}" onclick="toggleStage('${s.id}',event)" title="${s.done?'✓ Выполнено':'Отметить выполненным'}">${s.icon||'○'}</div>
       <div class="stage-lbl">${s.name}</div>
       <div class="stage-date ${ds==='overdue'?'od':ds==='soon'||ds==='today'?'soon':''}">${fdate(s.deadline,true)}</div>
+      ${canEdit?`<div class="stage-actions">
+        <button class="stage-edit-btn" onclick="openStageModal('${s.pid}','${s.id}');event.stopPropagation()" title="Редактировать">✏️</button>
+        <button class="stage-del-btn" onclick="deleteStage('${s.id}');event.stopPropagation()" title="Удалить">✕</button>
+      </div>`:''}
     </div>`;
-  }).join('')}</div>`;
+  }).join('')}</div>
+  ${canEdit?`<div class="add-stage-row">
+    <button class="btn btn-s" style="font-size:11px;padding:4px 12px" onclick="openStageModal('${pid}')">+ Добавить этап</button>
+  </div>`:''}`;
 }
 
 function openProjectDetail(pid){
@@ -1986,7 +2038,11 @@ function showProjectDetail(pid){
         <div class="sec-title" style="margin-top:0">Этапы производства</div>
         ${stagePipelineHTML(pid,false)}
         <div style="font-size:11px;color:var(--t3);margin-top:6px">Нажми на этап чтобы отметить выполненным</div>
-      `:'<div style="font-size:13px;color:var(--t3);margin:8px 0">Этапы не настроены — <span style="color:#fff;cursor:pointer" onclick="openProjectModal(\''+pid+'\')">добавить умный план</span></div>'}
+      `:(canCreateProject()?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0">
+        <span style="font-size:13px;color:var(--t3)">Этапы не настроены</span>
+        <button class="btn btn-s" style="font-size:11px;padding:4px 12px" onclick="openProjectModal('${pid}')">✨ Умный план</button>
+        <button class="btn btn-s" style="font-size:11px;padding:4px 12px" onclick="openStageModal('${pid}')">+ Этап вручную</button>
+      </div>`:'<div style="font-size:13px;color:var(--t3);margin:8px 0">Этапы не настроены</div>')}
       <div class="pb-wrap" style="margin-top:14px">
         <div class="pb-lbl"><span>Общая готовность</span><span>${p.pct||0}%</span></div>
         <div class="pb"><div class="pbf ${r==='critical'?'r':p.pct>=100?'g':''}" style="width:${p.pct||0}%"></div></div>
@@ -2131,8 +2187,55 @@ function toggleStage(id,event){
   const s=D.stages.find(x=>x.id===id);if(!s)return;
   s.done=!s.done;
   if(s.done){const proj=D.projects.find(p=>p.id===s.pid);addLog(`${s.icon} Этап «${s.name}» выполнен${proj?' в «'+proj.name+'»':''}`,s.pid);}
-  save();render(curPage);
+  save();if(curProjDetail)showProjectDetail(curProjDetail);else render(curPage);
   toast(s.done?`✅ ${s.name}`:`↩️ ${s.name}`,'ok');
+}
+
+/* ── STAGE MODAL ── */
+let _stageEditId=null;
+let _stagePid=null;
+
+function openStageModal(pid,sid){
+  _stagePid=pid;_stageEditId=sid||null;
+  const s=sid?D.stages.find(x=>x.id===sid):null;
+  $('m-stage-title').textContent=s?'Редактировать этап':'Новый этап';
+  $('s-name').value=s?s.name:'';
+  $('s-icon').value=s&&s.icon?s.icon:'📋';
+  $('s-deadline').value=s&&s.deadline?s.deadline:'';
+  $('s-del-btn').style.display=s?'':'none';
+  openM('m-stage');
+}
+
+function saveStageModal(){
+  const name=$('s-name').value.trim();
+  const deadline=$('s-deadline').value;
+  const icon=$('s-icon').value;
+  if(!name){toast('Введи название этапа','err');return;}
+  if(!deadline){toast('Укажи дедлайн','err');return;}
+  if(_stageEditId){
+    const s=D.stages.find(x=>x.id===_stageEditId);
+    if(s){s.name=name;s.deadline=deadline;s.icon=icon;}
+  } else {
+    const maxOrder=D.stages.filter(s=>s.pid===_stagePid).reduce((m,s)=>Math.max(m,s.order||0),0);
+    D.stages.push({id:uid(),pid:_stagePid,name,icon,deadline,done:false,order:maxOrder+1});
+    addLog(`${icon} Этап «${name}» добавлен`,_stagePid);
+  }
+  save();closeM('m-stage');
+  if(curProjDetail)showProjectDetail(curProjDetail);else render(curPage);
+  toast(_stageEditId?'✏️ Этап обновлён':'✅ Этап добавлен','ok');
+}
+
+function deleteStage(sid){
+  const s=D.stages.find(x=>x.id===sid);if(!s)return;
+  if(!confirm(`Удалить этап «${s.name}»?`))return;
+  D.stages=D.stages.filter(x=>x.id!==sid);
+  save();if(curProjDetail)showProjectDetail(curProjDetail);else render(curPage);
+  toast('🗑 Этап удалён','ok');
+}
+
+function deleteStageFromModal(){
+  if(_stageEditId)deleteStage(_stageEditId);
+  closeM('m-stage');
 }
 
 /* ═══════════════════════════════════════

@@ -744,6 +744,9 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
         <div id="backup-btn" class="nb-wrap" onclick="showBackupModal()" title="Резервные копии" style="display:none;cursor:pointer">
           <span class="nb-icon">🗄️</span>
         </div>
+        <div id="gcal-btn" class="nb-wrap" onclick="syncGoogleCalendar()" title="Синхронизировать с Google Календарём" style="display:none;cursor:pointer">
+          <span class="nb-icon">🗓</span>
+        </div>
         <div id="settings-btn" class="nb-wrap" onclick="showSettingsModal()" title="Настройки" style="display:none;cursor:pointer">
           <span class="nb-icon">⚙️</span>
         </div>
@@ -1774,6 +1777,9 @@ function applyPermissions(){
   // Кнопка настроек — только admin
   const stBtn=$('settings-btn');
   if(stBtn)stBtn.style.display=isAdmin()?'flex':'none';
+  // Кнопка Google Calendar — всем у кого настроен Client ID
+  const gcBtn=$('gcal-btn');
+  if(gcBtn)gcBtn.style.display=D.googleClientId?'flex':'none';
 }
 
 /* ═══════════════════════════════════════
@@ -3254,7 +3260,31 @@ async function showSettingsModal(){
       1. Установить приложение <strong>ntfy</strong> (iOS App Store / Google Play)<br>
       2. Нажать + и подписаться на канал: <code style="background:var(--s3);padding:1px 5px;border-radius:3px">${topic}</code><br>
       3. Готово — уведомления будут приходить автоматически
-    </div>`:''}`;
+    </div>`:''}
+
+    <div class="sec-title" style="margin-top:16px">🗓 Google Календарь</div>
+    <div style="font-size:12px;color:var(--t2);margin-bottom:10px;line-height:1.5">
+      Синхронизирует дедлайны проектов, этапов и критических задач в твой Google Calendar.<br>
+      Нужен <strong>OAuth Client ID</strong> — создаётся бесплатно в Google Cloud Console.
+    </div>
+    <div class="fg">
+      <label class="fl">Google OAuth Client ID</label>
+      <input type="text" class="fi" id="gcal-client-id" value="${D.googleClientId||''}"
+        placeholder="xxxxxxxxx.apps.googleusercontent.com" style="font-family:monospace;font-size:11px">
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <button class="btn btn-p" style="font-size:12px" onclick="saveGoogleClientId()">Сохранить</button>
+      ${D.googleClientId?`<button class="btn btn-s" style="font-size:12px" onclick="closeM('m-settings');syncGoogleCalendar()">🗓 Синхронизировать</button>`:''}
+    </div>
+    ${D.gcalLastSync?`<div style="font-size:11px;color:var(--t3);margin-top:8px">Последняя синхронизация: ${new Date(D.gcalLastSync).toLocaleString('ru')}</div>`:''}
+    <div style="margin-top:12px;padding:10px 12px;background:var(--s2);border-radius:8px;font-size:11px;color:var(--t2);line-height:1.7">
+      <strong>Как получить Client ID (5 минут):</strong><br>
+      1. Открыть <a href="https://console.cloud.google.com" target="_blank" style="color:var(--acc)">console.cloud.google.com</a><br>
+      2. Создать проект → Включить <strong>Google Calendar API</strong><br>
+      3. Credentials → Create → OAuth 2.0 Client ID → Web application<br>
+      4. Authorized JS origins: <code style="background:var(--s3);padding:1px 4px;border-radius:3px">https://fscfigma-lab.github.io</code><br>
+      5. Скопировать Client ID и вставить выше
+    </div>`;
 
   openM('m-settings');
 }
@@ -3271,6 +3301,148 @@ function saveNtfyTopic(){
 async function testPush(){
   await sendPush('🔔 Тест FSC уведомлений','Если видишь это — push работает! ✅','white_check_mark');
   toast('Push отправлен — проверь телефон','ok');
+}
+
+/* ═══════════════════════════════════════
+   GOOGLE CALENDAR SYNC
+═══════════════════════════════════════ */
+let _gcalToken=null;
+let _gcalTokenExpiry=0;
+
+function loadGISScript(){
+  return new Promise(resolve=>{
+    if(window.google?.accounts?.oauth2){resolve();return;}
+    const s=document.createElement('script');
+    s.src='https://accounts.google.com/gsi/client';
+    s.onload=resolve;
+    s.onerror=()=>resolve(); // не блокируем если не загрузилось
+    document.head.appendChild(s);
+  });
+}
+
+async function gcalRequest(method,path,body=null){
+  const res=await fetch(`https://www.googleapis.com/calendar/v3${path}`,{
+    method,
+    headers:{'Authorization':`Bearer ${_gcalToken}`,'Content-Type':'application/json'},
+    body:body?JSON.stringify(body):undefined
+  });
+  if(res.status===404&&method==='PUT'){
+    throw new Error('NOT_FOUND');
+  }
+  if(!res.ok){
+    const err=await res.json().catch(()=>({}));
+    throw new Error(err.error?.message||res.statusText);
+  }
+  return method==='DELETE'?null:res.json();
+}
+
+async function gcalUpsert(key,event){
+  if(!D.gcalEvents)D.gcalEvents={};
+  if(D.gcalEvents[key]){
+    try{
+      await gcalRequest('PUT',`/calendars/primary/events/${D.gcalEvents[key]}`,event);
+      return 'updated';
+    }catch(e){
+      if(e.message==='NOT_FOUND') delete D.gcalEvents[key];
+      else throw e;
+    }
+  }
+  const created=await gcalRequest('POST','/calendars/primary/events',event);
+  D.gcalEvents[key]=created.id;
+  return 'created';
+}
+
+async function doGCalSync(){
+  if(!D.gcalEvents)D.gcalEvents={};
+  let created=0,updated=0,errors=0;
+
+  const allItems=[
+    ...D.projects.filter(p=>p.deadline).map(p=>({
+      key:'proj_'+p.id,
+      event:{
+        summary:`📅 Дедлайн: ${p.name}`,
+        description:`Клиент: ${p.client||'—'}\nОбъект: ${p.obj||'—'}\nМенеджер: ${p.manager||'—'}`,
+        start:{date:p.deadline},end:{date:p.deadline},
+        colorId:'11',
+        reminders:{useDefault:false,overrides:[{method:'popup',minutes:1440}]}
+      }
+    })),
+    ...D.stages.filter(s=>s.deadline).map(s=>{
+      const proj=D.projects.find(p=>p.id===s.pid);
+      return{
+        key:'stage_'+s.id,
+        event:{
+          summary:`${s.icon||'🔨'} Этап: ${s.name}`,
+          description:`Проект: ${proj?.name||'—'}`,
+          start:{date:s.deadline},end:{date:s.deadline},
+          colorId:'5',
+          reminders:{useDefault:false,overrides:[{method:'popup',minutes:1440}]}
+        }
+      };
+    }),
+    ...D.tasks.filter(t=>t.dead&&(t.prio==='high'||t.prio==='critical')).map(t=>{
+      const proj=D.projects.find(p=>p.id===t.pid);
+      return{
+        key:'task_'+t.id,
+        event:{
+          summary:`⚡ ${t.name}`,
+          description:`Исполнитель: ${t.who||'—'}\nПроект: ${proj?.name||'—'}`,
+          start:{date:t.dead},end:{date:t.dead},
+          colorId:t.prio==='critical'?'4':'6',
+          reminders:{useDefault:false,overrides:[{method:'popup',minutes:60}]}
+        }
+      };
+    })
+  ];
+
+  for(const item of allItems){
+    try{
+      const res=await gcalUpsert(item.key,item.event);
+      if(res==='created')created++;else updated++;
+    }catch(e){console.warn('GCal error:',e);errors++;}
+  }
+
+  D.gcalLastSync=new Date().toISOString();
+  save();
+
+  if(errors>0) toast(`GCal: создано ${created}, обновлено ${updated}, ошибок ${errors}`,'err');
+  else toast(`✅ Google Календарь синхронизирован: ${created} новых, ${updated} обновлено`,'ok');
+}
+
+async function syncGoogleCalendar(){
+  const cid=D.googleClientId;
+  if(!cid){toast('Сначала введи Google Client ID в настройках ⚙️','err');showSettingsModal();return;}
+  await loadGISScript();
+  if(!window.google?.accounts?.oauth2){toast('Не удалось загрузить Google Sign-In','err');return;}
+
+  // Если токен ещё живой — сразу синк
+  if(_gcalToken&&Date.now()<_gcalTokenExpiry){
+    toast('⏳ Синхронизация…','ok');
+    await doGCalSync();
+    return;
+  }
+
+  const tokenClient=google.accounts.oauth2.initTokenClient({
+    client_id:cid,
+    scope:'https://www.googleapis.com/auth/calendar.events',
+    callback:async resp=>{
+      if(resp.error){toast('Ошибка авторизации Google: '+resp.error,'err');return;}
+      _gcalToken=resp.access_token;
+      _gcalTokenExpiry=Date.now()+3500000; // ~58 мин
+      toast('⏳ Синхронизация…','ok');
+      await doGCalSync();
+    }
+  });
+  tokenClient.requestAccessToken();
+}
+
+function saveGoogleClientId(){
+  const val=$('gcal-client-id').value.trim();
+  if(!val){toast('Введи Client ID','err');return;}
+  D.googleClientId=val;
+  save();
+  toast('✅ Client ID сохранён','ok');
+  showSettingsModal();
 }
 
 /* ═══════════════════════════════════════

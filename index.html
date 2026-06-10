@@ -231,8 +231,32 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 .g-bar.overdue{background:var(--red-bg);border-color:#E5C0C0;color:var(--red)}
 .g-bar.done{background:var(--grn-bg);border-color:#B0D4C0;color:var(--grn)}
 .g-bar.soon{background:var(--yel-bg);border-color:#DDD0A0;color:var(--yel)}
-.g-pf{position:absolute;left:0;top:0;bottom:0;background:rgba(28,28,28,.1);
-  border-radius:4px 0 0 4px;pointer-events:none}
+.g-pf{position:absolute;left:0;top:0;bottom:0;background:rgba(28,28,28,.12);
+  border-radius:4px 0 0 4px;pointer-events:none;transition:width .4s}
+.g-pf-lbl{position:absolute;right:4px;top:50%;transform:translateY(-50%);
+  font-size:9px;font-weight:600;color:inherit;opacity:.7;z-index:2;pointer-events:none}
+/* Baseline — тонкая серая полоска под основным баром */
+.g-baseline{position:absolute;height:4px;bottom:6px;border-radius:2px;
+  background:rgba(150,150,150,.35);border:1px solid rgba(150,150,150,.4);
+  pointer-events:none;z-index:1}
+/* Milestone — ромбик на дедлайне */
+.g-milestone{position:absolute;top:50%;transform:translate(-50%,-50%) rotate(45deg);
+  width:10px;height:10px;border:2px solid currentColor;z-index:6;pointer-events:none}
+.g-milestone.overdue{color:var(--red)}
+.g-milestone.done{color:var(--grn)}
+.g-milestone.soon{color:var(--yel)}
+.g-milestone.ok{color:var(--t3)}
+/* Zoom buttons */
+.g-zoom-bar{display:flex;gap:4px;align-items:center}
+.g-zoom-btn{padding:3px 10px;border-radius:20px;font-size:10px;border:1.5px solid var(--b1);
+  color:var(--t2);background:var(--s1);cursor:pointer;font-family:inherit;letter-spacing:.3px}
+.g-zoom-btn.active{background:var(--t1);color:#fff;border-color:var(--t1)}
+/* Mini-Gantt milestone dot */
+.pg-milestone{position:absolute;top:50%;right:-5px;transform:translateY(-50%) rotate(45deg);
+  width:8px;height:8px;border:1.5px solid;border-radius:0;z-index:3;pointer-events:none}
+/* Mini-Gantt baseline */
+.pg-baseline{position:absolute;height:2px;bottom:2px;border-radius:1px;
+  background:rgba(150,150,150,.4);pointer-events:none;z-index:1}
 
 /* ── CALENDAR ── */
 .cal-nav{display:flex;align-items:center;gap:12px;margin-bottom:20px}
@@ -780,7 +804,12 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
     <div id="p-gantt" class="page">
       <div class="ph">
         <div><div class="ph-title">Гант</div><div class="ph-sub" id="gantt-label">Временная шкала</div></div>
-        <div class="ph-actions">
+        <div class="ph-actions" style="gap:8px;align-items:center">
+          <div class="g-zoom-bar">
+            <button class="g-zoom-btn" id="gz-weeks" onclick="gSetZoom('weeks')">Недели</button>
+            <button class="g-zoom-btn active" id="gz-months" onclick="gSetZoom('months')">Месяцы</button>
+            <button class="g-zoom-btn" id="gz-quarters" onclick="gSetZoom('quarters')">Кварталы</button>
+          </div>
           <button class="btn btn-s" onclick="gShift(-1)">←</button>
           <button class="btn btn-s" onclick="gShift(1)">→</button>
         </div>
@@ -1963,8 +1992,11 @@ function showProjectDetail(pid){
         <div class="pb"><div class="pbf ${r==='critical'?'r':p.pct>=100?'g':''}" style="width:${p.pct||0}%"></div></div>
       </div>
     </div>
-    <div class="pg-toggle" onclick="toggleProjGantt('${pid}')">
-      <span id="pg-arrow-${pid}">▶</span> <span>График задач по критичности</span>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div class="pg-toggle" onclick="toggleProjGantt('${pid}')">
+        <span id="pg-arrow-${pid}">▶</span> <span>График по критичности</span>
+      </div>
+      ${canCreateProject()?`<button class="btn btn-s" style="font-size:10px;padding:3px 10px" onclick="saveBaseline('${pid}')">📌 Зафиксировать план</button>`:''}
     </div>
     <div id="pg-chart-${pid}" style="display:none;margin-bottom:16px">${projectGanttHTML(pid)}</div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -2019,17 +2051,30 @@ function projectGanttHTML(pid){
   }
 
   // Функция строки
-  function pgRow(name, dateStr, done, ds, color){
+  function pgRow(name, dateStr, done, ds, color, baselineDate){
     const off=Math.round((pd(dateStr)-pd(gStart))/86400000);
     const barW=Math.max(2,Math.ceil(totalDays*0.04));
     const barEnd=(off/totalDays)*100;
     const barStart=Math.max(0,((off-barW)/totalDays)*100);
     const w=Math.max(0.5,barEnd-barStart);
     const lbl=name.length>18?name.slice(0,16)+'…':name;
+    // Базовая линия этапа
+    let baseHTML='';
+    if(baselineDate&&baselineDate!==dateStr){
+      const bOff=Math.round((pd(baselineDate)-pd(gStart))/86400000);
+      const bEnd=(bOff/totalDays)*100;
+      const bStart=Math.max(0,((bOff-barW)/totalDays)*100);
+      const bW=Math.max(0.5,bEnd-bStart);
+      baseHTML=`<div class="pg-baseline" style="left:${bStart.toFixed(1)}%;width:${bW.toFixed(1)}%" title="План: ${fdate(baselineDate,true)}"></div>`;
+    }
+    // Ромбик-веха на дедлайне
+    const msColor=done?'var(--grn)':ds==='overdue'?'var(--red)':ds==='soon'||ds==='today'?'var(--yel)':'var(--t3)';
     return`<div class="pg-row">
       <div class="pg-lbl ${done?'done':''}" title="${name}">${lbl}</div>
       <div class="pg-track">
+        ${baseHTML}
         <div class="pg-bar" style="left:${barStart.toFixed(1)}%;width:${w.toFixed(1)}%;background:${color};opacity:${done?0.4:1}" title="${name}: ${fdate(dateStr,true)}"></div>
+        <div class="pg-milestone" style="left:${barEnd.toFixed(1)}%;border-color:${msColor};background:${done?msColor:'transparent'}"></div>
         <div class="pg-now" style="left:${todayPct.toFixed(1)}%"></div>
       </div>
     </div>`;
@@ -2049,7 +2094,10 @@ function projectGanttHTML(pid){
     html+=`<div class="pg-section">📋 Этапы производства</div>`;
     html+=stages.map(s=>{
       const ds=dlStatus(s.deadline,s.done);
-      return pgRow((s.icon?s.icon+' ':'')+s.name,s.deadline,s.done,ds,dsColor(ds,s.done));
+      // Ищем базовую линию для этапа
+      const blStage=p&&p.bl_stages&&p.bl_stages.find(b=>b.id===s.id);
+      const blDate=blStage?blStage.deadline:null;
+      return pgRow((s.icon?s.icon+' ':'')+s.name,s.deadline,s.done,ds,dsColor(ds,s.done),blDate);
     }).join('');
   }
 
@@ -2093,53 +2141,110 @@ function toggleStage(id,event){
 let gOff=0;
 const MS=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 
+let gZoom='months';
+
+function gSetZoom(z){
+  gZoom=z;gOff=0;
+  ['weeks','months','quarters'].forEach(k=>{
+    const btn=$('gz-'+k);if(btn)btn.classList.toggle('active',k===z);
+  });
+  rGantt();
+}
+
 function rGantt(){
   const now=new Date();
-  const months=[];
-  for(let i=0;i<6;i++){months.push(new Date(now.getFullYear(),now.getMonth()+gOff+i,1))}
-  const pStart=months[0];
-  const pEnd=new Date(months[5].getFullYear(),months[5].getMonth()+1,0);
-  const total=Math.round((pEnd-pStart)/86400000)+1;
-  $('gantt-label').textContent=`${MS[pStart.getMonth()].slice(0,3)} — ${MS[pEnd.getMonth()].slice(0,3)} ${pEnd.getFullYear()}`;
+  let pStart,pEnd,cols=[];
 
+  if(gZoom==='weeks'){
+    // 10 недель
+    const mon=new Date(now);mon.setDate(now.getDate()-((now.getDay()+6)%7)+gOff*7);mon.setHours(0,0,0,0);
+    pStart=mon;pEnd=new Date(mon);pEnd.setDate(mon.getDate()+70);
+    for(let i=0;i<10;i++){const w=new Date(mon);w.setDate(mon.getDate()+i*7);cols.push(w);}
+    $('gantt-label').textContent=`${fdate(mon.toISOString().split('T')[0],true)} — ${fdate(pEnd.toISOString().split('T')[0],true)}`;
+  } else if(gZoom==='months'){
+    for(let i=0;i<6;i++)cols.push(new Date(now.getFullYear(),now.getMonth()+gOff+i,1));
+    pStart=cols[0];pEnd=new Date(cols[5].getFullYear(),cols[5].getMonth()+1,0);
+    $('gantt-label').textContent=`${MS_SHORT[pStart.getMonth()]} — ${MS_SHORT[pEnd.getMonth()]} ${pEnd.getFullYear()}`;
+  } else {
+    // 4 квартала
+    const qM=Math.floor(now.getMonth()/3)*3+gOff*3;
+    for(let i=0;i<4;i++)cols.push(new Date(now.getFullYear(),qM+i*3,1));
+    pStart=cols[0];pEnd=new Date(cols[3].getFullYear(),cols[3].getMonth()+3,0);
+    $('gantt-label').textContent=`Q${Math.floor(cols[0].getMonth()/3)+1} ${cols[0].getFullYear()} — Q${Math.floor(cols[3].getMonth()/3)+1} ${cols[3].getFullYear()}`;
+  }
+
+  const total=Math.max(1,Math.round((pEnd-pStart)/86400000)+1);
   function pos(d){if(!d)return null;const diff=Math.round((pd(d)-pStart)/86400000);
     return Math.max(0,Math.min(100,diff/total*100))}
   const todayPos=pos(TODAY());
 
-  let html=`<div class="g-hrow"><div class="g-lcol">Проект</div><div class="g-months">`;
-  months.forEach(m=>{
-    const cur=m.getMonth()===now.getMonth()&&m.getFullYear()===now.getFullYear();
-    html+=`<div class="g-month ${cur?'cur':''}">${MS_SHORT[m.getMonth()]} ${m.getFullYear()}</div>`;
+  // Заголовок
+  let html=`<div class="g-hrow"><div class="g-lcol">Проект / % готовности</div><div class="g-months">`;
+  cols.forEach(c=>{
+    let lbl,cur=false;
+    if(gZoom==='weeks'){lbl=`${c.getDate()} ${MS_SHORT[c.getMonth()]}`;cur=Math.abs(c-now)<7*86400000;}
+    else if(gZoom==='months'){lbl=`${MS_SHORT[c.getMonth()]} ${c.getFullYear()}`;cur=c.getMonth()===now.getMonth()&&c.getFullYear()===now.getFullYear();}
+    else{const q=Math.floor(c.getMonth()/3)+1;lbl=`Q${q} ${c.getFullYear()}`;cur=c.getFullYear()===now.getFullYear()&&Math.floor(now.getMonth()/3)===q-1;}
+    html+=`<div class="g-month ${cur?'cur':''}">${lbl}</div>`;
   });
   html+=`</div></div>`;
 
-  D.projects.forEach(p=>{
+  const projs=visibleProjects();
+  projs.forEach(p=>{
     const sp=pos(p.start)||0,ep=pos(p.deadline)||100;
     const w=Math.max(1,ep-sp);
     const ds=dlStatus(p.deadline,p.status==='done');
     const r=calcRisk(p.id);
     const cls=p.status==='done'?'done':r==='critical'?'overdue':ds==='soon'?'soon':'on-track';
+    const msPos=pos(p.deadline);
+    const pct=p.pct||0;
 
     html+=`<div class="g-row" onclick="openProjectDetail('${p.id}')">
-      <div class="g-rlabel"><div class="g-rname">${p.name}</div><div class="g-rmgr">${p.manager?p.manager.split(' ')[0]:'—'}</div></div>
+      <div class="g-rlabel">
+        <div class="g-rname">${p.name}</div>
+        <div class="g-rmgr">${p.manager?p.manager.split(' ')[0]:'—'} · ${pct}%</div>
+      </div>
       <div class="g-rtl">`;
 
-    months.forEach(m=>{
-      const gp=(m-pStart)/86400000/total*100;
-      if(gp>0&&gp<100)html+=`<div class="g-grid" style="left:${gp}%"></div>`;
-    });
-    if(todayPos!==null&&todayPos>=0&&todayPos<=100)
-      html+=`<div class="g-today" style="left:${todayPos}%"></div>`;
+    // Сетка
+    cols.forEach(c=>{const gp=(c-pStart)/86400000/total*100;if(gp>0&&gp<100)html+=`<div class="g-grid" style="left:${gp.toFixed(1)}%"></div>`;});
+    // Сегодня
+    if(todayPos>=0&&todayPos<=100)html+=`<div class="g-today" style="left:${todayPos.toFixed(1)}%"></div>`;
+    // Базовая линия
+    if(p.bl_start||p.bl_deadline){
+      const bsp=pos(p.bl_start)||0,bep=pos(p.bl_deadline)||100;
+      if(bep>0&&bsp<100)html+=`<div class="g-baseline" style="left:${bsp.toFixed(1)}%;width:${Math.max(1,bep-bsp).toFixed(1)}%" title="План: ${fdate(p.bl_start,true)} → ${fdate(p.bl_deadline,true)}"></div>`;
+    }
+    // Основной бар
     if(ep>0&&sp<100)
-      html+=`<div class="g-bar ${cls}" style="left:${sp}%;width:${w}%" title="${p.name}: ${fdate(p.start,true)} → ${fdate(p.deadline,true)}">
-        <div class="g-pf" style="width:${p.pct||0}%"></div>
-        ${w>12?`<span style="position:relative;z-index:1">${p.name}</span>`:''}
+      html+=`<div class="g-bar ${cls}" style="left:${sp.toFixed(1)}%;width:${w.toFixed(1)}%" title="${p.name}: ${fdate(p.start,true)} → ${fdate(p.deadline,true)}">
+        <div class="g-pf" style="width:${pct}%"></div>
+        ${w>10?`<div class="g-pf-lbl">${pct}%</div>`:''}
+        ${w>12?`<span style="position:relative;z-index:1;padding-left:6px">${p.name}</span>`:''}
       </div>`;
+    // Ромбик-веха
+    if(msPos!==null&&msPos>=0&&msPos<=102)
+      html+=`<div class="g-milestone ${cls}" style="left:${msPos.toFixed(1)}%" title="Дедлайн: ${fdate(p.deadline)}"></div>`;
+
     html+=`</div></div>`;
   });
+
   $('gantt').innerHTML=html;
 }
+
 function gShift(d){gOff+=d;rGantt()}
+
+// Зафиксировать базовую линию проекта
+function saveBaseline(pid){
+  const p=D.projects.find(x=>x.id===pid);if(!p)return;
+  if(!confirm(`Зафиксировать текущий план как базовую линию?\n\nЭто позволит видеть отклонения от первоначального плана.`))return;
+  p.bl_start=p.start;
+  p.bl_deadline=p.deadline;
+  p.bl_stages=D.stages.filter(s=>s.pid===pid).map(s=>({id:s.id,name:s.name,deadline:s.deadline}));
+  save();
+  toast('📌 Базовая линия зафиксирована','ok');
+  showProjectDetail(pid);
+}
 
 /* ═══════════════════════════════════════
    CALENDAR

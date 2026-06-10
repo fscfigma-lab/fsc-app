@@ -1,50 +1,42 @@
-const CACHE = 'fsc-v4';
-const ASSETS = ['/index.html', '/manifest.json', '/icon-192.png', '/icon-512.png'];
+const CACHE = 'fsc-v5';
+const BASE = '/fsc-app';
+const ASSETS = [BASE+'/', BASE+'/index.html', BASE+'/manifest.json', BASE+'/icon-192.png', BASE+'/icon-512.png'];
 
-// Установка — кэшируем только статику (иконки, манифест)
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(['/icon-192.png', '/icon-512.png', '/manifest.json']))
+    caches.open(CACHE).then(c => c.addAll([BASE+'/icon-192.png', BASE+'/icon-512.png', BASE+'/manifest.json']))
   );
-  self.skipWaiting(); // сразу активируем новый SW
+  self.skipWaiting();
 });
 
-// Активация — удаляем старые кэши
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
       Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
     )
   );
-  self.clients.claim(); // берём контроль над всеми вкладками
+  self.clients.claim();
 });
 
-// Стратегия: для HTML — всегда сеть (свежая версия), для остального — кэш
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-
-  // HTML — network first: всегда пробуем получить свежую версию
-  if (e.request.destination === 'document' || url.pathname === '/' || url.pathname.endsWith('.html')) {
+  if (e.request.destination === 'document' || url.pathname === BASE+'/' || url.pathname.endsWith('.html')) {
     e.respondWith(
       fetch(e.request)
         .then(res => {
-          // Сохраняем свежую версию в кэш
           const clone = res.clone();
           caches.open(CACHE).then(c => c.put(e.request, clone));
           return res;
         })
-        .catch(() => caches.match(e.request)) // если нет сети — из кэша
+        .catch(() => caches.match(e.request))
     );
     return;
   }
-
-  // Остальное — cache first (иконки, шрифты)
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request))
   );
 });
 
-// Сообщаем всем вкладкам что есть обновление
 self.addEventListener('message', e => {
   if (e.data === 'SKIP_WAITING') self.skipWaiting();
 });

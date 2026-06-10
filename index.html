@@ -164,8 +164,13 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 .back-btn{display:flex;align-items:center;gap:6px;color:var(--t3);font-size:10px;
   cursor:pointer;margin-bottom:16px;padding:4px 0;letter-spacing:.8px;text-transform:uppercase}
 .back-btn:hover{color:var(--t1)}
+.back-btn-bottom{display:none;align-items:center;gap:6px;color:#bbb;font-size:14px;
+  cursor:pointer;margin-top:24px;padding:14px 0;font-weight:500;
+  border-top:1px solid var(--b1)}
+.back-btn-bottom:active{color:#fff}
 @media(max-width:768px){
   .back-btn{font-size:14px;padding:12px 0;color:#bbb;letter-spacing:.2px;text-transform:none;font-weight:500;min-height:44px;align-items:center}
+  .back-btn-bottom{display:flex}
 }
 
 /* ── TASKS ── */
@@ -1731,6 +1736,7 @@ function openProjectDetail(pid){
 function showProjectDetail(pid){
   const p=D.projects.find(x=>x.id===pid);
   if(!p)return;
+  window.scrollTo({top:0,behavior:'smooth'}); // на мобильном — прокрутка вверх к кнопке "назад"
   $('proj-list-wrap').style.display='none';
   $('proj-detail-wrap').style.display='';
   $('proj-ph-title').textContent=p.name;
@@ -1769,7 +1775,8 @@ function showProjectDetail(pid){
       <div class="sec-title" style="margin:0">Задачи проекта</div>
       <button class="btn btn-p" style="font-size:12px" onclick="openTaskModal('',pid)">+ Задача</button>
     </div>
-    ${tasks.length?tasks.map(t=>tiHTML(t,false)).join(''):'<div style="color:var(--t3);font-size:13px;padding:10px 0">Нет задач</div>'}`;
+    ${tasks.length?tasks.map(t=>tiHTML(t,false)).join(''):'<div style="color:var(--t3);font-size:13px;padding:10px 0">Нет задач</div>'}
+    <div class="back-btn-bottom" onclick="closeDetail()">← Все проекты</div>`;
 }
 
 function closeDetail(){curProjDetail=null;rProj()}

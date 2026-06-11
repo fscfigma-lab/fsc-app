@@ -408,16 +408,36 @@ body{background:var(--bg)}
   backdrop-filter:blur(3px);display:none}
 .qadd-ov.open{display:block}
 .qadd-handle{width:36px;height:4px;background:var(--b2);border-radius:2px;margin:0 auto 14px}
-.qadd-inp{width:100%;border:none;outline:none;background:transparent;
-  font-size:17px;color:var(--t1);font-family:inherit;padding:0 0 12px;
-  border-bottom:1.5px solid var(--b2);line-height:1.4}
+.qadd-inp-row{display:flex;align-items:center;gap:8px;padding-bottom:12px;border-bottom:1.5px solid var(--b2);margin-bottom:12px}
+.qadd-inp{flex:1;border:none;outline:none;background:transparent;
+  font-size:17px;color:var(--t1);font-family:inherit;padding:0;line-height:1.4}
 .qadd-inp::placeholder{color:var(--t3)}
-.qadd-drow{display:flex;gap:8px;margin:12px 0 10px;overflow-x:auto;padding-bottom:2px}
+.qadd-mic{background:none;border:none;font-size:22px;cursor:pointer;padding:2px 4px;
+  opacity:.45;color:var(--t1);transition:opacity .15s;line-height:1;flex-shrink:0}
+.qadd-mic:active{opacity:1}
+/* Action bar */
+.qadd-actions{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;margin-bottom:10px;-webkit-overflow-scrolling:touch}
+.qadd-act{display:flex;align-items:center;gap:5px;padding:7px 13px;border-radius:20px;
+  border:1.5px solid var(--b2);background:transparent;cursor:pointer;
+  font-size:12px;color:var(--t2);font-family:inherit;white-space:nowrap;
+  transition:all .15s;flex-shrink:0}
+.qadd-act:active{transform:scale(.96)}
+.qadd-act.a-on{background:var(--acc-bg);border-color:var(--acc-bd);color:var(--acc)}
+.qadd-act.a-ph{background:rgba(185,28,28,.07);border-color:rgba(185,28,28,.3);color:var(--red)}
+.qadd-act.a-pm{background:#FEF3E2;border-color:#EDD4A0;color:#D97706}
+.qadd-act.a-who{background:var(--grn-bg);border-color:var(--grn-bd);color:var(--grn)}
+/* Date chips */
+.qadd-drow{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;margin-bottom:10px}
 .qadd-dc{padding:6px 14px;border-radius:20px;border:1.5px solid var(--b2);font-size:13px;
-  color:var(--t2);cursor:pointer;white-space:nowrap;transition:all .15s;background:transparent;font-family:inherit}
+  color:var(--t2);cursor:pointer;white-space:nowrap;transition:all .15s;background:transparent;font-family:inherit;flex-shrink:0}
 .qadd-dc.on{background:var(--acc-bg);border-color:var(--acc-bd);color:var(--acc);font-weight:600}
-.qadd-dc.rd{background:rgba(185,28,28,.07);border-color:rgba(185,28,28,.3);color:var(--red)}
-.qadd-foot{display:flex;align-items:center;gap:10px;margin-top:12px}
+/* Who chips */
+.qadd-who-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.qadd-wchip{padding:6px 12px;border-radius:20px;border:1.5px solid var(--b2);font-size:12px;
+  color:var(--t2);cursor:pointer;transition:all .15s;background:transparent;font-family:inherit}
+.qadd-wchip.on{background:var(--grn-bg);border-color:var(--grn-bd);color:var(--grn);font-weight:600}
+/* Footer */
+.qadd-foot{display:flex;align-items:center;gap:10px;margin-top:4px}
 .qadd-sel{flex:1;border:1.5px solid var(--b2);border-radius:10px;padding:9px 10px;
   background:var(--s2);color:var(--t1);font-size:13px;font-family:inherit;outline:none}
 .qadd-btn{background:var(--acc);color:#fff;border:none;border-radius:10px;padding:10px 20px;
@@ -1349,13 +1369,33 @@ body{background:var(--bg)}
 <div class="qadd-ov" id="qadd-ov" onclick="closeQuickAdd()"></div>
 <div class="qadd-sheet" id="qadd-sheet">
   <div class="qadd-handle"></div>
-  <input class="qadd-inp" id="qadd-inp" type="text" placeholder="Что нужно сделать?">
-  <div class="qadd-drow">
+  <!-- Строка ввода + микрофон -->
+  <div class="qadd-inp-row">
+    <input class="qadd-inp" id="qadd-inp" type="text" placeholder="Что нужно сделать?" onkeydown="if(event.key==='Enter')saveQuickTask()">
+    <button class="qadd-mic" onclick="closeQuickAdd();setTimeout(toggleVoice,80)" title="Голосовой ввод">🎤</button>
+  </div>
+  <!-- Панель действий -->
+  <div class="qadd-actions">
+    <button class="qadd-act" id="qadd-act-date" onclick="toggleQDatePicker()">
+      <span>📅</span><span id="qadd-date-lbl">Сегодня</span>
+    </button>
+    <button class="qadd-act" id="qadd-act-prio" onclick="cycleQPrio()">
+      <span id="qadd-prio-ico">🏳</span><span id="qadd-prio-lbl">Приоритет</span>
+    </button>
+    <button class="qadd-act" id="qadd-act-who" onclick="toggleQWho()">
+      <span>👤</span><span id="qadd-who-lbl">Исполнитель</span>
+    </button>
+  </div>
+  <!-- Выбор даты (скрыт) -->
+  <div class="qadd-drow" id="qadd-drow" style="display:none">
     <button class="qadd-dc on" id="qdcToday" onclick="setQDate('today')">☀️ Сегодня</button>
     <button class="qadd-dc" id="qdcTmrw" onclick="setQDate('tomorrow')">🌅 Завтра</button>
-    <button class="qadd-dc" id="qdcOther" onclick="document.getElementById('qdcDateIn').showPicker?document.getElementById('qdcDateIn').showPicker():document.getElementById('qdcDateIn').click()">📅 Другая</button>
+    <button class="qadd-dc" id="qdcOther" onclick="document.getElementById('qdcDateIn').click()">📅 Другая</button>
     <input type="date" id="qdcDateIn" style="opacity:0;position:absolute;width:0;height:0" onchange="setQDate('custom',this.value)">
   </div>
+  <!-- Выбор исполнителя (скрыт) -->
+  <div class="qadd-who-row" id="qadd-who-row" style="display:none"></div>
+  <!-- Футер -->
   <div class="qadd-foot">
     <select class="qadd-sel" id="qadd-proj">
       <option value="">📁 Без проекта</option>
@@ -3284,55 +3324,114 @@ function fabAction(){
   else openTaskModal();
 }
 
-let _qdate=TODAY();
+let _qdate=TODAY(),_qprio='medium',_qwho='',_qShowDate=false,_qShowWho=false;
+
 function openQuickAdd(){
-  _qdate=TODAY();
-  const inp=$('qadd-inp');
-  if(inp)inp.value='';
-  // Проставляем проекты
+  _qdate=TODAY();_qprio='medium';_qwho='';_qShowDate=false;_qShowWho=false;
+  const inp=$('qadd-inp');if(inp)inp.value='';
   const sel=$('qadd-proj');
   if(sel){
     sel.innerHTML=`<option value="">📁 Без проекта</option>`+
       visibleProjects().map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
     if(curProjDetail)sel.value=curProjDetail;
   }
-  _updQdateBtns();
+  const dr=$('qadd-drow');if(dr)dr.style.display='none';
+  const wr=$('qadd-who-row');if(wr)wr.style.display='none';
+  _updQdateBtns();_updQPrio();_updQWhoBtn();
   const sheet=$('qadd-sheet'),ov=$('qadd-ov');
   sheet.classList.add('open');ov.classList.add('open');
-  setTimeout(()=>{if(inp)inp.focus();},100);
+  setTimeout(()=>{if(inp)inp.focus();},120);
 }
 function closeQuickAdd(){
   $('qadd-sheet').classList.remove('open');
   $('qadd-ov').classList.remove('open');
 }
-function _updQdateBtns(){
-  const t=TODAY(),tmrw=addDays(t,1);
-  $('qdcToday').classList.toggle('on',_qdate===t);
-  $('qdcTmrw').classList.toggle('on',_qdate===tmrw);
-  const isOther=_qdate!==t&&_qdate!==tmrw;
-  const obtn=$('qdcOther');
-  obtn.classList.toggle('on',isOther);
-  if(isOther){const d=new Date(_qdate+'T00:00:00');obtn.textContent=`📅 ${d.getDate()}.${d.getMonth()+1}`;}
-  else obtn.textContent='📅 Другая';
+
+// ── Дата ──
+function toggleQDatePicker(){
+  _qShowDate=!_qShowDate;
+  if(_qShowWho){_qShowWho=false;const wr=$('qadd-who-row');if(wr)wr.style.display='none';}
+  const dr=$('qadd-drow');if(dr)dr.style.display=_qShowDate?'flex':'none';
+  $('qadd-act-date').classList.toggle('a-on',_qShowDate);
 }
 function setQDate(type,val){
   if(type==='today')_qdate=TODAY();
   else if(type==='tomorrow')_qdate=addDays(TODAY(),1);
   else if(type==='custom'&&val)_qdate=val;
   _updQdateBtns();
+  // закрываем панель после выбора
+  _qShowDate=false;
+  const dr=$('qadd-drow');if(dr)dr.style.display='none';
+  $('qadd-act-date').classList.remove('a-on');
 }
+function _updQdateBtns(){
+  const t=TODAY(),tmrw=addDays(t,1);
+  const dc=$('qdcToday');if(dc)dc.classList.toggle('on',_qdate===t);
+  const dt=$('qdcTmrw');if(dt)dt.classList.toggle('on',_qdate===tmrw);
+  const isOther=_qdate!==t&&_qdate!==tmrw;
+  const ob=$('qdcOther');
+  if(ob){ob.classList.toggle('on',isOther);
+    ob.textContent=isOther?`📅 ${new Date(_qdate+'T00:00:00').getDate()}.${new Date(_qdate+'T00:00:00').getMonth()+1}`:'📅 Другая';}
+  const lbl=$('qadd-date-lbl');
+  if(lbl){lbl.textContent=_qdate===t?'Сегодня':_qdate===tmrw?'Завтра':
+    `${new Date(_qdate+'T00:00:00').getDate()}.${new Date(_qdate+'T00:00:00').getMonth()+1}`;}
+}
+
+// ── Приоритет ──
+function cycleQPrio(){
+  const order=['medium','high','low'];
+  _qprio=order[(order.indexOf(_qprio)+1)%order.length];
+  _updQPrio();
+}
+function _updQPrio(){
+  const btn=$('qadd-act-prio'),ico=$('qadd-prio-ico'),lbl=$('qadd-prio-lbl');
+  if(!btn)return;
+  btn.className='qadd-act';
+  if(_qprio==='high'){btn.classList.add('a-ph');if(ico)ico.textContent='🔴';if(lbl)lbl.textContent='Срочно';}
+  else if(_qprio==='medium'){btn.classList.add('a-pm');if(ico)ico.textContent='🟡';if(lbl)lbl.textContent='Важно';}
+  else{if(ico)ico.textContent='⚪';if(lbl)lbl.textContent='Обычно';}
+}
+
+// ── Исполнитель ──
+function toggleQWho(){
+  _qShowWho=!_qShowWho;
+  if(_qShowDate){_qShowDate=false;const dr=$('qadd-drow');if(dr)dr.style.display='none';$('qadd-act-date').classList.remove('a-on');}
+  const wr=$('qadd-who-row');
+  if(wr){
+    if(_qShowWho){
+      wr.style.display='flex';
+      wr.innerHTML=D.team.map(m=>{
+        const nm=m.name.split(' ');
+        const lbl=nm[0]+(nm[1]?' '+nm[1][0]+'.':'');
+        return`<button class="qadd-wchip${_qwho===m.name?' on':''}" onclick="setQWho('${m.name}')">${lbl}</button>`;
+      }).join('');
+    } else {wr.style.display='none';}
+  }
+  $('qadd-act-who').classList.toggle('a-on',_qShowWho);
+}
+function setQWho(name){
+  _qwho=(_qwho===name)?'':name;
+  document.querySelectorAll('.qadd-wchip').forEach(c=>c.classList.toggle('on',c.onclick?.toString().includes(`'${name}'`)));
+  _updQWhoBtn();
+}
+function _updQWhoBtn(){
+  const lbl=$('qadd-who-lbl'),btn=$('qadd-act-who');
+  if(lbl)lbl.textContent=_qwho?_qwho.split(' ')[0]:'Исполнитель';
+  if(btn){btn.className='qadd-act';if(_qwho)btn.classList.add('a-who');}
+}
+
 function saveQuickTask(){
   const name=($('qadd-inp').value||'').trim();
   if(!name){$('qadd-inp').focus();return;}
   const pid=$('qadd-proj').value||null;
-  const t={id:uid(),name,pid,dead:_qdate,who:null,prio:'medium',done:false};
+  const t={id:uid(),name,pid,dead:_qdate,who:_qwho||null,prio:_qprio,done:false};
   D.tasks.push(t);
   const proj=pid?D.projects.find(p=>p.id===pid):null;
-  addLog(`📌 Новая задача: «${t.name}»${proj?' → '+proj.name:''}`,pid);
-  save();
-  closeQuickAdd();
+  addLog(`📌 Новая задача: «${t.name}»${proj?' → '+proj.name:''}${t.who?' · '+t.who:''}`,pid);
+  save();closeQuickAdd();
   toast('✅ Задача добавлена','ok');
   render(curPage);
+  if(t.who)pushTaskAssigned(t);
 }
 
 function tiHTML(task,showProj){

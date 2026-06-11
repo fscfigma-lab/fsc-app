@@ -1,6 +1,5 @@
-const CACHE = 'fsc-v13';
+const CACHE = 'fsc-v14';
 const BASE = '/fsc-app';
-const ASSETS = [BASE+'/', BASE+'/index.html', BASE+'/manifest.json', BASE+'/icon-192.png', BASE+'/icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(
@@ -20,18 +19,14 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
+  // HTML — всегда с сервера, никогда не кэшируем
   if (e.request.destination === 'document' || url.pathname === BASE+'/' || url.pathname.endsWith('.html')) {
     e.respondWith(
-      fetch(e.request)
-        .then(res => {
-          const clone = res.clone();
-          caches.open(CACHE).then(c => c.put(e.request, clone));
-          return res;
-        })
-        .catch(() => caches.match(e.request))
+      fetch(e.request, {cache: 'no-store'}).catch(() => caches.match(e.request))
     );
     return;
   }
+  // Статика — кэш, потом сеть
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request))
   );

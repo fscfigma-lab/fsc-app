@@ -3395,6 +3395,7 @@ function closeQuickAdd(){
 
 // ── Дата ──
 function toggleQDatePicker(){
+  const inp=$('qadd-inp');if(inp)inp.blur();
   _qShowDate=!_qShowDate;
   if(_qShowWho){_qShowWho=false;const wr=$('qadd-who-row');if(wr)wr.style.display='none';}
   const dr=$('qadd-drow');if(dr)dr.style.display=_qShowDate?'flex':'none';
@@ -3427,6 +3428,7 @@ function _updQdateLbl(){_updQdateBtns();}
 
 // ── Приоритет ──
 function cycleQPrio(){
+  const inp=$('qadd-inp');if(inp)inp.blur();
   const order=['medium','high','low'];
   _qprio=order[(order.indexOf(_qprio)+1)%order.length];
   _updQPrio();
@@ -3442,6 +3444,7 @@ function _updQPrio(){
 
 // ── Исполнитель ──
 function toggleQWho(){
+  const inp=$('qadd-inp');if(inp)inp.blur();
   _qShowWho=!_qShowWho;
   if(_qShowDate){_qShowDate=false;const dr=$('qadd-drow');if(dr)dr.style.display='none';$('qadd-act-date').classList.remove('a-on');}
   const wr=$('qadd-who-row');

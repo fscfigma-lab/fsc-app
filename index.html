@@ -4237,9 +4237,9 @@ async function getStorageInfo(){
 ═══════════════════════════════════════ */
 async function sendPush(title, body, tags='fsc'){
   const topic=D.ntfyTopic;
-  if(!topic)return;
+  if(!topic)return false;
   try{
-    await fetch(`https://ntfy.sh/${topic}`,{
+    const r=await fetch(`https://ntfy.sh/${topic}`,{
       method:'POST',
       headers:{
         'Title': title,
@@ -4249,7 +4249,8 @@ async function sendPush(title, body, tags='fsc'){
       },
       body
     });
-  }catch(e){console.warn('Push failed:',e);}
+    return r.ok;
+  }catch(e){console.warn('Push failed:',e);return false;}
 }
 
 // Проверка просроченных задач — шлём push при открытии приложения
@@ -4408,8 +4409,10 @@ function saveNtfyTopic(){
 }
 
 async function testPush(){
-  await sendPush('🔔 Тест FSC уведомлений','Если видишь это — push работает! ✅','white_check_mark');
-  toast('Push отправлен — проверь телефон','ok');
+  toast('Отправляем…','ok');
+  const ok=await sendPush('🔔 Тест FSC уведомлений','Если видишь это — push работает! ✅','white_check_mark');
+  if(ok)toast('✅ Отправлено — проверь телефон','ok');
+  else toast('❌ Ошибка отправки — проверь интернет','err');
 }
 
 /* ═══════════════════════════════════════

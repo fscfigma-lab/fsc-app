@@ -1,0 +1,113 @@
+name: 🔔 Ежедневные уведомления
+
+on:
+  schedule:
+    - cron: '0 5 * * *'   # каждый день в 08:00 МСК (UTC+3)
+  workflow_dispatch:        # ← кнопка "запустить вручную" на GitHub
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Проверить дедлайны и отправить push
+        uses: actions/github-script@v7
+        env:
+          SUPA_URL: 'https://yhsedgaimfgbcqbjltkv.supabase.co'
+          SUPA_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inloc2VkZ2FpbWZnYmNxYmpsdGt2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMjQxOTMsImV4cCI6MjA5NjYwMDE5M30.aThP2KxMEmw0DHf0PPIMF82SiqSLBRbA9Q-HuHENxIE'
+        with:
+          script: |
+            const SUPA_URL = process.env.SUPA_URL;
+            const SUPA_KEY = process.env.SUPA_KEY;
+
+            // ── 1. Загружаем данные из Supabase ──────────────────────────────
+            const res = await fetch(
+              `${SUPA_URL}/rest/v1/app_data?id=eq.main&select=data`,
+              { headers: { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${SUPA_KEY}` } }
+            );
+            const rows = await res.json();
+            if (!rows?.length) { console.log('Нет данных в Supabase'); return; }
+
+            const D = rows[0].data;
+            const topic = D.ntfyTopic;
+            if (!topic) { console.log('ntfyTopic не настроен — уведомления отключены'); return; }
+
+            // ── 2. Вспомогательные функции ───────────────────────────────────
+            const today = new Date().toISOString().slice(0, 10);
+            const fmt = d => d ? d.slice(5).replace('-', '/') : '?';   // "2025-12-31" → "12/31"
+
+            async function sendPush(title, body, tags = 'construction') {
+              const isUrgent = tags.includes('warning') || tags.includes('skull');
+              const r = await fetch(`https://ntfy.sh/${topic}`, {
+                method: 'POST',
+                headers: {
+                  'Title':        title,
+                  'Tags':         tags,
+                  'Priority':     isUrgent ? 'high' : 'default',
+                  'Content-Type': 'text/plain; charset=utf-8'
+                },
+                body
+              });
+              console.log(`→ Push [${r.status}]: ${title}`);
+            }
+
+            // ── 3. Задачи ────────────────────────────────────────────────────
+            const tasks    = D.tasks  || [];
+            const projects = D.projects || [];
+            const stages   = D.stages || [];
+            const getProjName = pid => projects.find(p => p.id === pid)?.name || '—';
+
+            const overdueTasks = tasks.filter(t => !t.done && t.dead && t.dead < today);
+            const todayTasks   = tasks.filter(t => !t.done && t.dead === today);
+
+            if (overdueTasks.length > 0) {
+              const lines = overdueTasks.slice(0, 5)
+                .map(t => `• ${t.title || t.name} (${t.who || '—'}) [${fmt(t.dead)}]`);
+              if (overdueTasks.length > 5) lines.push(`...и ещё ${overdueTasks.length - 5}`);
+              await sendPush(
+                `⚠️ Просрочено задач: ${overdueTasks.length}`,
+                lines.join('\n'),
+                'warning,construction'
+              );
+            }
+
+            if (todayTasks.length > 0) {
+              const lines = todayTasks.slice(0, 5)
+                .map(t => `• ${t.title || t.name} (${t.who || '—'})`);
+              await sendPush(
+                `📅 Дедлайн сегодня: ${todayTasks.length} задач`,
+                lines.join('\n'),
+                'calendar,construction'
+              );
+            }
+
+            // ── 4. Этапы ─────────────────────────────────────────────────────
+            const overdueStages = stages.filter(s => !s.done && s.deadline && s.deadline < today);
+            const todayStages   = stages.filter(s => !s.done && s.deadline === today);
+
+            if (overdueStages.length > 0) {
+              const lines = overdueStages.slice(0, 5)
+                .map(s => `• ${s.name} — ${getProjName(s.pid)} [${fmt(s.deadline)}]`);
+              if (overdueStages.length > 5) lines.push(`...и ещё ${overdueStages.length - 5}`);
+              await sendPush(
+                `🏗 Просрочено этапов: ${overdueStages.length}`,
+                lines.join('\n'),
+                'warning,construction'
+              );
+            }
+
+            if (todayStages.length > 0) {
+              const lines = todayStages.slice(0, 5)
+                .map(s => `• ${s.name} — ${getProjName(s.pid)}`);
+              await sendPush(
+                `📌 Срок этапа сегодня: ${todayStages.length}`,
+                lines.join('\n'),
+                'memo,construction'
+              );
+            }
+
+            // ── 5. Итог ──────────────────────────────────────────────────────
+            const total = overdueTasks.length + todayTasks.length +
+                          overdueStages.length + todayStages.length;
+            if (total === 0) {
+              console.log('✅ Всё в порядке — просрочек нет, уведомления не отправлялись');
+            }

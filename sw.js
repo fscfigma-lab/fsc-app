@@ -1,4 +1,4 @@
-const CACHE = 'fsc-v14';
+const CACHE = 'fsc-v15';
 const BASE = '/fsc-app';
 
 self.addEventListener('install', e => {
@@ -19,6 +19,8 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
+  // Внешние запросы (ntfy, Supabase, Google и т.д.) — не трогаем, браузер сам
+  if (url.hostname !== 'fscfigma-lab.github.io') return;
   // HTML — всегда с сервера, никогда не кэшируем
   if (e.request.destination === 'document' || url.pathname === BASE+'/' || url.pathname.endsWith('.html')) {
     e.respondWith(

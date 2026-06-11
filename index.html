@@ -4444,7 +4444,12 @@ async function syncFromSheets(silent){
       const client=(r[6]||'').trim()||(r[5]||'').trim();
       const start=_parseSheetDate(r[24]||'');
       const deadline=_parseSheetDate(r[25]||'');
-      const ex=D.projects.find(p=>p.name.trim().toLowerCase()===name.toLowerCase());
+      // Ищем совпадение: точное или через подстроку (имя в таблице может содержать код договора)
+      const nameLow=name.toLowerCase();
+      const ex=D.projects.find(p=>{
+        const pn=p.name.trim().toLowerCase();
+        return pn===nameLow||nameLow.includes(pn)||pn.includes(nameLow);
+      });
       if(ex){
         if(mgr)ex.mgr=mgr;
         if(pct!==null)ex.pct=pct;

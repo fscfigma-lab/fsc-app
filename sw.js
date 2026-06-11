@@ -1,4 +1,4 @@
-const CACHE = 'fsc-v10';
+const CACHE = 'fsc-v11';
 const BASE = '/fsc-app';
 const ASSETS = [BASE+'/', BASE+'/index.html', BASE+'/manifest.json', BASE+'/icon-192.png', BASE+'/icon-512.png'];
 

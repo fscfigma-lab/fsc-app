@@ -398,6 +398,51 @@ body{background:var(--bg)}
 .mob-more-item .mob-more-icon{font-size:22px;width:28px;text-align:center}
 .mob-more-item .mob-more-sub{font-size:11px;color:var(--t3);display:block;margin-top:1px;font-weight:400}
 
+/* ── QUICK-ADD SHEET (mobile) ── */
+.qadd-sheet{position:fixed;bottom:0;left:0;right:0;background:var(--s1);border-radius:20px 20px 0 0;
+  z-index:300;padding:10px 16px max(28px,calc(env(safe-area-inset-bottom)+16px));
+  box-shadow:0 -8px 32px rgba(0,0,0,.25);border-top:1px solid var(--b1);
+  transform:translateY(100%);transition:transform .28s cubic-bezier(.32,1,.64,1)}
+.qadd-sheet.open{transform:translateY(0)}
+.qadd-ov{position:fixed;inset:0;z-index:299;background:rgba(0,0,0,.4);
+  backdrop-filter:blur(3px);display:none}
+.qadd-ov.open{display:block}
+.qadd-handle{width:36px;height:4px;background:var(--b2);border-radius:2px;margin:0 auto 14px}
+.qadd-inp{width:100%;border:none;outline:none;background:transparent;
+  font-size:17px;color:var(--t1);font-family:inherit;padding:0 0 12px;
+  border-bottom:1.5px solid var(--b2);line-height:1.4}
+.qadd-inp::placeholder{color:var(--t3)}
+.qadd-drow{display:flex;gap:8px;margin:12px 0 10px;overflow-x:auto;padding-bottom:2px}
+.qadd-dc{padding:6px 14px;border-radius:20px;border:1.5px solid var(--b2);font-size:13px;
+  color:var(--t2);cursor:pointer;white-space:nowrap;transition:all .15s;background:transparent;font-family:inherit}
+.qadd-dc.on{background:var(--acc-bg);border-color:var(--acc-bd);color:var(--acc);font-weight:600}
+.qadd-dc.rd{background:rgba(185,28,28,.07);border-color:rgba(185,28,28,.3);color:var(--red)}
+.qadd-foot{display:flex;align-items:center;gap:10px;margin-top:12px}
+.qadd-sel{flex:1;border:1.5px solid var(--b2);border-radius:10px;padding:9px 10px;
+  background:var(--s2);color:var(--t1);font-size:13px;font-family:inherit;outline:none}
+.qadd-btn{background:var(--acc);color:#fff;border:none;border-radius:10px;padding:10px 20px;
+  font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;letter-spacing:.4px;white-space:nowrap}
+.qadd-btn:active{opacity:.8}
+/* ── MOBILE TODAY / UPCOMING pages ── */
+.mob-ph{padding:20px 16px 10px;background:var(--s1)}
+.mob-ph-ttl{font-size:30px;font-weight:800;letter-spacing:-.5px;color:var(--t1);
+  font-family:'Space Grotesk',sans-serif;line-height:1.1}
+.mob-ph-dt{font-size:13px;color:var(--t3);margin-top:4px}
+.mob-sec-hdr{display:flex;align-items:center;justify-content:space-between;
+  padding:10px 16px 5px;background:var(--s1);border-top:1px solid var(--b1)}
+.mob-sec-lbl{font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.8px}
+.mob-sec-cnt{font-size:10px;font-weight:700;background:var(--b2);color:var(--t2);
+  padding:2px 8px;border-radius:10px;min-width:20px;text-align:center}
+.mob-sec-od .mob-sec-lbl{color:var(--red)}
+.mob-sec-od .mob-sec-cnt{background:rgba(185,28,28,.12);color:var(--red)}
+.mob-empty-wrap{display:flex;flex-direction:column;align-items:center;
+  padding:60px 32px 40px;text-align:center}
+.mob-empty-svg{font-size:64px;margin-bottom:16px;opacity:.5}
+.mob-empty-ttl{font-size:18px;font-weight:700;color:var(--t1);margin-bottom:6px}
+.mob-empty-sub{font-size:14px;color:var(--t3);line-height:1.5}
+.mob-day-hdr{padding:8px 16px 3px;font-size:11px;font-weight:700;
+  color:var(--t3);letter-spacing:.5px;text-transform:uppercase;background:var(--s2)}
+
 /* ── CALENDAR ── */
 .cal-nav{display:flex;align-items:center;gap:12px;margin-bottom:20px}
 .cal-nav-title{font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:700;min-width:200px;letter-spacing:-.2px}
@@ -1195,6 +1240,12 @@ body{background:var(--bg)}
       </div>
     </div>
 
+    <!-- ── MOB TODAY ── -->
+    <div id="p-mob-today" class="page"></div>
+
+    <!-- ── MOB UPCOMING ── -->
+    <div id="p-mob-upcoming" class="page"></div>
+
     <!-- ── TEAM ── -->
     <div id="p-team" class="page">
       <div class="ph">
@@ -1264,10 +1315,9 @@ body{background:var(--bg)}
 <!-- BOTTOM NAV -->
 <nav class="bnav">
   <div class="bnav-items">
-    <div class="bni active" data-page="dashboard" onclick="nav('dashboard')"><span class="bni-icon">🏠</span><span class="bni-label">Главная</span></div>
-    <div class="bni" data-page="tasks" onclick="nav('tasks')"><span class="bni-icon">✅</span><span class="bni-label">Задачи</span><span class="bni-badge" id="bn-badge" style="display:none">0</span></div>
+    <div class="bni active" data-page="mob-today" onclick="nav('mob-today')"><span class="bni-icon">☀️</span><span class="bni-label">Сегодня</span><span class="bni-badge" id="bn-badge" style="display:none">0</span></div>
+    <div class="bni" data-page="mob-upcoming" onclick="nav('mob-upcoming')"><span class="bni-icon">📅</span><span class="bni-label">Предстоящее</span></div>
     <div class="bni" data-page="projects" onclick="nav('projects')"><span class="bni-icon">📁</span><span class="bni-label">Проекты</span></div>
-    <div class="bni" data-page="gantt" onclick="nav('gantt')"><span class="bni-icon">📊</span><span class="bni-label">Гант</span></div>
     <div class="bni" id="bni-more" onclick="toggleMoreMenu()"><span class="bni-icon">⋯</span><span class="bni-label">Ещё</span></div>
   </div>
 </nav>
@@ -1275,8 +1325,16 @@ body{background:var(--bg)}
 <div id="mob-more-overlay" class="mob-more-overlay" style="display:none" onclick="closeMobMore()"></div>
 <div id="mob-more-sheet" class="mob-more-sheet" style="display:none">
   <div class="mob-more-handle"></div>
+  <div class="mob-more-item" onclick="closeMobMore();nav('gantt')">
+    <span class="mob-more-icon">📊</span>
+    <div><span>Гант</span><span class="mob-more-sub">Расписание проектов</span></div>
+  </div>
+  <div class="mob-more-item" onclick="closeMobMore();nav('tasks')">
+    <span class="mob-more-icon">✅</span>
+    <div><span>Все задачи</span><span class="mob-more-sub">Расширенные фильтры</span></div>
+  </div>
   <div class="mob-more-item" onclick="closeMobMore();nav('calendar')">
-    <span class="mob-more-icon">📅</span>
+    <span class="mob-more-icon">🗓</span>
     <div><span>Календарь</span><span class="mob-more-sub">Дедлайны и события</span></div>
   </div>
   <div class="mob-more-item" onclick="closeMobMore();nav('team')">
@@ -1284,8 +1342,27 @@ body{background:var(--bg)}
     <div><span>Команда</span><span class="mob-more-sub">Сотрудники и роли</span></div>
   </div>
 </div>
-<button class="fab" onclick="openTaskModal()">＋</button>
+<button class="fab" onclick="fabAction()">＋</button>
 <button class="voice-btn" id="voice-btn" onclick="toggleVoice()" title="Голосовой ассистент">🎤</button>
+
+<!-- QUICK-ADD SHEET -->
+<div class="qadd-ov" id="qadd-ov" onclick="closeQuickAdd()"></div>
+<div class="qadd-sheet" id="qadd-sheet">
+  <div class="qadd-handle"></div>
+  <input class="qadd-inp" id="qadd-inp" type="text" placeholder="Что нужно сделать?">
+  <div class="qadd-drow">
+    <button class="qadd-dc on" id="qdcToday" onclick="setQDate('today')">☀️ Сегодня</button>
+    <button class="qadd-dc" id="qdcTmrw" onclick="setQDate('tomorrow')">🌅 Завтра</button>
+    <button class="qadd-dc" id="qdcOther" onclick="document.getElementById('qdcDateIn').showPicker?document.getElementById('qdcDateIn').showPicker():document.getElementById('qdcDateIn').click()">📅 Другая</button>
+    <input type="date" id="qdcDateIn" style="opacity:0;position:absolute;width:0;height:0" onchange="setQDate('custom',this.value)">
+  </div>
+  <div class="qadd-foot">
+    <select class="qadd-sel" id="qadd-proj">
+      <option value="">📁 Без проекта</option>
+    </select>
+    <button class="qadd-btn" onclick="saveQuickTask()">Добавить ➔</button>
+  </div>
+</div>
 
 <!-- VOICE OVERLAY -->
 <div class="voice-overlay" id="voice-overlay">
@@ -1945,8 +2022,8 @@ function updatePinDots(){
 function checkPin(){
   if(_pinVal===_pinUser.pin){
     D.currentUser={id:_pinUser.id,name:_pinUser.name,role:_pinUser.role,role_key:_pinUser.role_key,ini:_pinUser.ini};
-    curProjDetail=null; curPage='dashboard'; // сбрасываем состояние прошлого пользователя
-    save();hideLoginScreen();applyUser();nav('dashboard');
+    curProjDetail=null; curPage=isMobile()?'mob-today':'dashboard';
+    save();hideLoginScreen();applyUser();nav(curPage);
     setTimeout(()=>showMorningBrief(),400);
     toast(`👋 Привет, ${_pinUser.name}!`,'ok');
   } else {
@@ -2147,6 +2224,8 @@ function render(page){
   else if(page==='calendar')rCal();
   else if(page==='tasks')rTasks();
   else if(page==='team')rTeam();
+  else if(page==='mob-today')rMobToday();
+  else if(page==='mob-upcoming')rMobUpcoming();
 }
 
 function applyPermissions(){
@@ -3104,6 +3183,155 @@ function setPrio(p){tprio=(tprio===p?null:p);if(curPage==='tasks')rTasks();else 
 function setPid(p){tpid=p||null;if(curPage==='tasks')rTasks();else nav('tasks')}
 function clearExtraFilters(){tprio=null;tpid=null;if(curPage==='tasks')rTasks()}
 
+/* ═══════════════════════════════════════
+   MOBILE TODAY & UPCOMING
+═══════════════════════════════════════ */
+function _mobDayLabel(d){
+  const t=TODAY(),tmrw=addDays(t,1);
+  if(d===t)return'📌 Сегодня';
+  if(d===tmrw)return'🌅 Завтра';
+  const dt=new Date(d+'T00:00:00');
+  const days=['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+  const months=['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+  return`${days[dt.getDay()]}, ${dt.getDate()} ${months[dt.getMonth()]}`;
+}
+
+function rMobToday(){
+  const t=TODAY();
+  const all=visibleTasks().filter(x=>!x.done);
+  const overdue=all.filter(x=>x.dead&&x.dead<t);
+  const today=all.filter(x=>x.dead===t);
+
+  const dt=new Date();
+  const wdays=['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
+  const months=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+  const dateStr=`${wdays[dt.getDay()]}, ${dt.getDate()} ${months[dt.getMonth()]}`;
+
+  let html=`<div class="mob-ph">
+    <div class="mob-ph-ttl">Сегодня</div>
+    <div class="mob-ph-dt">${dateStr}</div>
+  </div>`;
+
+  if(!overdue.length&&!today.length){
+    html+=`<div class="mob-empty-wrap">
+      <div class="mob-empty-svg">✅</div>
+      <div class="mob-empty-ttl">Всё сделано!</div>
+      <div class="mob-empty-sub">Нет задач на сегодня.<br>Нажми <strong>＋</strong> чтобы добавить.</div>
+    </div>`;
+  } else {
+    if(overdue.length){
+      html+=`<div class="mob-sec-hdr mob-sec-od">
+        <span class="mob-sec-lbl">⚠️ Просрочено</span>
+        <span class="mob-sec-cnt">${overdue.length}</span>
+      </div>`;
+      html+=overdue.map(t=>tiHTML(t,true)).join('');
+    }
+    if(today.length){
+      html+=`<div class="mob-sec-hdr">
+        <span class="mob-sec-lbl">📌 Сегодня</span>
+        <span class="mob-sec-cnt">${today.length}</span>
+      </div>`;
+      html+=today.map(t=>tiHTML(t,true)).join('');
+    }
+  }
+  $('p-mob-today').innerHTML=html;
+}
+
+function rMobUpcoming(){
+  const t=TODAY();
+  const all=visibleTasks().filter(x=>!x.done);
+
+  // Собираем уникальные даты на 21 день вперёд
+  const days=[];
+  for(let i=1;i<=21;i++){
+    const d=addDays(t,i);
+    const ts=all.filter(x=>x.dead===d);
+    if(ts.length)days.push({d,tasks:ts});
+  }
+  const nodead=all.filter(x=>!x.dead);
+  const far=all.filter(x=>x.dead&&x.dead>addDays(t,21));
+  if(far.length)days.push({d:null,label:'🕐 Позже',tasks:far});
+  if(nodead.length)days.push({d:null,label:'📭 Без даты',tasks:nodead});
+
+  let html=`<div class="mob-ph">
+    <div class="mob-ph-ttl">Предстоящее</div>
+  </div>`;
+
+  if(!days.length){
+    html+=`<div class="mob-empty-wrap">
+      <div class="mob-empty-svg">🗓</div>
+      <div class="mob-empty-ttl">Всё запланировано</div>
+      <div class="mob-empty-sub">Нет предстоящих задач</div>
+    </div>`;
+  } else {
+    days.forEach(g=>{
+      const lbl=g.label||(g.d?_mobDayLabel(g.d):'');
+      html+=`<div class="mob-day-hdr">${lbl}</div>`;
+      html+=g.tasks.map(t=>tiHTML(t,true)).join('');
+    });
+  }
+  $('p-mob-upcoming').innerHTML=html;
+}
+
+/* ═══════════════════════════════════════
+   FAB + QUICK-ADD
+═══════════════════════════════════════ */
+function fabAction(){
+  if(isMobile())openQuickAdd();
+  else openTaskModal();
+}
+
+let _qdate=TODAY();
+function openQuickAdd(){
+  _qdate=TODAY();
+  const inp=$('qadd-inp');
+  if(inp)inp.value='';
+  // Проставляем проекты
+  const sel=$('qadd-proj');
+  if(sel){
+    sel.innerHTML=`<option value="">📁 Без проекта</option>`+
+      visibleProjects().map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+    if(curProjDetail)sel.value=curProjDetail;
+  }
+  _updQdateBtns();
+  const sheet=$('qadd-sheet'),ov=$('qadd-ov');
+  sheet.classList.add('open');ov.classList.add('open');
+  setTimeout(()=>{if(inp)inp.focus();},100);
+}
+function closeQuickAdd(){
+  $('qadd-sheet').classList.remove('open');
+  $('qadd-ov').classList.remove('open');
+}
+function _updQdateBtns(){
+  const t=TODAY(),tmrw=addDays(t,1);
+  $('qdcToday').classList.toggle('on',_qdate===t);
+  $('qdcTmrw').classList.toggle('on',_qdate===tmrw);
+  const isOther=_qdate!==t&&_qdate!==tmrw;
+  const obtn=$('qdcOther');
+  obtn.classList.toggle('on',isOther);
+  if(isOther){const d=new Date(_qdate+'T00:00:00');obtn.textContent=`📅 ${d.getDate()}.${d.getMonth()+1}`;}
+  else obtn.textContent='📅 Другая';
+}
+function setQDate(type,val){
+  if(type==='today')_qdate=TODAY();
+  else if(type==='tomorrow')_qdate=addDays(TODAY(),1);
+  else if(type==='custom'&&val)_qdate=val;
+  _updQdateBtns();
+}
+function saveQuickTask(){
+  const name=($('qadd-inp').value||'').trim();
+  if(!name){$('qadd-inp').focus();return;}
+  const pid=$('qadd-proj').value||null;
+  const t={id:uid(),name,pid,dead:_qdate,who:null,prio:'medium',done:false};
+  D.tasks.push(t);
+  const proj=pid?D.projects.find(p=>p.id===pid):null;
+  addLog(`📌 Новая задача: «${t.name}»${proj?' → '+proj.name:''}`,pid);
+  save();
+  closeQuickAdd();
+  toast('✅ Задача добавлена','ok');
+  render(curPage);
+}
+
 function tiHTML(task,showProj){
   const ds=dlStatus(task.dead,task.done);
   const proj=showProj?D.projects.find(p=>p.id===task.pid):null;
@@ -3365,7 +3593,7 @@ function openTaskModal(tid,forceProj){
     $('t-name').value='';
     const defProj=forceProj||curProjDetail||(tfilt&&!['all','overdue','today','week'].includes(tfilt)?tfilt:'');
     $('t-proj').value=defProj;
-    $('t-dead').value='';$('t-who').value='';$('t-prio').value='medium';
+    $('t-dead').value=TODAY();$('t-who').value='';$('t-prio').value='medium';
   }
   openM('m-task');
 }

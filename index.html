@@ -4198,6 +4198,10 @@ document.addEventListener('DOMContentLoaded',async()=>{
     checkNotifs();
     setTimeout(()=>checkOverduePush(),5000);
     setTimeout(()=>checkReminders(),6000);
+    // Авто-синхронизация с Google Таблицей при каждом открытии
+    if(D.sheetsUrl)setTimeout(()=>syncFromSheets(true),3000);
+    // И каждые 10 минут пока приложение открыто
+    setInterval(()=>{if(D.sheetsUrl)syncFromSheets(true);},10*60*1000);
   }
 });
 

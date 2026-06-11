@@ -575,6 +575,21 @@ body{background:var(--bg)}
 .fi:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-glow)}
 .fi option{background:var(--s1);color:var(--t1)}
 .fg-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+/* Task modal extras */
+.mtitle-row{display:flex;align-items:center;gap:8px;margin-bottom:16px}
+.mtitle-row .mtitle{margin-bottom:0;flex:1}
+.t-voice-btn{background:none;border:none;font-size:22px;cursor:pointer;padding:4px 6px;opacity:.5;transition:opacity .15s;line-height:1}
+.t-voice-btn:active,.t-voice-btn:hover{opacity:1}
+.tag-pre{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.tag-pre-chip{padding:4px 10px;border-radius:14px;border:1.5px solid var(--b2);font-size:12px;color:var(--t2);cursor:pointer;background:transparent;font-family:inherit;transition:all .15s}
+.tag-pre-chip.on{background:var(--acc-bg);border-color:var(--acc-bd);color:var(--acc);font-weight:600}
+.tag-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;min-height:0}
+.tag-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:14px;background:var(--acc-bg);border:1.5px solid var(--acc-bd);color:var(--acc);font-size:12px;font-weight:600}
+.tag-rm{background:none;border:none;font-size:13px;cursor:pointer;color:var(--acc);padding:0;line-height:1;opacity:.7}
+.photos-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;min-height:0}
+.photo-thumb{position:relative;width:72px;height:72px;border-radius:8px;overflow:hidden;border:1.5px solid var(--b2);flex-shrink:0;cursor:pointer}
+.photo-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.photo-rm{position:absolute;top:2px;right:2px;background:rgba(0,0,0,.65);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
 .mfoot{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;
   padding-top:16px;border-top:1px solid var(--b1)}
 
@@ -1496,20 +1511,42 @@ body{background:var(--bg)}
 <!-- MODAL: TASK -->
 <div class="moverlay" id="m-task">
   <div class="modal">
-    <div class="mtitle" id="m-task-title">Новая задача</div>
+    <div class="mtitle-row">
+      <div class="mtitle" id="m-task-title">Новая задача</div>
+      <button class="t-voice-btn" onclick="toggleVoice()" title="Голосовой ввод">🎤</button>
+    </div>
     <div class="fg"><label class="fl">Название *</label><input type="text" class="fi" id="t-name" placeholder="Что нужно сделать?"></div>
     <div class="fg"><label class="fl">Проект</label><select class="fi" id="t-proj"></select></div>
     <div class="fg-row">
       <div style="flex:2"><label class="fl">Дедлайн</label><input type="date" class="fi" id="t-dead"></div>
       <div style="flex:1"><label class="fl">Время</label><input type="time" class="fi" id="t-time"></div>
     </div>
-    <div class="fg"><label class="fl">Ответственный</label><select class="fi" id="t-who"></select></div>
-    <div class="fg"><label class="fl">Приоритет</label>
-      <select class="fi" id="t-prio">
-        <option value="high">🔴 Высокий</option>
-        <option value="medium" selected>🟡 Средний</option>
-        <option value="low">⚪ Низкий</option>
-      </select>
+    <div class="fg-row">
+      <div><label class="fl">Ответственный</label><select class="fi" id="t-who"></select></div>
+      <div><label class="fl">Приоритет</label>
+        <select class="fi" id="t-prio">
+          <option value="high">🔴 Высокий</option>
+          <option value="medium" selected>🟡 Средний</option>
+          <option value="low">⚪ Низкий</option>
+        </select>
+      </div>
+    </div>
+    <div class="fg">
+      <label class="fl">🏷️ Метки</label>
+      <div class="tag-pre" id="t-tag-pre"></div>
+      <div class="tag-list" id="t-tag-list"></div>
+    </div>
+    <div class="fg-row">
+      <div style="flex:2"><label class="fl">🔔 Напоминание</label><input type="date" class="fi" id="t-remind-d"></div>
+      <div style="flex:1"><label class="fl">Время</label><input type="time" class="fi" id="t-remind-t"></div>
+    </div>
+    <div class="fg">
+      <label class="fl">📎 Фото с объекта</label>
+      <div class="photos-row" id="t-photos-row"></div>
+      <label class="btn btn-s" style="cursor:pointer;font-size:12px;display:inline-flex;align-items:center;gap:5px;margin-top:2px">
+        📷 Добавить фото
+        <input type="file" id="t-photo-inp" accept="image/*" multiple style="display:none" onchange="addTaskPhotos(this)">
+      </label>
     </div>
     <div class="mfoot">
       <button class="btn btn-d" id="t-del-btn" style="display:none;margin-right:auto" onclick="deleteTask()">Удалить</button>
@@ -3126,7 +3163,8 @@ function cShift(d){calOff+=d;calSelectedDay=null;rCal()}
 let tfilt='all';   // статус/дата: all|overdue|today|week|done
 let tprio=null;    // приоритет: null|high|medium|low
 let tpid=null;     // проект: null|id
-let tedit=null;
+let tedit=null,_tTags=[],_tPhotos=[];
+const TAG_PRESETS=['Согласование','Материалы','Замечание','Проверить','На подпись','Клиент','Срочно','Фото'];
 
 function rTasks(){
   const t=TODAY(),wk=addDays(t,7);
@@ -3462,11 +3500,17 @@ function tiHTML(task,showProj){
     ${task.who?`<span class="ttag">👤 ${task.who.split(' ')[0]}</span>`:''}
   </div>`:'';
 
+  const extraIcons=(task.remind&&!task.done?'🔔 ':'')+
+    (task.photos?.length?`📎${task.photos.length} `:'');
+  const taskTags=task.tags?.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${
+    task.tags.map(t=>`<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:var(--acc-bg);color:var(--acc);border:1px solid var(--acc-bd)">${t}</span>`).join('')
+  }</div>`:'';
   return`<div class="ti ${task.done?'dn':''} ${ds==='overdue'&&!task.done?'od':''}" style="${urgStyle}" onclick="openTaskModal('${task.id}')">
     <div class="tchk ${task.done?'ck':''}" onclick="toggleTask('${task.id}',event)"></div>
     <div class="tbody">
-      <div class="ttitle">${task.name} ${urgBadge}</div>
+      <div class="ttitle">${task.name} ${urgBadge}${extraIcons?`<span style="font-size:11px;opacity:.6">${extraIcons}</span>`:''}</div>
       ${mobProj}
+      ${taskTags}
       ${deskTags}
     </div>
     <div class="tmeta">
@@ -3699,21 +3743,34 @@ function openTaskModal(tid,forceProj){
 
   if(tedit){
     const t=D.tasks.find(x=>x.id===tedit);
-    if(t){$('t-name').value=t.name;$('t-proj').value=t.pid||'';
-      $('t-dead').value=t.dead||'';$('t-time').value=t.time||'';$('t-who').value=t.who||'';$('t-prio').value=t.prio||'medium'}
+    if(t){
+      $('t-name').value=t.name;$('t-proj').value=t.pid||'';
+      $('t-dead').value=t.dead||'';$('t-time').value=t.time||'';
+      $('t-who').value=t.who||'';$('t-prio').value=t.prio||'medium';
+      _tTags=[...(t.tags||[])];_tPhotos=[...(t.photos||[])];
+      const rd=t.remind?t.remind.split('T'):['',''];
+      $('t-remind-d').value=rd[0]||'';$('t-remind-t').value=rd[1]||'';
+    }
   }else{
     $('t-name').value='';
     const defProj=forceProj||curProjDetail||(tfilt&&!['all','overdue','today','week'].includes(tfilt)?tfilt:'');
     $('t-proj').value=defProj;
     $('t-dead').value=TODAY();$('t-time').value='';$('t-who').value='';$('t-prio').value='medium';
+    _tTags=[];_tPhotos=[];$('t-remind-d').value='';$('t-remind-t').value='';
   }
+  _renderTagPre();_renderTagList();_renderPhotos();
   openM('m-task');
 }
 
 function saveTask(){
   const name=$('t-name').value.trim();if(!name){toast('Введи название','err');return}
+  const rd=$('t-remind-d').value,rt=$('t-remind-t').value;
+  const remind=rd?(rd+(rt?'T'+rt:'T00:00')):null;
   const t={id:tedit||uid(),name,pid:$('t-proj').value||null,dead:$('t-dead').value||null,
-    time:$('t-time').value||null,who:$('t-who').value||null,prio:$('t-prio').value,done:false};
+    time:$('t-time').value||null,who:$('t-who').value||null,prio:$('t-prio').value,done:false,
+    tags:_tTags.length?[..._tTags]:undefined,
+    photos:_tPhotos.length?[..._tPhotos]:undefined,
+    remind:remind||undefined};
   const isNew=!tedit;
   if(tedit){const idx=D.tasks.findIndex(x=>x.id===tedit);if(idx>=0){t.done=D.tasks[idx].done;D.tasks[idx]=t}}
   else D.tasks.push(t);
@@ -3730,6 +3787,78 @@ function deleteTask(){
   if(!tedit||!confirm('Удалить задачу?'))return;
   D.tasks=D.tasks.filter(x=>x.id!==tedit);
   save();closeM('m-task');render(curPage);toast('🗑 Удалено','ok');
+}
+
+/* ── Метки ── */
+function _renderTagPre(){
+  const el=$('t-tag-pre');if(!el)return;
+  el.innerHTML=TAG_PRESETS.map(t=>
+    `<button class="tag-pre-chip${_tTags.includes(t)?' on':''}" onclick="toggleTag('${t}')">${t}</button>`
+  ).join('');
+}
+function _renderTagList(){
+  const el=$('t-tag-list');if(!el)return;
+  el.innerHTML=_tTags.map((t,i)=>
+    `<span class="tag-chip">${t}<button class="tag-rm" onclick="removeTag(${i})">×</button></span>`
+  ).join('');
+}
+function toggleTag(name){
+  const i=_tTags.indexOf(name);
+  if(i>=0)_tTags.splice(i,1);else _tTags.push(name);
+  _renderTagPre();_renderTagList();
+}
+function removeTag(i){_tTags.splice(i,1);_renderTagPre();_renderTagList();}
+
+/* ── Фото ── */
+function _renderPhotos(){
+  const el=$('t-photos-row');if(!el)return;
+  el.innerHTML=_tPhotos.map((src,i)=>
+    `<div class="photo-thumb" onclick="viewPhoto(${i})">
+      <img src="${src}">
+      <button class="photo-rm" onclick="event.stopPropagation();removePhoto(${i})">✕</button>
+    </div>`
+  ).join('');
+}
+async function addTaskPhotos(inp){
+  const files=[...inp.files].slice(0,5-_tPhotos.length);
+  for(const f of files){
+    const b64=await _compressPhoto(f);
+    _tPhotos.push(b64);
+  }
+  inp.value='';
+  _renderPhotos();
+}
+function removePhoto(i){_tPhotos.splice(i,1);_renderPhotos();}
+function viewPhoto(i){
+  const w=window.open();
+  w.document.write(`<img src="${_tPhotos[i]}" style="max-width:100%;max-height:100vh">`);
+}
+function _compressPhoto(file,max=800,q=0.65){
+  return new Promise(res=>{
+    const img=new Image(),url=URL.createObjectURL(file);
+    img.onload=()=>{
+      let w=img.width,h=img.height;
+      if(w>max||h>max){if(w>h){h=Math.round(h*max/w);w=max;}else{w=Math.round(w*max/h);h=max;}}
+      const c=document.createElement('canvas');c.width=w;c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      URL.revokeObjectURL(url);res(c.toDataURL('image/jpeg',q));
+    };
+    img.src=url;
+  });
+}
+
+/* ── Напоминания: проверяем при открытии приложения ── */
+function checkReminders(){
+  if(!D.ntfyTopic)return;
+  const now=new Date().toISOString().slice(0,16);
+  const due=D.tasks.filter(t=>!t.done&&t.remind&&t.remind<=now&&!t.remindSent);
+  due.forEach(t=>{
+    sendPush(`🔔 Напоминание: ${t.name}`,
+      t.dead?`Дедлайн: ${fdate(t.dead,true)}`:'',
+      'bell');
+    t.remindSent=true;
+  });
+  if(due.length)save();
 }
 
 /* ═══════════════════════════════════════
@@ -4068,6 +4197,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
     nav(startPage);
     checkNotifs();
     setTimeout(()=>checkOverduePush(),5000);
+    setTimeout(()=>checkReminders(),6000);
   }
 });
 
@@ -4805,7 +4935,7 @@ function speak(text){
 
 // PWA Service Worker
 // Версия приложения — должна совпадать с CACHE в sw.js
-const APP_VER='fsc-v12';
+const APP_VER='fsc-v13';
 let _swBusy=false;
 
 // При каждом открытии: тихо проверяем sw.js на сервере

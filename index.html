@@ -2022,8 +2022,11 @@ function updatePinDots(){
 function checkPin(){
   if(_pinVal===_pinUser.pin){
     D.currentUser={id:_pinUser.id,name:_pinUser.name,role:_pinUser.role,role_key:_pinUser.role_key,ini:_pinUser.ini};
-    curProjDetail=null; curPage=isMobile()?'mob-today':'dashboard';
-    save();hideLoginScreen();applyUser();nav(curPage);
+    curProjDetail=null;
+    const startPage=isMobile()&&$('p-mob-today')?'mob-today':'dashboard';
+    curPage=startPage;
+    save();hideLoginScreen();applyUser();
+    try{nav(startPage);}catch(e){console.error('nav err',e);nav('dashboard');}
     setTimeout(()=>showMorningBrief(),400);
     toast(`👋 Привет, ${_pinUser.name}!`,'ok');
   } else {
@@ -3952,9 +3955,9 @@ document.addEventListener('DOMContentLoaded',async()=>{
     showLoginScreen();
   } else {
     applyUser();
-    rDash();
+    const startPage=isMobile()&&$('p-mob-today')?'mob-today':'dashboard';
+    nav(startPage);
     checkNotifs();
-    // Проверяем просроченные задачи и шлём push
     setTimeout(()=>checkOverduePush(),5000);
   }
 });

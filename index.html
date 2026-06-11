@@ -4233,6 +4233,29 @@ async function showSettingsModal(){
       3. Credentials → Create → OAuth 2.0 Client ID → Web application<br>
       4. Authorized JS origins: <code style="background:var(--s3);padding:1px 4px;border-radius:3px">https://fscfigma-lab.github.io</code><br>
       5. Скопировать Client ID и вставить выше
+    </div>
+
+    <div class="sec-title" style="margin-top:16px">📊 Google Таблица</div>
+    <div style="font-size:12px;color:var(--t2);margin-bottom:10px;line-height:1.5">
+      Подтягивает актуальные данные из Google Таблицы: проекты, РП, % выполнения, даты.<br>
+      Таблица должна быть открыта по ссылке (просмотр без входа).
+    </div>
+    <div class="fg">
+      <label class="fl">Ссылка на лист Google Таблицы</label>
+      <input type="text" class="fi" id="sheets-url" value="${D.sheetsUrl||''}"
+        placeholder="https://docs.google.com/spreadsheets/d/..." style="font-size:11px;font-family:monospace">
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <button class="btn btn-p" style="font-size:12px" onclick="saveSheetUrl()">Сохранить</button>
+      ${D.sheetsUrl?`<button class="btn btn-s" style="font-size:12px" onclick="syncFromSheets(false)">🔄 Синхронизировать сейчас</button>`:''}
+    </div>
+    ${D.sheetsLastSync?`<div style="font-size:11px;color:var(--t3);margin-top:8px">Последняя синхронизация: ${new Date(D.sheetsLastSync).toLocaleString('ru')}</div>`:''}
+    <div style="margin-top:12px;padding:10px 12px;background:var(--s2);border-radius:8px;font-size:11px;color:var(--t2);line-height:1.6">
+      <strong>Что синхронизируется:</strong><br>
+      Название проекта · РП · Клиент · % выполнения · Даты старта и дедлайна<br><br>
+      <strong>Логика:</strong> если проект с таким названием уже есть в приложении — обновляет его поля.
+      Новые строки из таблицы добавляются как новые проекты.<br><br>
+      <strong>Ожидаемый порядок столбцов:</strong> Дата · Проект · РП · Дизайнер · % · Адрес · Клиент · … · Дата начала · Дата окончания
     </div>`;
 
   openM('m-settings');
@@ -4250,6 +4273,114 @@ function saveNtfyTopic(){
 async function testPush(){
   await sendPush('🔔 Тест FSC уведомлений','Если видишь это — push работает! ✅','white_check_mark');
   toast('Push отправлен — проверь телефон','ok');
+}
+
+/* ═══════════════════════════════════════
+   GOOGLE SHEETS SYNC
+═══════════════════════════════════════ */
+function saveSheetUrl(){
+  const url=($('sheets-url').value||'').trim();
+  if(!url){toast('Введи ссылку на таблицу','err');return;}
+  if(!url.includes('docs.google.com/spreadsheets')){toast('Неверная ссылка — нужна Google Таблица','err');return;}
+  D.sheetsUrl=url;
+  save();
+  toast('✅ Ссылка сохранена','ok');
+  showSettingsModal();
+}
+
+async function syncFromSheets(silent){
+  const url=D.sheetsUrl;
+  if(!url){if(!silent)toast('Настройте ссылку в настройках ⚙️','err');return;}
+  const sheetMatch=url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  const gidMatch=url.match(/[?&#]gid=(\d+)/);
+  if(!sheetMatch){toast('Не могу распознать ID таблицы','err');return;}
+  const sheetId=sheetMatch[1],gid=gidMatch?gidMatch[1]:'0';
+  const csvUrl=`https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+  if(!silent)toast('🔄 Загружаем таблицу…','ok');
+  try{
+    const resp=await fetch(csvUrl,{redirect:'follow'});
+    if(!resp.ok)throw new Error('HTTP '+resp.status);
+    const text=await resp.text();
+    const rows=_parseCSV(text);
+    if(rows.length<2){toast('Таблица пустая или нет данных','err');return;}
+    // Columns (0-indexed): 0=Дата, 1=Проект, 2=РП, 3=Дизайнер, 4=%, 5=Адрес, 6=Клиент, ..., 24=Начало, 25=Дедлайн
+    let added=0,updated=0;
+    for(let i=1;i<rows.length;i++){
+      const r=rows[i];
+      const name=(r[1]||'').trim();
+      if(!name)continue;
+      const mgr=(r[2]||'').trim();
+      const pct=_parseSheetPct(r[4]||'');
+      const client=(r[6]||'').trim()||(r[5]||'').trim();
+      const start=_parseSheetDate(r[24]||'');
+      const deadline=_parseSheetDate(r[25]||'');
+      const ex=D.projects.find(p=>p.name.trim().toLowerCase()===name.toLowerCase());
+      if(ex){
+        if(mgr)ex.mgr=mgr;
+        if(pct!==null)ex.pct=pct;
+        if(client)ex.client=client;
+        if(start)ex.start=start;
+        if(deadline)ex.deadline=deadline;
+        ex.sheetSync=new Date().toISOString();
+        updated++;
+      }else{
+        D.projects.push({id:uid(),name,mgr:mgr||'',client:client||'',
+          start:start||TODAY(),deadline:deadline||addDays(TODAY(),90),
+          pct:pct||0,status:'active',sheetSync:new Date().toISOString()});
+        added++;
+      }
+    }
+    D.sheetsLastSync=new Date().toISOString();
+    save();render(curPage);
+    if(!silent){
+      toast(`✅ Готово: +${added} новых, ${updated} обновлено`,'ok');
+      addLog(`🔄 Синхронизация Google Sheets: +${added} новых, ${updated} обновлено`,null);
+      if($('m-settings').classList.contains('open'))showSettingsModal();
+    }
+  }catch(e){
+    if(!silent)toast('Ошибка загрузки: '+e.message,'err');
+    console.error('syncFromSheets:',e);
+  }
+}
+
+function _parseCSV(text){
+  const rows=[];
+  let row=[],cell='',inQ=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(inQ){
+      if(c==='"'&&text[i+1]==='"'){cell+='"';i++;}
+      else if(c==='"')inQ=false;
+      else cell+=c;
+    }else{
+      if(c==='"')inQ=true;
+      else if(c===','){row.push(cell);cell='';}
+      else if(c==='\r'){}
+      else if(c==='\n'){row.push(cell);rows.push(row);row=[];cell='';}
+      else cell+=c;
+    }
+  }
+  if(cell||row.length){row.push(cell);rows.push(row);}
+  return rows;
+}
+
+function _parseSheetDate(s){
+  if(!s||!s.trim())return null;
+  s=s.trim();
+  let m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if(m)return`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  m=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(m)return s;
+  const d=new Date(s);
+  if(!isNaN(d.getTime()))return d.toISOString().split('T')[0];
+  return null;
+}
+
+function _parseSheetPct(s){
+  if(!s||!s.trim())return null;
+  const n=parseFloat(s.trim().replace('%','').replace(',','.'));
+  if(isNaN(n))return null;
+  return n<=1?Math.round(n*100):Math.round(n);
 }
 
 /* ═══════════════════════════════════════

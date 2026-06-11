@@ -384,6 +384,20 @@ body{background:var(--bg)}
   color:var(--t2);cursor:pointer;background:var(--s1);font-family:inherit;transition:all .15s}
 .tmpl-chip:hover{border-color:var(--acc-bd);color:var(--acc);background:var(--acc-bg)}
 
+/* ── MOBILE MORE MENU ── */
+.mob-more-overlay{position:fixed;inset:0;z-index:199;background:rgba(0,0,0,.35);
+  backdrop-filter:blur(2px)}
+.mob-more-sheet{position:fixed;bottom:0;left:0;right:0;background:var(--s1);
+  border-radius:20px 20px 0 0;z-index:200;padding:12px 0 max(24px,env(safe-area-inset-bottom));
+  box-shadow:0 -8px 32px rgba(0,0,0,.18);border-top:1px solid var(--b1)}
+.mob-more-handle{width:36px;height:4px;background:var(--b2);border-radius:2px;
+  margin:0 auto 12px}
+.mob-more-item{display:flex;align-items:center;gap:14px;padding:14px 22px;
+  font-size:15px;cursor:pointer;color:var(--t1);transition:background .1s;font-weight:500}
+.mob-more-item:active{background:var(--s2)}
+.mob-more-item .mob-more-icon{font-size:22px;width:28px;text-align:center}
+.mob-more-item .mob-more-sub{font-size:11px;color:var(--t3);display:block;margin-top:1px;font-weight:400}
+
 /* ── CALENDAR ── */
 .cal-nav{display:flex;align-items:center;gap:12px;margin-bottom:20px}
 .cal-nav-title{font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:700;min-width:200px;letter-spacing:-.2px}
@@ -648,6 +662,44 @@ body{background:var(--bg)}
   .fb{gap:5px}
   .fc{padding:4px 10px;font-size:9px}
   .fc-select{font-size:9px;padding:4px 22px 4px 10px}
+
+  /* ── TODOIST-STYLE TASKS on mobile ── */
+  .ti{padding:13px 14px;min-height:54px;gap:12px;
+    background:var(--s1);border:none;border-bottom:1px solid var(--b1);
+    border-radius:0;margin:0}
+  .ti:last-child{border-bottom:none}
+  .ti:active{background:var(--s2)}
+  /* Bigger tap target for checkbox */
+  .tchk{width:24px;height:24px;border-width:2px;flex-shrink:0}
+  .tchk.ck::after{font-size:13px}
+  /* Task name — allow 2 lines */
+  .ttitle{font-size:15px;font-weight:500;white-space:normal;line-height:1.4;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .ttags{margin-top:4px}
+  .ttag{font-size:10px;padding:1px 7px}
+  /* Hide avatar — saves space */
+  .tava{display:none}
+  /* Bigger priority dot */
+  .pdot{width:8px;height:8px}
+  /* Date badge */
+  .dc{font-size:10px;padding:3px 9px}
+  /* Task group header — date section */
+  .tgh{padding:9px 14px 7px;font-size:11px;font-weight:700;letter-spacing:.3px;
+    background:var(--s2);border-top:1px solid var(--b1);border-bottom:1px solid var(--b1)}
+  .tg-cnt{background:var(--acc);color:#fff;border-radius:8px;padding:1px 7px;font-size:10px}
+  /* Task list as a card */
+  #tasks-list{background:var(--s1);border-radius:10px;
+    overflow:hidden;border:1px solid var(--b1)}
+  .tgroup{margin-bottom:0}
+  /* Filter bar: horizontal scroll, no wrap */
+  #task-filters{display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;
+    white-space:nowrap;gap:6px;flex-wrap:nowrap;padding:0 0 8px;scrollbar-width:none}
+  #task-filters::-webkit-scrollbar{display:none}
+  #task-filters>div{flex-shrink:0}
+  /* Hide priority filter row on mobile — too much clutter */
+  .task-prio-row{display:none}
+  /* Dashboard: hide heavy sections on mobile */
+  .mgmt-section-mob-hide{display:none!important}
 }
 @media(max-width:420px){
   .stats{gap:8px}
@@ -1212,13 +1264,26 @@ body{background:var(--bg)}
 <!-- BOTTOM NAV -->
 <nav class="bnav">
   <div class="bnav-items">
-    <div class="bni active" data-page="dashboard" onclick="nav('dashboard')"><span class="bni-icon">🏠</span><span class="bni-label">Дашборд</span></div>
-    <div class="bni" data-page="projects" onclick="nav('projects')"><span class="bni-icon">📁</span><span class="bni-label">Проекты</span></div>
-    <div class="bni" data-page="calendar" onclick="nav('calendar')"><span class="bni-icon">📅</span><span class="bni-label">Календарь</span></div>
+    <div class="bni active" data-page="dashboard" onclick="nav('dashboard')"><span class="bni-icon">🏠</span><span class="bni-label">Главная</span></div>
     <div class="bni" data-page="tasks" onclick="nav('tasks')"><span class="bni-icon">✅</span><span class="bni-label">Задачи</span><span class="bni-badge" id="bn-badge" style="display:none">0</span></div>
-    <div class="bni" data-page="team" onclick="nav('team')"><span class="bni-icon">👥</span><span class="bni-label">Команда</span></div>
+    <div class="bni" data-page="projects" onclick="nav('projects')"><span class="bni-icon">📁</span><span class="bni-label">Проекты</span></div>
+    <div class="bni" data-page="gantt" onclick="nav('gantt')"><span class="bni-icon">📊</span><span class="bni-label">Гант</span></div>
+    <div class="bni" id="bni-more" onclick="toggleMoreMenu()"><span class="bni-icon">⋯</span><span class="bni-label">Ещё</span></div>
   </div>
 </nav>
+<!-- Mobile: More menu -->
+<div id="mob-more-overlay" class="mob-more-overlay" style="display:none" onclick="closeMobMore()"></div>
+<div id="mob-more-sheet" class="mob-more-sheet" style="display:none">
+  <div class="mob-more-handle"></div>
+  <div class="mob-more-item" onclick="closeMobMore();nav('calendar')">
+    <span class="mob-more-icon">📅</span>
+    <div><span>Календарь</span><span class="mob-more-sub">Дедлайны и события</span></div>
+  </div>
+  <div class="mob-more-item" onclick="closeMobMore();nav('team')">
+    <span class="mob-more-icon">👥</span>
+    <div><span>Команда</span><span class="mob-more-sub">Сотрудники и роли</span></div>
+  </div>
+</div>
 <button class="fab" onclick="openTaskModal()">＋</button>
 <button class="voice-btn" id="voice-btn" onclick="toggleVoice()" title="Голосовой ассистент">🎤</button>
 
@@ -2048,12 +2113,30 @@ function calcPlanPreview(){
 let curPage='dashboard';
 let curProjDetail=null; // currently open project detail
 
+function isMobile(){return window.innerWidth<=767}
+
+function toggleMoreMenu(){
+  const sheet=$('mob-more-sheet'),ov=$('mob-more-overlay');
+  if(!sheet)return;
+  const open=sheet.style.display==='none'||!sheet.style.display;
+  sheet.style.display=open?'block':'none';
+  ov.style.display=open?'block':'none';
+  const btn=$('bni-more');if(btn)btn.classList.toggle('active',open);
+}
+function closeMobMore(){
+  const sheet=$('mob-more-sheet'),ov=$('mob-more-overlay');
+  if(sheet)sheet.style.display='none';
+  if(ov)ov.style.display='none';
+  const btn=$('bni-more');if(btn)btn.classList.remove('active');
+}
+
 function nav(page){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.ni,.bni').forEach(n=>n.classList.remove('active'));
   $('p-'+page).classList.add('active');
   document.querySelectorAll(`[data-page="${page}"]`).forEach(n=>n.classList.add('active'));
   curPage=page;
+  closeMobMore();
   render(page);
 }
 function render(page){
@@ -2919,46 +3002,50 @@ let tedit=null;
 function rTasks(){
   const t=TODAY(),wk=addDays(t,7);
   const myProjs=visibleProjects();
+  const mob=isMobile();
 
-  // — Строка 1: статус/дата —
+  // Фильтр-бар
   const statuses=[
     {id:'all',label:'Все'},
     {id:'overdue',label:'⚠️ Просрочено'},
     {id:'today',label:'📌 Сегодня'},
     {id:'week',label:'📅 Неделя'},
-    {id:'done',label:'✅ Выполнено'},
-  ];
-  // — Строка 2: приоритет —
-  const prios=[
-    {id:'high',label:'🔴 Срочно'},
-    {id:'medium',label:'🟡 Важно'},
-    {id:'low',label:'🟢 Обычно'},
+    {id:'done',label:'✅ Готово'},
   ];
 
-  $('task-filters').innerHTML=
-    `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">`+
-    statuses.map(f=>`<div class="fc ${tfilt===f.id?'active':''}" onclick="setTF('${f.id}')">${f.label}</div>`).join('')+
-    `</div>`+
-    `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">`+
-    prios.map(f=>`<div class="fc ${tprio===f.id?'active':''}" onclick="setPrio('${f.id}')">${f.label}</div>`).join('')+
-    `<select class="fc-select ${tpid?'active':''}" onchange="setPid(this.value)" style="margin-left:4px">
-      <option value="">📁 Все проекты</option>`+
-    myProjs.map(p=>`<option value="${p.id}" ${tpid===p.id?'selected':''}>${p.name}</option>`).join('')+
-    `</select>`+
-    ((tprio||tpid)?`<div class="fc" onclick="clearExtraFilters()" style="color:var(--red);border-color:var(--red);opacity:.8">✕ Сбросить</div>`:'')+
-    `</div>`;
+  if(mob){
+    // На мобильном: только дата-чипы в одну горизонтальную строку
+    $('task-filters').innerHTML=
+      statuses.map(f=>`<div class="fc ${tfilt===f.id?'active':''}" onclick="setTF('${f.id}')">${f.label}</div>`).join('');
+  } else {
+    // На десктопе: полный фильтр с приоритетом и проектом
+    const prios=[
+      {id:'high',label:'🔴 Срочно'},
+      {id:'medium',label:'🟡 Важно'},
+      {id:'low',label:'🟢 Обычно'},
+    ];
+    $('task-filters').innerHTML=
+      `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">`+
+      statuses.map(f=>`<div class="fc ${tfilt===f.id?'active':''}" onclick="setTF('${f.id}')">${f.label}</div>`).join('')+
+      `</div>`+
+      `<div class="task-prio-row" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">`+
+      prios.map(f=>`<div class="fc ${tprio===f.id?'active':''}" onclick="setPrio('${f.id}')">${f.label}</div>`).join('')+
+      `<select class="fc-select ${tpid?'active':''}" onchange="setPid(this.value)" style="margin-left:4px">
+        <option value="">📁 Все проекты</option>`+
+      myProjs.map(p=>`<option value="${p.id}" ${tpid===p.id?'selected':''}>${p.name}</option>`).join('')+
+      `</select>`+
+      ((tprio||tpid)?`<div class="fc" onclick="clearExtraFilters()" style="color:var(--red);border-color:var(--red);opacity:.8">✕ Сбросить</div>`:'')+
+      `</div>`;
+  }
 
-  // — Применяем фильтры (AND логика) —
+  // Фильтрация задач
   let tasks=visibleTasks();
-  // Фильтр 1: статус/дата
   if(tfilt==='overdue')      tasks=tasks.filter(x=>!x.done&&x.dead&&x.dead<t);
   else if(tfilt==='today')   tasks=tasks.filter(x=>!x.done&&x.dead===t);
   else if(tfilt==='week')    tasks=tasks.filter(x=>!x.done&&x.dead&&x.dead>t&&x.dead<=wk);
   else if(tfilt==='done')    tasks=tasks.filter(x=>x.done);
-  else                       tasks=tasks.filter(x=>!x.done); // 'all' = активные
-  // Фильтр 2: приоритет
+  else                       tasks=tasks.filter(x=>!x.done);
   if(tprio) tasks=tasks.filter(x=>x.prio===tprio);
-  // Фильтр 3: проект
   if(tpid)  tasks=tasks.filter(x=>x.pid===tpid);
 
   tasks.sort((a,b)=>{
@@ -2974,22 +3061,41 @@ function rTasks(){
     return;
   }
 
-  const groups={};
-  tasks.forEach(t=>{const k=t.pid||'none';if(!groups[k])groups[k]=[];groups[k].push(t)});
-  // Группируем по проектам если нет фильтра по конкретному проекту
-  const showProj=!tpid;
-
   let html='';
-  if(showProj){
-    Object.entries(groups).forEach(([pid,pts])=>{
-      const proj=D.projects.find(p=>p.id===pid);
-      html+=`<div class="tgroup">
-        <div class="tgh"><span class="tg-title">${proj?proj.name:'Без проекта'}</span>
-          <span class="tg-cnt">${pts.length}</span></div>
-        ${pts.map(t=>tiHTML(t,false)).join('')}
-      </div>`;
-    });
-  }else{html=tasks.map(t=>tiHTML(t,false)).join('')}
+
+  if(mob && tfilt==='all'){
+    // MOBILE: группировка по дате (Todoist-стиль)
+    const tmrw=addDays(t,1);
+    const dateGroups=[
+      {label:'⚠️ Просрочено', tasks:tasks.filter(x=>x.dead&&x.dead<t)},
+      {label:'📌 Сегодня',    tasks:tasks.filter(x=>x.dead===t)},
+      {label:'🌅 Завтра',     tasks:tasks.filter(x=>x.dead===tmrw)},
+      {label:'📅 На неделе',  tasks:tasks.filter(x=>x.dead&&x.dead>tmrw&&x.dead<=wk)},
+      {label:'🕐 Позже',      tasks:tasks.filter(x=>!x.dead||(x.dead>wk))},
+    ].filter(g=>g.tasks.length);
+
+    html=dateGroups.map(g=>`
+      <div class="tgroup">
+        <div class="tgh"><span>${g.label}</span><span class="tg-cnt">${g.tasks.length}</span></div>
+        ${g.tasks.map(t=>tiHTML(t,true)).join('')}
+      </div>`).join('');
+  } else {
+    // DESKTOP или конкретный фильтр: группировка по проектам
+    if(!tpid){
+      const groups={};
+      tasks.forEach(task=>{const k=task.pid||'none';if(!groups[k])groups[k]=[];groups[k].push(task)});
+      Object.entries(groups).forEach(([pid,pts])=>{
+        const proj=D.projects.find(p=>p.id===pid);
+        html+=`<div class="tgroup">
+          <div class="tgh"><span class="tg-title">${proj?proj.name:'Без проекта'}</span>
+            <span class="tg-cnt">${pts.length}</span></div>
+          ${pts.map(t=>tiHTML(t,false)).join('')}
+        </div>`;
+      });
+    } else {
+      html=tasks.map(t=>tiHTML(t,false)).join('');
+    }
+  }
   $('tasks-list').innerHTML=html;
 }
 
@@ -3009,14 +3115,19 @@ function tiHTML(task,showProj){
   // Urgency badge only for critical/urgent
   const urgBadge=urg==='critical'?`<span style="font-size:9px;font-weight:700;background:#FEE2E2;color:#B91C1C;padding:2px 6px;border-radius:6px;letter-spacing:.5px;text-transform:uppercase">Критично</span>`:
                  urg==='urgent'?`<span style="font-size:9px;font-weight:700;background:#FFEDD5;color:#EA580C;padding:2px 6px;border-radius:6px;letter-spacing:.5px;text-transform:uppercase">Срочно</span>`:'';
+  // На мобильном: проект показываем как мелкий текст под названием, а не тег
+  const mobProj=showProj&&proj?`<span style="font-size:11px;color:var(--t3);display:block;margin-top:3px">📁 ${proj.name}</span>`:'';
+  const deskTags=(proj||task.who)?`<div class="ttags">
+    ${proj&&showProj?`<span class="ttag">📁 ${proj.name}</span>`:''}
+    ${task.who?`<span class="ttag">👤 ${task.who.split(' ')[0]}</span>`:''}
+  </div>`:'';
+
   return`<div class="ti ${task.done?'dn':''} ${ds==='overdue'&&!task.done?'od':''}" style="${urgStyle}" onclick="openTaskModal('${task.id}')">
     <div class="tchk ${task.done?'ck':''}" onclick="toggleTask('${task.id}',event)"></div>
     <div class="tbody">
       <div class="ttitle">${task.name} ${urgBadge}</div>
-      ${(proj||task.who)?`<div class="ttags">
-        ${proj?`<span class="ttag">📁 ${proj.name}</span>`:''}
-        ${task.who?`<span class="ttag">👤 ${task.who.split(' ')[0]}</span>`:''}
-      </div>`:''}
+      ${mobProj}
+      ${deskTags}
     </div>
     <div class="tmeta">
       ${task.dead?`<span class="dc ${task.done?'':ds}">${task.done?fdate(task.dead,true):dlLabel(task.dead)}</span>`:''}

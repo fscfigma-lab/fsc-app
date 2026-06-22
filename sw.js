@@ -1,7 +1,7 @@
 // OneSignal должен быть первым
 importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
 
-const CACHE = 'fsc-v32';
+const CACHE = 'fsc-v33';
 const BASE = '/fsc-app';
 
 self.addEventListener('install', e => {

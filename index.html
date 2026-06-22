@@ -4455,17 +4455,30 @@ async function getStorageInfo(){
 const ONESIGNAL_APP_ID='00e0da53-ae8a-4e4f-a2c9-bb74f68f97ef';
 
 // Инициализация OneSignal
-window.OneSignalDeferred=window.OneSignalDeferred||[];
-OneSignalDeferred.push(async function(OneSignal){
-  await OneSignal.init({
-    appId:ONESIGNAL_APP_ID,
-    serviceWorkerPath:'sw.js',
-    serviceWorkerParam:{scope:'/fsc-app/'},
-    notifyButton:{enable:false},
-    promptOptions:{slidedown:{enabled:false}}
+// Сначала убираем старый sw.js чтобы OneSignal мог зарегистрировать свой
+(async()=>{
+  if('serviceWorker' in navigator){
+    try{
+      const regs=await navigator.serviceWorker.getRegistrations();
+      for(const reg of regs){
+        if(reg.active?.scriptURL?.includes('sw.js')||reg.scope?.includes('/fsc-app/')){
+          await reg.unregister();
+        }
+      }
+    }catch(e){}
+  }
+  window.OneSignalDeferred=window.OneSignalDeferred||[];
+  window.OneSignalDeferred.push(async function(OneSignal){
+    await OneSignal.init({
+      appId:ONESIGNAL_APP_ID,
+      serviceWorkerPath:'OneSignalSDKWorker.js',
+      serviceWorkerParam:{scope:'/fsc-app/'},
+      notifyButton:{enable:false},
+      promptOptions:{slidedown:{enabled:false}}
+    });
+    _checkPushStatus();
   });
-  _checkPushStatus();
-});
+})();
 
 function _showPushBanner(){
   if(Notification.permission==='granted')return;
@@ -5275,42 +5288,7 @@ function speak(text){
   window.speechSynthesis.speak(u);
 }
 
-// PWA Service Worker
-// Версия приложения — должна совпадать с CACHE в sw.js
-const APP_VER='fsc-v32';
-let _swBusy=false;
-
-// При каждом открытии: тихо проверяем sw.js на сервере
-// Если там другая версия — перезагружаемся сами, без участия пользователя
-(async()=>{
-  try{
-    const r=await fetch('/fsc-app/sw.js',{cache:'no-store'});
-    const txt=await r.text();
-    const m=txt.match(/CACHE\s*=\s*['"]([^'"]+)['"]/);
-    if(m&&m[1]!==APP_VER&&!_swBusy){
-      _swBusy=true;
-      if(navigator.serviceWorker?.controller)
-        navigator.serviceWorker.controller.postMessage('SKIP_WAITING');
-      setTimeout(()=>location.reload(true),300);
-    }
-  }catch(e){}
-})();
-
-if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('/fsc-app/sw.js').then(reg=>{
-    reg.update();
-    reg.addEventListener('updatefound',()=>{
-      const nw=reg.installing;
-      nw.addEventListener('statechange',()=>{
-        if(nw.state==='installed'&&navigator.serviceWorker.controller)
-          nw.postMessage('SKIP_WAITING');
-      });
-    });
-  }).catch(()=>{});
-  navigator.serviceWorker.addEventListener('controllerchange',()=>{
-    if(!_swBusy){_swBusy=true;location.reload();}
-  });
-}
+// PWA Service Worker — регистрацией управляет OneSignal (OneSignalSDKWorker.js)
 </script>
 
 <!-- ═══ MORNING BRIEF ═══ -->

@@ -4483,11 +4483,27 @@ async function subscribeWebPush(){
     toast('Запрашиваем разрешение…','ok');
     const perm=await Notification.requestPermission();
     if(perm!=='granted'){toast('Разрешение на уведомления отклонено','err');return;}
-    toast('Подписываемся…','ok');
+    toast('Сбрасываем старую подписку…','ok');
+    // Полный сброс: снимаем ВСЕ SW регистрации чтобы FCM дал новый endpoint
+    const regs=await navigator.serviceWorker.getRegistrations();
+    for(const r of regs){
+      const s=await r.pushManager.getSubscription();
+      if(s) await s.unsubscribe();
+      await r.unregister();
+    }
+    // Перерегистрируем SW
+    const newReg=await navigator.serviceWorker.register('/fsc-app/sw.js',{scope:'/fsc-app/'});
+    await new Promise(res=>{
+      if(newReg.active){res();return;}
+      newReg.addEventListener('updatefound',()=>{
+        const w=newReg.installing;
+        w.addEventListener('statechange',()=>{ if(w.state==='activated')res(); });
+      });
+      // Fallback если SW уже активен
+      navigator.serviceWorker.ready.then(res);
+    });
     const reg=await navigator.serviceWorker.ready;
-    // Всегда отписываемся и создаём новую подписку с актуальным VAPID ключом
-    const oldSub=await reg.pushManager.getSubscription();
-    if(oldSub) await oldSub.unsubscribe();
+    toast('Создаём новую подписку…','ok');
     const sub=await reg.pushManager.subscribe({
       userVisibleOnly:true,
       applicationServerKey:_urlBase64ToUint8(VAPID_PUBLIC_KEY)
@@ -4497,7 +4513,7 @@ async function subscribeWebPush(){
     const existing=await _loadPushSubs();
     existing[devId]=subObj;
     await _savePushSubs(existing);
-    toast('✅ Подписка сохранена! Теперь нажми Тест','ok');
+    toast('✅ Новая подписка сохранена! Нажми Тест','ok');
     _checkPushStatus();
   }catch(e){
     console.error('WebPush subscribe failed:',e);
@@ -5297,7 +5313,7 @@ function speak(text){
 
 // PWA Service Worker
 // Версия приложения — должна совпадать с CACHE в sw.js
-const APP_VER='fsc-v29';
+const APP_VER='fsc-v30';
 let _swBusy=false;
 
 // При каждом открытии: тихо проверяем sw.js на сервере

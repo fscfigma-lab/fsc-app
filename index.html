@@ -4455,18 +4455,33 @@ async function getStorageInfo(){
 ═══════════════════════════════════════ */
 const ONESIGNAL_APP_ID='00e0da53-ae8a-4e4f-a2c9-bb74f68f97ef';
 
-// Инициализация OneSignal
-window.OneSignalDeferred=window.OneSignalDeferred||[];
-window.OneSignalDeferred.push(async function(OneSignal){
-  await OneSignal.init({
-    appId:ONESIGNAL_APP_ID,
-    serviceWorkerPath:'OneSignalSDKWorker.js',
-    serviceWorkerParam:{scope:'/fsc-app/'},
-    notifyButton:{enable:false},
-    promptOptions:{slidedown:{enabled:false}}
+// Инициализация OneSignal — сначала регистрируем SW вручную, потом OneSignal
+(async()=>{
+  if('serviceWorker' in navigator){
+    try{
+      // Регистрируем OneSignal SW явно и ждём активации
+      const reg=await navigator.serviceWorker.register('/fsc-app/OneSignalSDKWorker.js',{scope:'/fsc-app/'});
+      if(reg.installing){
+        await new Promise(resolve=>{
+          reg.installing.addEventListener('statechange',function(){
+            if(this.state==='activated')resolve();
+          });
+        });
+      }
+    }catch(e){console.warn('SW reg failed:',e);}
+  }
+  window.OneSignalDeferred=window.OneSignalDeferred||[];
+  window.OneSignalDeferred.push(async function(OneSignal){
+    await OneSignal.init({
+      appId:ONESIGNAL_APP_ID,
+      serviceWorkerPath:'OneSignalSDKWorker.js',
+      serviceWorkerParam:{scope:'/fsc-app/'},
+      notifyButton:{enable:false},
+      promptOptions:{slidedown:{enabled:false}}
+    });
+    _checkPushStatus();
   });
-  _checkPushStatus();
-});
+})();
 
 function _showPushBanner(){
   if(Notification.permission==='granted')return;

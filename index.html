@@ -4451,7 +4451,7 @@ async function getStorageInfo(){
 /* ═══════════════════════════════════════
    PUSH NOTIFICATIONS (Web Push / VAPID)
 ═══════════════════════════════════════ */
-const VAPID_PUBLIC_KEY='BNUsUKeLFAEB6S8j_wMUWQA1IBLUsavwD_v_hNHpxQekJRzteF-XAfJHdWXZajKvIm0QmSSQAQylbE856Nl7FHk';
+const VAPID_PUBLIC_KEY='BESCyBVi7rANPtvZIP5yuCPUjdjXtJ1a-hVlOVlb2BF-v-jsp12rnmcHSfmSeXyt5mXCAgUw-C8gUnJX9yae2Zo';
 
 function _urlBase64ToUint8(base64String){
   const padding='='.repeat((4-base64String.length%4)%4);
@@ -5297,7 +5297,7 @@ function speak(text){
 
 // PWA Service Worker
 // Версия приложения — должна совпадать с CACHE в sw.js
-const APP_VER='fsc-v26';
+const APP_VER='fsc-v27';
 let _swBusy=false;
 
 // При каждом открытии: тихо проверяем sw.js на сервере

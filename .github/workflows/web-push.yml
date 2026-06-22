@@ -31,11 +31,18 @@ jobs:
             const SUPA_URL = process.env.SUPA_URL;
             const SUPA_KEY = process.env.SUPA_KEY;
 
+            if (!process.env.VAPID_PRIVATE_KEY) {
+              core.setFailed('VAPID_PRIVATE_KEY не задан в GitHub Secrets!');
+              return;
+            }
+
             webpush.setVapidDetails(
-              process.env.VAPID_EMAIL,
+              process.env.VAPID_EMAIL || 'mailto:fscfigma@gmail.com',
               process.env.VAPID_PUBLIC_KEY,
               process.env.VAPID_PRIVATE_KEY
             );
+
+            console.log('VAPID Public Key (первые 20 символов):', process.env.VAPID_PUBLIC_KEY?.slice(0,20));
 
             const headers = {
               'apikey': SUPA_KEY,
@@ -61,6 +68,7 @@ jobs:
 
             // 3. Отправляем
             const deadSubs = new Set();
+            let sent = 0, failed = 0;
             for (const notif of queue) {
               const payload = JSON.stringify({
                 title: notif.title,
@@ -69,12 +77,14 @@ jobs:
               });
               for (const [devId, sub] of subEntries) {
                 try {
-                  await webpush.sendNotification(sub, payload);
+                  const result = await webpush.sendNotification(sub, payload);
+                  console.log(`✅ Отправлено [${devId.slice(0,6)}]: статус ${result.statusCode}`);
+                  sent++;
                 } catch (e) {
+                  console.error(`❌ Ошибка [${devId.slice(0,6)}]: ${e.statusCode} — ${e.message}`);
+                  failed++;
                   if (e.statusCode === 410 || e.statusCode === 404) {
                     deadSubs.add(devId);
-                  } else {
-                    console.warn(`Push failed [${devId}]:`, e.message);
                   }
                 }
               }
@@ -91,11 +101,21 @@ jobs:
               console.log(`Удалено устаревших: ${deadSubs.size}`);
             }
 
-            // 5. Очищаем очередь
+            // 5. Пишем результат в Supabase для диагностики
+            await fetch(`${SUPA_URL}/rest/v1/app_data`, {
+              method: 'POST',
+              headers: { ...headers, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
+              body: JSON.stringify({ id: 'push_log', data: { ts: new Date().toISOString(), sent, failed, queue: queue.length, subs: subEntries.length } })
+            });
+
+            // 6. Очищаем очередь
             await fetch(`${SUPA_URL}/rest/v1/app_data`, {
               method: 'POST',
               headers: { ...headers, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
               body: JSON.stringify({ id: 'push_queue', data: [] })
             });
 
-            console.log(`✅ Готово: ${queue.length} уведомлений → ${subEntries.length} устройств`);
+            console.log(`✅ Итого: отправлено ${sent}, ошибок ${failed}`);
+            if (failed > 0 && sent === 0) {
+              core.setFailed(`Все отправки провалились: ${failed} ошибок`);
+            }

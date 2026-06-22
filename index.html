@@ -1940,11 +1940,12 @@ function loadLocal(){try{const s=localStorage.getItem('fsc4');if(s)return JSON.p
   return JSON.parse(JSON.stringify(DEFAULTS))}
 let _saveCount=0;
 function save(){
+  D.savedAt=new Date().toISOString();
   localStorage.setItem('fsc4_user', D.currentUser ? JSON.stringify(D.currentUser) : '');
   localStorage.setItem('fsc4', JSON.stringify(D));
   const cloudD = Object.assign({}, D);
   delete cloudD.currentUser;
-  sb.from('app_data').upsert({id:'main',data:cloudD,updated_at:new Date().toISOString()})
+  sb.from('app_data').upsert({id:'main',data:cloudD,updated_at:D.savedAt})
     .then(({error})=>{if(error)console.error('Supabase save error:',error)});
   // Авто-бэкап каждые 20 сохранений
   _saveCount++;
@@ -4395,7 +4396,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
     if(D.sheetsUrl)setTimeout(()=>syncFromSheets(true),3000);
     // И каждые 10 минут пока приложение открыто
     setInterval(()=>{if(D.sheetsUrl)syncFromSheets(true);},10*60*1000);
-    // Фоновая синхронизация данных — подтягиваем изменения с других устройств каждые 30 сек
+    // Фоновая синхронизация — только если Supabase новее (по savedAt)
     setInterval(_cloudSync,30000);
   }
 });
@@ -4404,12 +4405,15 @@ document.addEventListener('DOMContentLoaded',async()=>{
 async function _cloudSync(){
   if(!D.currentUser)return;
   try{
-    const {data,error}=await sb.from('app_data').select('data').eq('id','main').maybeSingle();
+    const {data,error}=await sb.from('app_data').select('data,updated_at').eq('id','main').maybeSingle();
     if(error||!data?.data?.projects)return;
     const newD=data.data;
-    // Сравниваем ключевые массивы — если изменились, обновляем и перерисовываем
-    const sig=x=>JSON.stringify([x.projects,x.tasks,x.stages,x.log?.slice(0,5)]);
-    if(sig(newD)===sig(D))return;
+    // Берём данные из облака только если они НОВЕЕ локальных
+    const cloudTs=new Date(data.updated_at||0).getTime();
+    const localTs=new Date(D.savedAt||0).getTime();
+    if(cloudTs<=localTs)return;
+    // Дополнительная защита: никогда не уменьшаем кол-во проектов из облака
+    if((newD.projects?.length||0)<(D.projects?.length||0))return;
     const savedUser=D.currentUser;
     D=newD;
     D.currentUser=savedUser;
@@ -5288,7 +5292,7 @@ function speak(text){
 
 // PWA Service Worker
 // Версия приложения — должна совпадать с CACHE в sw.js
-const APP_VER='fsc-v21';
+const APP_VER='fsc-v22';
 let _swBusy=false;
 
 // При каждом открытии: тихо проверяем sw.js на сервере

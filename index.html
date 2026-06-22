@@ -4456,30 +4456,17 @@ async function getStorageInfo(){
 const ONESIGNAL_APP_ID='00e0da53-ae8a-4e4f-a2c9-bb74f68f97ef';
 
 // Инициализация OneSignal
-// Сначала убираем старый sw.js чтобы OneSignal мог зарегистрировать свой
-(async()=>{
-  if('serviceWorker' in navigator){
-    try{
-      const regs=await navigator.serviceWorker.getRegistrations();
-      for(const reg of regs){
-        if(reg.active?.scriptURL?.includes('sw.js')||reg.scope?.includes('/fsc-app/')){
-          await reg.unregister();
-        }
-      }
-    }catch(e){}
-  }
-  window.OneSignalDeferred=window.OneSignalDeferred||[];
-  window.OneSignalDeferred.push(async function(OneSignal){
-    await OneSignal.init({
-      appId:ONESIGNAL_APP_ID,
-      serviceWorkerPath:'OneSignalSDKWorker.js',
-      serviceWorkerParam:{scope:'/fsc-app/'},
-      notifyButton:{enable:false},
-      promptOptions:{slidedown:{enabled:false}}
-    });
-    _checkPushStatus();
+window.OneSignalDeferred=window.OneSignalDeferred||[];
+window.OneSignalDeferred.push(async function(OneSignal){
+  await OneSignal.init({
+    appId:ONESIGNAL_APP_ID,
+    serviceWorkerPath:'OneSignalSDKWorker.js',
+    serviceWorkerParam:{scope:'/fsc-app/'},
+    notifyButton:{enable:false},
+    promptOptions:{slidedown:{enabled:false}}
   });
-})();
+  _checkPushStatus();
+});
 
 function _showPushBanner(){
   if(Notification.permission==='granted')return;

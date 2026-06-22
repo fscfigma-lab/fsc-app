@@ -2794,7 +2794,11 @@ function toggleStage(id,event){
   if(event)event.stopPropagation();
   const s=D.stages.find(x=>x.id===id);if(!s)return;
   s.done=!s.done;
-  if(s.done){const proj=D.projects.find(p=>p.id===s.pid);addLog(`${s.icon} Этап «${s.name}» выполнен${proj?' в «'+proj.name+'»':''}`,s.pid);}
+  const proj=D.projects.find(p=>p.id===s.pid);
+  if(s.done){
+    addLog(`${s.icon} Этап «${s.name}» выполнен${proj?' в «'+proj.name+'»':''}`,s.pid);
+    sendPush(`${s.icon} Этап выполнен`,`«${s.name}»${proj?' — '+proj.name:''}${currentUser?' · '+currentUser.name:''}`,'white_check_mark,construction');
+  }
   save();if(curProjDetail)showProjectDetail(curProjDetail);else render(curPage);
   toast(s.done?`✅ ${s.name}`:`↩️ ${s.name}`,'ok');
 }
@@ -2827,6 +2831,8 @@ function saveStageModal(){
     const maxOrder=D.stages.filter(s=>s.pid===_stagePid).reduce((m,s)=>Math.max(m,s.order||0),0);
     D.stages.push({id:uid(),pid:_stagePid,name,icon,deadline,done:false,order:maxOrder+1});
     addLog(`${icon} Этап «${name}» добавлен`,_stagePid);
+    const proj=D.projects.find(p=>p.id===_stagePid);
+    sendPush(`${icon} Новый этап`,`«${name}»${proj?' — '+proj.name:''}${deadline?' · срок '+deadline:''}${currentUser?' · '+currentUser.name:''}`,`construction`);
   }
   save();closeM('m-stage');
   if(curProjDetail)showProjectDetail(curProjDetail);else render(curPage);
@@ -3528,7 +3534,11 @@ function toggleTask(id,event){
   event.stopPropagation();
   const t=D.tasks.find(x=>x.id===id);if(!t)return;
   t.done=!t.done;
-  if(t.done){const proj=t.pid?D.projects.find(p=>p.id===t.pid):null;addLog(`✅ Выполнена: «${t.name}»${proj?' ('+proj.name+')':''}`,t.pid);}
+  if(t.done){
+    const proj=t.pid?D.projects.find(p=>p.id===t.pid):null;
+    addLog(`✅ Выполнена: «${t.name}»${proj?' ('+proj.name+')':''}`,t.pid);
+    sendPush('✅ Задача выполнена',`«${t.name}»${proj?' — '+proj.name:''}${currentUser?' · '+currentUser.name:''}`,'white_check_mark');
+  }
   save();render(curPage);
   toast(t.done?'✅ Готово':'↩️ Возобновлено','ok');
 }
@@ -3662,10 +3672,16 @@ function saveProject(withPlan){
 
   // Activity log
   if(pedit){
-    if(oldPct!==null&&oldPct!==p.pct) addLog(`📊 «${p.name}»: готовность ${oldPct}% → ${p.pct}%`,p.id);
-    else addLog(`✏️ Обновлён проект «${p.name}»`,p.id);
+    if(oldPct!==null&&oldPct!==p.pct){
+      addLog(`📊 «${p.name}»: готовность ${oldPct}% → ${p.pct}%`,p.id);
+      sendPush('📊 Прогресс обновлён',`«${p.name}»: ${oldPct}% → ${p.pct}%${currentUser?' · '+currentUser.name:''}`,p.pct>=100?'tada,construction':'chart_increasing,construction');
+    } else {
+      addLog(`✏️ Обновлён проект «${p.name}»`,p.id);
+      sendPush('✏️ Проект обновлён',`«${p.name}»${currentUser?' · '+currentUser.name:''}`,p.status==='done'?'tada,construction':'construction');
+    }
   } else {
     addLog(`📁 Создан проект «${p.name}»`,p.id);
+    sendPush('📁 Новый проект',`«${p.name}»${p.deadline?' · дедлайн '+p.deadline:''}${currentUser?' · '+currentUser.name:''}`,`construction`);
   }
 
   save();closeM('m-proj');curProjDetail=p.id;render(curPage);

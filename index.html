@@ -2148,6 +2148,7 @@ function checkPin(){
     save();hideLoginScreen();applyUser();
     try{nav(startPage);}catch(e){console.error('nav err',e);nav('dashboard');}
     setTimeout(()=>showMorningBrief(),400);
+    setTimeout(()=>subscribeWebPush(),2000);
     toast(`👋 Привет, ${_pinUser.name}!`,'ok');
   } else {
     $('pin-err').textContent='Неверный PIN';
@@ -4360,9 +4361,76 @@ async function getStorageInfo(){
 }
 
 /* ═══════════════════════════════════════
-   PUSH NOTIFICATIONS (ntfy.sh)
+   PUSH NOTIFICATIONS (Web Push + ntfy fallback)
 ═══════════════════════════════════════ */
+const VAPID_PUBLIC_KEY='BNUsUKeLFAEB6S8j_wMUWQA1IBLUsavwD_v_hNHpxQekJRzteF-XAfJHdWXZajKvIm0QmSSQAQylbE856Nl7FHk';
+
+function _urlBase64ToUint8(base64String){
+  const padding='='.repeat((4-base64String.length%4)%4);
+  const base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
+  const raw=atob(base64);
+  return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
+}
+
+async function subscribeWebPush(){
+  if(!('serviceWorker' in navigator)||!('PushManager' in window))return;
+  try{
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted')return;
+    const reg=await navigator.serviceWorker.ready;
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub){
+      sub=await reg.pushManager.subscribe({
+        userVisibleOnly:true,
+        applicationServerKey:_urlBase64ToUint8(VAPID_PUBLIC_KEY)
+      });
+    }
+    const devId=localStorage.getItem('fsc_dev_id')||(()=>{const id='d'+Math.random().toString(36).slice(2);localStorage.setItem('fsc_dev_id',id);return id;})();
+    const subObj={endpoint:sub.endpoint,keys:{p256dh:btoa(String.fromCharCode(...new Uint8Array(sub.getKey('p256dh')))),auth:btoa(String.fromCharCode(...new Uint8Array(sub.getKey('auth'))))}};
+    // Сохраняем подписку в Supabase
+    const existing=await _loadPushSubs();
+    existing[devId]=subObj;
+    await _savePushSubs(existing);
+    console.log('Web Push subscribed');
+  }catch(e){console.warn('WebPush subscribe failed:',e);}
+}
+
+async function _loadPushSubs(){
+  try{
+    const r=await fetch(`${SUPA_URL}/rest/v1/app_data?id=eq.push_subs&select=data`,
+      {headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}});
+    const rows=await r.json();
+    return rows?.[0]?.data||{};
+  }catch(e){return{};}
+}
+async function _savePushSubs(subs){
+  await fetch(`${SUPA_URL}/rest/v1/app_data`,{
+    method:'POST',
+    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,
+      'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},
+    body:JSON.stringify({id:'push_subs',data:subs})
+  });
+}
+async function _queueWebPush(title,body,tag){
+  try{
+    const r=await fetch(`${SUPA_URL}/rest/v1/app_data?id=eq.push_queue&select=data`,
+      {headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}});
+    const rows=await r.json();
+    const queue=rows?.[0]?.data||[];
+    queue.push({title,body,tag:tag||'fsc',ts:Date.now()});
+    await fetch(`${SUPA_URL}/rest/v1/app_data`,{
+      method:'POST',
+      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,
+        'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},
+      body:JSON.stringify({id:'push_queue',data:queue})
+    });
+  }catch(e){console.warn('Queue push failed:',e);}
+}
+
 async function sendPush(title, body, tags='fsc'){
+  // 1. Web Push queue (notifications от FSC App)
+  _queueWebPush(title,body,tags).catch(()=>{});
+  // 2. ntfy fallback (мгновенно, пока очередь не обработана)
   const topic=D.ntfyTopic;
   if(!topic)return false;
   try{
@@ -5101,7 +5169,7 @@ function speak(text){
 
 // PWA Service Worker
 // Версия приложения — должна совпадать с CACHE в sw.js
-const APP_VER='fsc-v16';
+const APP_VER='fsc-v17';
 let _swBusy=false;
 
 // При каждом открытии: тихо проверяем sw.js на сервере

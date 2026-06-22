@@ -1,0 +1,86 @@
+name: 📲 Web Push (от FSC App)
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'   # каждые 10 минут
+  workflow_dispatch:
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Отправить Web Push из очереди
+        uses: actions/github-script@v7
+        env:
+          SUPA_URL: 'https://yhsedgaimfgbcqbjltkv.supabase.co'
+          SUPA_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inloc2VkZ2FpbWZnYmNxYmpsdGt2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMjQxOTMsImV4cCI6MjA5NjYwMDE5M30.aThP2KxMEmw0DHf0PPIMF82SiqSLBRbA9Q-HuHENxIE'
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_EMAIL: ${{ secrets.VAPID_EMAIL }}
+        with:
+          script: |
+            const { execSync } = require('child_process');
+            execSync('npm install web-push --silent', { cwd: '/tmp' });
+            const webpush = require('/tmp/node_modules/web-push');
+
+            const SUPA_URL = process.env.SUPA_URL;
+            const SUPA_KEY = process.env.SUPA_KEY;
+
+            webpush.setVapidDetails(
+              process.env.VAPID_EMAIL,
+              process.env.VAPID_PUBLIC_KEY,
+              process.env.VAPID_PRIVATE_KEY
+            );
+
+            const headers = { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${SUPA_KEY}` };
+
+            // ── 1. Загружаем очередь уведомлений ──
+            const qRes = await fetch(`${SUPA_URL}/rest/v1/app_data?id=eq.push_queue&select=data`, { headers });
+            const qRows = await qRes.json();
+            const queue = qRows?.[0]?.data || [];
+
+            if (queue.length === 0) { console.log('Очередь пуста'); return; }
+            console.log(`Уведомлений в очереди: ${queue.length}`);
+
+            // ── 2. Загружаем подписки ──
+            const sRes = await fetch(`${SUPA_URL}/rest/v1/app_data?id=eq.push_subs&select=data`, { headers });
+            const sRows = await sRes.json();
+            const subs = sRows?.[0]?.data || {};
+            const subList = Object.values(subs);
+
+            if (subList.length === 0) { console.log('Подписчиков нет'); return; }
+            console.log(`Подписчиков: ${subList.length}`);
+
+            // ── 3. Отправляем каждое уведомление каждому подписчику ──
+            const deadSubs = new Set();
+            for (const notif of queue) {
+              const payload = JSON.stringify({ title: notif.title, body: notif.body, tag: notif.tag || 'fsc' });
+              for (const [devId, sub] of Object.entries(subs)) {
+                try {
+                  await webpush.sendNotification(sub, payload);
+                } catch (e) {
+                  if (e.statusCode === 410 || e.statusCode === 404) deadSubs.add(devId);
+                  else console.warn(`Push failed for ${devId}:`, e.message);
+                }
+              }
+            }
+
+            // ── 4. Удаляем просроченные подписки ──
+            if (deadSubs.size > 0) {
+              for (const id of deadSubs) delete subs[id];
+              await fetch(`${SUPA_URL}/rest/v1/app_data`, {
+                method: 'POST',
+                headers: { ...headers, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
+                body: JSON.stringify({ id: 'push_subs', data: subs })
+              });
+              console.log(`Удалено устаревших подписок: ${deadSubs.size}`);
+            }
+
+            // ── 5. Очищаем очередь ──
+            await fetch(`${SUPA_URL}/rest/v1/app_data`, {
+              method: 'POST',
+              headers: { ...headers, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
+              body: JSON.stringify({ id: 'push_queue', data: [] })
+            });
+
+            console.log(`✅ Отправлено: ${queue.length} уведомлений → ${subList.length} устройств`);

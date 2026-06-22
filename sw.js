@@ -1,4 +1,4 @@
-const CACHE = 'fsc-v16';
+const CACHE = 'fsc-v17';
 const BASE = '/fsc-app';
 
 self.addEventListener('install', e => {
@@ -31,6 +31,30 @@ self.addEventListener('fetch', e => {
   // Статика — кэш, потом сеть
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request))
+  );
+});
+
+self.addEventListener('push', e => {
+  const data = e.data ? e.data.json() : {};
+  e.waitUntil(
+    self.registration.showNotification(data.title || 'FSC App', {
+      body: data.body || '',
+      icon: self.location.origin + '/fsc-app/icon-192.png',
+      badge: self.location.origin + '/fsc-app/icon-192.png',
+      tag: data.tag || 'fsc',
+      renotify: true,
+      data: { url: self.location.origin + '/fsc-app/' }
+    })
+  );
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(
+    clients.matchAll({ type: 'window' }).then(cs => {
+      for (const c of cs) if (c.url.includes('/fsc-app') && 'focus' in c) return c.focus();
+      if (clients.openWindow) return clients.openWindow('/fsc-app/');
+    })
   );
 });
 

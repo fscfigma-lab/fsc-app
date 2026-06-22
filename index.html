@@ -133,7 +133,9 @@ body{background:var(--bg)}
 .btn-d:hover{background:rgba(184,50,50,0.14)}
 
 /* ── STATS ── */
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:24px}
+@media(max-width:900px){.stats{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:600px){.stats{grid-template-columns:repeat(2,1fr)}}
 .sc{background:var(--s1);border:1px solid var(--b2);border-radius:8px;
   padding:20px 20px;cursor:pointer;transition:all .18s;
   position:relative;overflow:hidden;box-shadow:var(--shadow)}
@@ -1216,6 +1218,7 @@ body{background:var(--bg)}
           <div class="sc" onclick="setTF('today');nav('tasks')"><div class="sc-label">Сегодня</div><div class="sc-val y" id="st-td">0</div><div class="sc-hint">задач</div></div>
           <div class="sc" onclick="setTF('week');nav('tasks')"><div class="sc-label">Неделя</div><div class="sc-val w" id="st-wk">0</div><div class="sc-hint">задач</div></div>
           <div class="sc" onclick="nav('projects')"><div class="sc-label">Проектов</div><div class="sc-val g" id="st-pr">0</div><div class="sc-hint">активных</div></div>
+          <div class="sc g"><div class="sc-label">Выполнено</div><div class="sc-val g" id="st-done">0</div><div class="sc-hint">за 7 дней</div></div>
         </div>
 
         <div class="sec-title">🚦 Риски по проектам</div>
@@ -1236,6 +1239,10 @@ body{background:var(--bg)}
         </div>
         <!-- РП: быстрое обновление этапов -->
         <div id="rpm-section" style="display:none"></div>
+
+        <div class="divider"></div>
+        <div class="sec-title">🕐 Последние изменения</div>
+        <div id="d-activity"></div>
       </div>
     </div>
 
@@ -1589,11 +1596,15 @@ body{background:var(--bg)}
       <div style="flex:1"><label class="fl">Время</label><input type="time" class="fi" id="t-remind-t"></div>
     </div>
     <div class="fg">
+      <label class="fl">📝 Заметки</label>
+      <textarea class="fi" id="t-notes" rows="3" placeholder="Комментарии, детали, ссылки…" style="resize:vertical;min-height:72px;line-height:1.5"></textarea>
+    </div>
+    <div class="fg">
       <label class="fl">📎 Фото с объекта</label>
       <div class="photos-row" id="t-photos-row"></div>
       <label class="btn btn-s" style="cursor:pointer;font-size:12px;display:inline-flex;align-items:center;gap:5px;margin-top:2px">
         📷 Добавить фото
-        <input type="file" id="t-photo-inp" accept="image/*" multiple style="display:none" onchange="addTaskPhotos(this)">
+        <input type="file" id="t-photo-inp" accept="image/*" capture="environment" multiple style="display:none" onchange="addTaskPhotos(this)">
       </label>
     </div>
     <div class="mfoot">
@@ -2398,7 +2409,7 @@ function rDash(){
   const now=new Date();
   $('today-label').textContent=`${days[now.getDay()]}, ${fdate(TODAY())}`;
 
-  const t=TODAY(),wk=addDays(t,7);
+  const t=TODAY(),wk=addDays(t,7),wkAgo=addDays(t,-7);
   const myProjs=visibleProjects();
   const myTasks=visibleTasks();
   const pend=myTasks.filter(x=>!x.done);
@@ -2406,9 +2417,11 @@ function rDash(){
   const td=pend.filter(x=>x.dead===t);
   const wkT=pend.filter(x=>x.dead&&x.dead>t&&x.dead<=wk);
   const actP=myProjs.filter(p=>p.status!=='done').length;
+  const doneWk=myTasks.filter(x=>x.done&&x.dead&&x.dead>=wkAgo&&x.dead<=t).length;
 
   $('st-od').textContent=od.length;$('st-td').textContent=td.length;
   $('st-wk').textContent=wkT.length;$('st-pr').textContent=actP;
+  const dEl=$('st-done');if(dEl)dEl.textContent=doneWk;
 
   const banner=$('od-banner');
   if(od.length>0){banner.style.display='flex';$('od-txt').innerHTML=`<strong>${decl(od.length,'задача','задачи','задач')} просрочено</strong>`}
@@ -2517,6 +2530,33 @@ function rDash(){
       rpmSection.style.display='none';
     }
   }
+
+  // Activity feed
+  const actEl=$('d-activity');
+  if(actEl){
+    const log=(D.log||[]).slice(0,8);
+    actEl.innerHTML=log.length?log.map(l=>{
+      const ago=_timeAgo(l.ts);
+      const proj=l.pid?D.projects.find(p=>p.id===l.pid):null;
+      return`<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--b1)"
+        ${proj?`onclick="openProjectDetail('${proj.id}');nav('projects')" style="cursor:pointer"`:''}>
+        <div style="font-size:11px;color:var(--t3);white-space:nowrap;margin-top:2px;min-width:60px">${ago}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${l.msg}</div>
+          ${l.user?`<div style="font-size:11px;color:var(--t3);margin-top:2px">${l.user}</div>`:''}
+        </div>
+      </div>`;
+    }).join(''):`<div style="color:var(--t3);font-size:13px;padding:8px 0">Пока нет активности</div>`;
+  }
+}
+
+function _timeAgo(iso){
+  const diff=Date.now()-new Date(iso).getTime();
+  const m=Math.floor(diff/60000),h=Math.floor(m/60),d=Math.floor(h/24);
+  if(d>0)return d+'д назад';
+  if(h>0)return h+'ч назад';
+  if(m>0)return m+'м назад';
+  return'только что';
 }
 
 function setPid_nav(managerName){
@@ -3645,10 +3685,12 @@ function tiHTML(task,showProj){
   const taskTags=task.tags?.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${
     task.tags.map(t=>`<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:var(--acc-bg);color:var(--acc);border:1px solid var(--acc-bd)">${t}</span>`).join('')
   }</div>`:'';
+  const notesPreview=task.notes&&!task.done?`<div style="font-size:11px;color:var(--t3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">📝 ${task.notes}</div>`:'';
   return`<div class="ti ${task.done?'dn':''} ${ds==='overdue'&&!task.done?'od':''}" style="${urgStyle}" onclick="openTaskModal('${task.id}')">
     <div class="tchk ${task.done?'ck':''}" onclick="toggleTask('${task.id}',event)"></div>
     <div class="tbody">
       <div class="ttitle">${task.name} ${urgBadge}${extraIcons?`<span style="font-size:11px;opacity:.6">${extraIcons}</span>`:''}</div>
+      ${notesPreview}
       ${mobProj}
       ${taskTags}
       ${deskTags}
@@ -3897,12 +3939,13 @@ function openTaskModal(tid,forceProj){
       $('t-name').value=t.name;$('t-proj').value=t.pid||'';
       $('t-dead').value=t.dead||'';$('t-time').value=t.time||'';
       $('t-who').value=t.who||'';$('t-prio').value=t.prio||'medium';
+      $('t-notes').value=t.notes||'';
       _tTags=[...(t.tags||[])];_tPhotos=[...(t.photos||[])];
       const rd=t.remind?t.remind.split('T'):['',''];
       $('t-remind-d').value=rd[0]||'';$('t-remind-t').value=rd[1]||'';
     }
   }else{
-    $('t-name').value='';
+    $('t-name').value='';$('t-notes').value='';
     const defProj=forceProj||curProjDetail||(tfilt&&!['all','overdue','today','week'].includes(tfilt)?tfilt:'');
     $('t-proj').value=defProj;
     $('t-dead').value=TODAY();$('t-time').value='';$('t-who').value='';$('t-prio').value='medium';
@@ -3916,8 +3959,10 @@ function saveTask(){
   const name=$('t-name').value.trim();if(!name){toast('Введи название','err');return}
   const rd=$('t-remind-d').value,rt=$('t-remind-t').value;
   const remind=rd?(rd+(rt?'T'+rt:'T00:00')):null;
+  const notes=($('t-notes').value||'').trim()||undefined;
   const t={id:tedit||uid(),name,pid:$('t-proj').value||null,dead:$('t-dead').value||null,
     time:$('t-time').value||null,who:$('t-who').value||null,prio:$('t-prio').value,done:false,
+    notes,
     tags:_tTags.length?[..._tTags]:undefined,
     photos:_tPhotos.length?[..._tPhotos]:undefined,
     remind:remind||undefined};
@@ -3980,9 +4025,19 @@ async function addTaskPhotos(inp){
 }
 function removePhoto(i){_tPhotos.splice(i,1);_renderPhotos();}
 function viewPhoto(arrOrIdx,idx){
-  const src=Array.isArray(arrOrIdx)?arrOrIdx[idx||0]:_tPhotos[arrOrIdx];
-  const w=window.open();
-  w.document.write(`<img src="${src}" style="max-width:100%;max-height:100vh;display:block;margin:auto">`);
+  const src=Array.isArray(arrOrIdx)?arrOrIdx[typeof idx==='number'?idx:0]:_tPhotos[arrOrIdx];
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+  ov.onclick=()=>ov.remove();
+  const img=document.createElement('img');
+  img.src=src;
+  img.style.cssText='max-width:96vw;max-height:96vh;object-fit:contain;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,.6)';
+  const close=document.createElement('button');
+  close.textContent='✕';
+  close.style.cssText='position:absolute;top:16px;right:20px;background:rgba(255,255,255,.15);border:none;color:#fff;font-size:20px;width:40px;height:40px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center';
+  close.onclick=e=>{e.stopPropagation();ov.remove();};
+  ov.append(img,close);
+  document.body.append(ov);
 }
 function _compressPhoto(file,max=800,q=0.65){
   return new Promise(res=>{
@@ -4447,7 +4502,19 @@ async function _queueWebPush(title,body,tag){
         'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},
       body:JSON.stringify({id:'push_queue',data:queue})
     });
+    // Мгновенный триггер — запускаем GitHub Actions без ожидания 10 минут
+    _triggerPushWorkflow();
   }catch(e){console.warn('Queue push failed:',e);}
+}
+
+function _triggerPushWorkflow(){
+  const pat=D.githubPat;
+  if(!pat)return;
+  fetch('https://api.github.com/repos/fscfigma-lab/fsc-app/actions/workflows/web-push.yml/dispatches',{
+    method:'POST',
+    headers:{'Authorization':'Bearer '+pat,'Accept':'application/vnd.github+json','Content-Type':'application/json'},
+    body:JSON.stringify({ref:'main'})
+  }).catch(()=>{});
 }
 
 async function sendPush(title, body, tags='fsc'){
@@ -4529,12 +4596,21 @@ async function showSettingsModal(){
       Уведомления приходят прямо из FSC App — никаких сторонних приложений.<br>
       Каждый сотрудник разрешает уведомления один раз при первом входе.
     </div>
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
       <span style="font-size:12px;padding:4px 12px;border-radius:8px;${typeof Notification!=='undefined'&&Notification.permission==='granted'?'background:var(--grn-bg);color:var(--grn)':'background:var(--yel-bg);color:var(--yel)'}">
         ${typeof Notification!=='undefined'&&Notification.permission==='granted'?'✅ Разрешены на этом устройстве':'⚠️ Не разрешены на этом устройстве'}
       </span>
       ${typeof Notification!=='undefined'&&Notification.permission!=='granted'?`<button class="btn btn-p" style="font-size:12px" onclick="subscribeWebPush().then(()=>showSettingsModal())">Включить</button>`:''}
       <button class="btn btn-s" style="font-size:12px" onclick="testPush()">🔔 Тест</button>
+    </div>
+    <div class="fg" style="margin-bottom:0">
+      <label class="fl">⚡ GitHub PAT для мгновенных уведомлений</label>
+      <input type="password" class="fi" id="gh-pat" value="${D.githubPat||''}" placeholder="github_pat_..."
+        style="font-family:monospace;font-size:12px">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+      <button class="btn btn-p" style="font-size:12px" onclick="saveGithubPat()">Сохранить PAT</button>
+      <span style="font-size:11px;color:var(--t3)">github.com → Settings → Developer settings → PAT → Fine-grained → repo:Actions:write</span>
     </div>
 
     <div class="sec-title" style="margin-top:16px">🗓 Google Календарь</div>
@@ -4593,7 +4669,15 @@ async function testPush(){
   }
   toast('Отправляем…','ok');
   await sendPush('🔔 Тест FSC уведомлений','Если видишь это — push работает! ✅','white_check_mark');
-  toast('✅ Отправлено — уведомление придёт в течение 10 минут','ok');
+  toast(D.githubPat?'✅ Отправлено — придёт через ~30 сек':'✅ Отправлено — придёт до 10 минут','ok');
+}
+
+function saveGithubPat(){
+  const val=($('gh-pat').value||'').trim();
+  D.githubPat=val||undefined;
+  save();
+  toast(val?'⚡ PAT сохранён — теперь push мгновенные':'PAT удалён','ok');
+  showSettingsModal();
 }
 
 /* ═══════════════════════════════════════
@@ -5156,7 +5240,7 @@ function speak(text){
 
 // PWA Service Worker
 // Версия приложения — должна совпадать с CACHE в sw.js
-const APP_VER='fsc-v18';
+const APP_VER='fsc-v19';
 let _swBusy=false;
 
 // При каждом открытии: тихо проверяем sw.js на сервере

@@ -407,7 +407,11 @@ body{background:var(--bg)}
 .qadd-ov{position:fixed;inset:0;z-index:299;background:rgba(0,0,0,.4);
   backdrop-filter:blur(3px);display:none}
 .qadd-ov.open{display:block}
-.qadd-handle{width:36px;height:4px;background:var(--b2);border-radius:2px;margin:0 auto 12px}
+.qadd-handle{width:36px;height:4px;background:var(--b2);border-radius:2px;margin:0 auto 10px}
+.qadd-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.qadd-close{background:none;border:none;font-size:20px;color:var(--t3);cursor:pointer;
+  padding:2px 0 2px 12px;line-height:1;flex-shrink:0}
+.qadd-close:active{opacity:.6}
 /* Title input */
 .qadd-inp{width:100%;border:none;outline:none;background:transparent;
   font-size:17px;color:var(--t1);font-family:inherit;padding:0 0 2px;line-height:1.4;box-sizing:border-box}
@@ -1407,8 +1411,11 @@ body{background:var(--bg)}
 <div class="qadd-ov" id="qadd-ov" onclick="closeQuickAdd()"></div>
 <div class="qadd-sheet" id="qadd-sheet">
   <div class="qadd-handle"></div>
-  <!-- Название задачи -->
-  <input class="qadd-inp" id="qadd-inp" type="text" placeholder="Напр., Позвонить заказчику" onkeydown="if(event.key==='Enter')saveQuickTask()">
+  <!-- Строка: инпут + крестик -->
+  <div class="qadd-top">
+    <input class="qadd-inp" id="qadd-inp" type="text" placeholder="Что нужно сделать?" onkeydown="if(event.key==='Enter')saveQuickTask()">
+    <button class="qadd-close" onclick="closeQuickAdd()">✕</button>
+  </div>
   <!-- Описание (опционально) -->
   <input class="qadd-desc-inp" id="qadd-desc" type="text" placeholder="Описание">
   <!-- Чипы действий -->
@@ -3439,10 +3446,10 @@ function fabAction(){
   else openTaskModal();
 }
 
-let _qdate=TODAY(),_qtime='',_qprio='medium',_qwho='',_qprojId=null,_qShowDate=false,_qShowWho=false,_qShowProj=false;
+let _qdate=TODAY(),_qtime='',_qprio='low',_qwho='',_qprojId=null,_qShowDate=false,_qShowWho=false,_qShowProj=false;
 
 function openQuickAdd(){
-  _qdate=TODAY();_qtime='';_qprio='medium';_qwho='';_qShowDate=false;_qShowWho=false;_qShowProj=false;
+  _qdate=TODAY();_qtime='';_qprio='low';_qwho='';_qShowDate=false;_qShowWho=false;_qShowProj=false;
   _qprojId=curProjDetail||null;
   const inp=$('qadd-inp');if(inp)inp.value='';
   const desc=$('qadd-desc');if(desc)desc.value='';
@@ -3545,7 +3552,7 @@ function _updQPrio(){
   btn.className='qadd-act';
   if(_qprio==='high'){btn.classList.add('a-ph');if(ico)ico.textContent='🔴';if(lbl)lbl.textContent='Срочно';}
   else if(_qprio==='medium'){btn.classList.add('a-pm');if(ico)ico.textContent='🟡';if(lbl)lbl.textContent='Важно';}
-  else{if(ico)ico.textContent='⚪';if(lbl)lbl.textContent='Обычно';}
+  else{if(ico)ico.textContent='🏳';if(lbl)lbl.textContent='Приоритет';}
 }
 
 // ── Исполнитель ──

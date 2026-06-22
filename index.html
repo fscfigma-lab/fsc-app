@@ -4619,11 +4619,9 @@ async function showSettingsModal(){
       Уведомления приходят прямо из FSC App — никаких сторонних приложений.<br>
       Каждый сотрудник разрешает уведомления один раз при первом входе.
     </div>
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
-      <span style="font-size:12px;padding:4px 12px;border-radius:8px;${typeof Notification!=='undefined'&&Notification.permission==='granted'?'background:var(--grn-bg);color:var(--grn)':'background:var(--yel-bg);color:var(--yel)'}">
-        ${typeof Notification!=='undefined'&&Notification.permission==='granted'?'✅ Разрешены на этом устройстве':'⚠️ Не разрешены на этом устройстве'}
-      </span>
-      ${typeof Notification!=='undefined'&&Notification.permission!=='granted'?`<button class="btn btn-p" style="font-size:12px" onclick="subscribeWebPush().then(()=>showSettingsModal())">Включить</button>`:''}
+    <div id="push-status-row" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+      <span id="push-status-chip" style="font-size:12px;padding:4px 12px;border-radius:8px;background:var(--yel-bg);color:var(--yel)">⏳ Проверяем…</span>
+      <button class="btn btn-p" style="font-size:12px" id="push-sub-btn" onclick="subscribeWebPush().then(()=>showSettingsModal())">Подписаться</button>
       <button class="btn btn-s" style="font-size:12px" onclick="testPush()">🔔 Тест</button>
     </div>
     <div class="fg" style="margin-bottom:0">
@@ -4684,6 +4682,33 @@ async function showSettingsModal(){
     </div>`;
 
   openM('m-settings');
+  // Проверяем реальный статус Web Push подписки
+  _checkPushStatus();
+}
+
+async function _checkPushStatus(){
+  const chip=$('push-status-chip'),btn=$('push-sub-btn');
+  if(!chip||!btn)return;
+  if(!('serviceWorker' in navigator)||!('PushManager' in window)){
+    chip.textContent='❌ Браузер не поддерживает push';
+    chip.style.cssText='font-size:12px;padding:4px 12px;border-radius:8px;background:var(--red-bg);color:var(--red)';
+    btn.style.display='none';return;
+  }
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    const sub=await reg.pushManager.getSubscription();
+    if(sub){
+      chip.textContent='✅ Подписан на этом устройстве';
+      chip.style.cssText='font-size:12px;padding:4px 12px;border-radius:8px;background:var(--grn-bg);color:var(--grn)';
+      btn.textContent='Переподписаться';
+    }else{
+      chip.textContent='⚠️ Не подписан — нажмите кнопку';
+      chip.style.cssText='font-size:12px;padding:4px 12px;border-radius:8px;background:var(--yel-bg);color:var(--yel)';
+      btn.textContent='Подписаться';
+    }
+  }catch(e){
+    chip.textContent='⚠️ Ошибка проверки';
+  }
 }
 
 async function testPush(){
@@ -5263,7 +5288,7 @@ function speak(text){
 
 // PWA Service Worker
 // Версия приложения — должна совпадать с CACHE в sw.js
-const APP_VER='fsc-v20';
+const APP_VER='fsc-v21';
 let _swBusy=false;
 
 // При каждом открытии: тихо проверяем sw.js на сервере

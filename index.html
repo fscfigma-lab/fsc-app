@@ -4477,10 +4477,13 @@ async function enablePushFromBanner(){
 }
 
 async function subscribeWebPush(){
-  if(!('serviceWorker' in navigator)||!('PushManager' in window))return;
+  if(!('serviceWorker' in navigator)){toast('Браузер не поддерживает SW','err');return;}
+  if(!('PushManager' in window)){toast('Браузер не поддерживает Push','err');return;}
   try{
+    toast('Запрашиваем разрешение…','ok');
     const perm=await Notification.requestPermission();
-    if(perm!=='granted')return;
+    if(perm!=='granted'){toast('Разрешение на уведомления отклонено','err');return;}
+    toast('Подписываемся…','ok');
     const reg=await navigator.serviceWorker.ready;
     let sub=await reg.pushManager.getSubscription();
     if(!sub){
@@ -4491,12 +4494,15 @@ async function subscribeWebPush(){
     }
     const devId=localStorage.getItem('fsc_dev_id')||(()=>{const id='d'+Math.random().toString(36).slice(2);localStorage.setItem('fsc_dev_id',id);return id;})();
     const subObj={endpoint:sub.endpoint,keys:{p256dh:btoa(String.fromCharCode(...new Uint8Array(sub.getKey('p256dh')))),auth:btoa(String.fromCharCode(...new Uint8Array(sub.getKey('auth'))))}};
-    // Сохраняем подписку в Supabase
     const existing=await _loadPushSubs();
     existing[devId]=subObj;
     await _savePushSubs(existing);
-    console.log('Web Push subscribed');
-  }catch(e){console.warn('WebPush subscribe failed:',e);}
+    toast('✅ Подписка сохранена! Теперь нажми Тест','ok');
+    _checkPushStatus();
+  }catch(e){
+    console.error('WebPush subscribe failed:',e);
+    toast('❌ Ошибка: '+e.message,'err');
+  }
 }
 
 async function _loadPushSubs(){
@@ -5291,7 +5297,7 @@ function speak(text){
 
 // PWA Service Worker
 // Версия приложения — должна совпадать с CACHE в sw.js
-const APP_VER='fsc-v24';
+const APP_VER='fsc-v25';
 let _swBusy=false;
 
 // При каждом открытии: тихо проверяем sw.js на сервере

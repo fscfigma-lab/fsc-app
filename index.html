@@ -4571,6 +4571,7 @@ async function syncFromSheets(silent){
     if(rows.length<2){toast('Таблица пустая или нет данных','err');return;}
     // Columns (0-indexed): 1=Проект, 2=РП, 3=Проектировщик, 4=%, 5=Адрес, 6=Контакт, 24=Начало, 25=Дедлайн, 26=План на неделю
     let added=0,updated=0;
+    const pushLines=[];
     for(let i=1;i<rows.length;i++){
       const r=rows[i];
       const name=(r[1]||'').trim();
@@ -4583,13 +4584,15 @@ async function syncFromSheets(silent){
       const start=_parseSheetDate(r[24]||'');
       const deadline=_parseSheetDate(r[25]||'');
       const weekPlan=(r[26]||'').trim();
-      // Ищем совпадение: точное или через подстроку (имя в таблице может содержать код договора)
       const nameLow=name.toLowerCase();
       const ex=D.projects.find(p=>{
         const pn=p.name.trim().toLowerCase();
         return pn===nameLow||nameLow.includes(pn)||pn.includes(nameLow);
       });
       if(ex){
+        const oldPct=ex.pct||0;
+        const oldPlan=ex.weekPlan||'';
+        const oldMgr=ex.mgr||'';
         if(mgr)ex.mgr=mgr;
         if(designer)ex.designer=designer;
         if(pct!==null)ex.pct=pct;
@@ -4600,6 +4603,13 @@ async function syncFromSheets(silent){
         if(weekPlan)ex.weekPlan=weekPlan;
         ex.sheetSync=new Date().toISOString();
         updated++;
+        // Фиксируем значимые изменения для push
+        if(pct!==null&&Math.abs(pct-oldPct)>=1)
+          pushLines.push(`📊 ${ex.name}: ${oldPct}%→${pct}%`);
+        else if(weekPlan&&weekPlan!==oldPlan)
+          pushLines.push(`📋 ${ex.name}: план обновлён`);
+        else if(mgr&&mgr!==oldMgr)
+          pushLines.push(`👤 ${ex.name}: РП → ${mgr}`);
       }else{
         D.projects.push({id:uid(),name,mgr:mgr||'',designer:designer||'',
           client:contact||'',address:address||'',
@@ -4607,10 +4617,17 @@ async function syncFromSheets(silent){
           pct:pct||0,status:'active',weekPlan:weekPlan||'',
           sheetSync:new Date().toISOString()});
         added++;
+        pushLines.push(`🆕 Новый проект: ${name}`);
       }
     }
     D.sheetsLastSync=new Date().toISOString();
     save();render(curPage);
+    // Отправляем push если есть реальные изменения
+    if(pushLines.length>0){
+      const shown=pushLines.slice(0,6);
+      if(pushLines.length>6)shown.push(`...и ещё ${pushLines.length-6}`);
+      sendPush('🔄 Обновления из таблицы',shown.join('\n'),'construction,memo');
+    }
     if(!silent){
       toast(`✅ Готово: +${added} новых, ${updated} обновлено`,'ok');
       addLog(`🔄 Синхронизация Google Sheets: +${added} новых, ${updated} обновлено`,null);

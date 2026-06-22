@@ -37,15 +37,16 @@ jobs:
 
             async function sendPush(title, body, tags = 'construction') {
               const isUrgent = tags.includes('warning') || tags.includes('skull');
-              const r = await fetch(`https://ntfy.sh/${topic}`, {
+              const r = await fetch('https://ntfy.sh', {
                 method: 'POST',
-                headers: {
-                  'Title':        title,
-                  'Tags':         tags,
-                  'Priority':     isUrgent ? 'high' : 'default',
-                  'Content-Type': 'text/plain; charset=utf-8'
-                },
-                body
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  topic,
+                  title,
+                  message: body,
+                  tags: tags.split(',').map(t => t.trim()),
+                  priority: isUrgent ? 4 : 3
+                })
               });
               console.log(`→ Push [${r.status}]: ${title}`);
             }

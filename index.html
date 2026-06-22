@@ -4239,15 +4239,14 @@ async function sendPush(title, body, tags='fsc'){
   const topic=D.ntfyTopic;
   if(!topic)return false;
   try{
-    const r=await fetch(`https://ntfy.sh/${topic}`,{
+    const r=await fetch('https://ntfy.sh',{
       method:'POST',
-      headers:{
-        'Title': title,
-        'Tags': tags,
-        'Priority': tags.includes('warning')||tags.includes('skull')?'high':'default',
-        'Content-Type':'text/plain; charset=utf-8'
-      },
-      body
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        topic,title,message:body,
+        tags:tags?tags.split(',').map(t=>t.trim()):[],
+        priority:tags.includes('warning')||tags.includes('skull')?4:3
+      })
     });
     return r.ok;
   }catch(e){console.warn('Push failed:',e);return false;}

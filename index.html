@@ -4474,7 +4474,7 @@ const ONESIGNAL_APP_ID='00e0da53-ae8a-4e4f-a2c9-bb74f68f97ef';
   window.OneSignalDeferred.push(async function(OneSignal){
     await OneSignal.init({
       appId:ONESIGNAL_APP_ID,
-      serviceWorkerPath:'OneSignalSDKWorker.js',
+      serviceWorkerPath:'/fsc-app/OneSignalSDKWorker.js',
       serviceWorkerParam:{scope:'/fsc-app/'},
       notifyButton:{enable:false},
       promptOptions:{slidedown:{enabled:false}}

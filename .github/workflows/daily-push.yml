@@ -106,9 +106,63 @@ jobs:
               );
             }
 
-            // ── 5. Итог ──────────────────────────────────────────────────────
+            // ── 5. Понедельник: напоминание РП обновить план ─────────────────
+            const dayOfWeek = new Date().getDay(); // 1 = понедельник
+            if (dayOfWeek === 1) {
+              const sevenDaysAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString();
+              const stale = projects.filter(p =>
+                p.status === 'active' &&
+                (!p.sheetSync || p.sheetSync < sevenDaysAgo)
+              );
+              if (stale.length > 0) {
+                const lines = stale.slice(0, 7).map(p => `• ${p.name} (${p.mgr || '—'})`);
+                if (stale.length > 7) lines.push(`...и ещё ${stale.length - 7}`);
+                await sendPush(
+                  `📋 Обновите план на неделю: ${stale.length} проектов`,
+                  lines.join('\n'),
+                  'loudspeaker,construction'
+                );
+              }
+            }
+
+            // ── 6. Алерт: проект не обновлялся 7+ дней ───────────────────────
+            const sevenDaysAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString();
+            const staleProjects = projects.filter(p =>
+              p.status === 'active' &&
+              p.sheetSync && p.sheetSync < sevenDaysAgo
+            );
+            if (staleProjects.length > 0) {
+              const lines = staleProjects.slice(0, 5).map(p => {
+                const days = Math.floor((Date.now() - new Date(p.sheetSync)) / 86400000);
+                return `• ${p.name} (${p.mgr || '—'}) — ${days} дн. без обновления`;
+              });
+              if (staleProjects.length > 5) lines.push(`...и ещё ${staleProjects.length - 5}`);
+              await sendPush(
+                `⚠️ Проекты без обновления: ${staleProjects.length}`,
+                lines.join('\n'),
+                'warning,construction'
+              );
+            }
+
+            // ── 7. Пятница 17:00: еженедельный отчёт ────────────────────────
+            const hour = new Date().getUTCHours(); // 14 UTC = 17 МСК
+            if (dayOfWeek === 5 && hour >= 13 && hour <= 15) {
+              const active = projects.filter(p => p.status === 'active').length;
+              const done   = projects.filter(p => p.status === 'done').length;
+              const overdue = projects.filter(p => p.status === 'overdue').length;
+              const avgPct = projects.length
+                ? Math.round(projects.reduce((s,p) => s + (p.pct||0), 0) / projects.length)
+                : 0;
+              await sendPush(
+                '📊 Итоги недели FSC',
+                `Активных проектов: ${active}\nПросрочено: ${overdue}\nЗавершено: ${done}\nСредний прогресс: ${avgPct}%\nВсего задач: ${tasks.filter(t=>!t.done).length} открытых`,
+                'bar_chart,construction'
+              );
+            }
+
+            // ── 8. Итог ──────────────────────────────────────────────────────
             const total = overdueTasks.length + todayTasks.length +
                           overdueStages.length + todayStages.length;
             if (total === 0) {
-              console.log('✅ Всё в порядке — просрочек нет, уведомления не отправлялись');
+              console.log('✅ Всё в порядке — просрочек нет');
             }

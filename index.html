@@ -1603,6 +1603,14 @@ body{background:var(--bg)}
       <label class="fl">Дедлайн *</label>
       <input type="date" class="fi" id="s-deadline">
     </div>
+    <div class="fg">
+      <label class="fl">📎 Фото с объекта</label>
+      <div class="photos-row" id="s-photos-row"></div>
+      <label class="btn btn-s" style="cursor:pointer;font-size:12px;display:inline-flex;align-items:center;gap:6px;margin-top:4px">
+        📷 Добавить фото
+        <input type="file" id="s-photo-inp" accept="image/*" multiple style="display:none" onchange="addStagePhotos(this)">
+      </label>
+    </div>
     <div class="mfoot">
       <button class="btn btn-d" id="s-del-btn" style="display:none;margin-right:auto" onclick="deleteStageFromModal()">Удалить</button>
       <button class="btn btn-s" onclick="closeM('m-stage')">Отмена</button>
@@ -2596,6 +2604,7 @@ function stagePipelineHTML(pid,mini=false){
       <div class="stage-dot ${cls}" onclick="toggleStage('${s.id}',event)" title="${s.done?'✓ Выполнено':'Отметить выполненным'}">${s.icon||'○'}</div>
       <div class="stage-lbl">${s.name}</div>
       <div class="stage-date ${ds==='overdue'?'od':ds==='soon'||ds==='today'?'soon':''}">${fdate(s.deadline,true)}</div>
+      ${s.photos?.length?`<div style="font-size:10px;color:var(--acc);cursor:pointer;margin-top:2px" onclick="viewPhoto(D.stages.find(x=>x.id==='${s.id}').photos,0);event.stopPropagation()">📷 ${s.photos.length}</div>`:''}
       ${canEdit?`<div class="stage-actions">
         <button class="stage-edit-btn" onclick="openStageModal('${s.pid}','${s.id}');event.stopPropagation()" title="Редактировать">✏️</button>
         <button class="stage-del-btn" onclick="deleteStage('${s.id}');event.stopPropagation()" title="Удалить">✕</button>
@@ -2810,6 +2819,20 @@ function toggleStage(id,event){
 let _stageEditId=null;
 let _stagePid=null;
 
+let _sPhotos=[];
+function _renderSPhotos(){
+  const el=$('s-photos-row');if(!el)return;
+  el.innerHTML=_sPhotos.map((src,i)=>
+    `<div class="photo-thumb" onclick="viewPhoto(_sPhotos,${i})"><img src="${src}"><button class="photo-rm" onclick="removeSPhoto(${i});event.stopPropagation()">✕</button></div>`
+  ).join('');
+}
+async function addStagePhotos(inp){
+  const files=[...inp.files].slice(0,5-_sPhotos.length);
+  for(const f of files){const b64=await _compressPhoto(f);_sPhotos.push(b64);}
+  inp.value='';_renderSPhotos();
+}
+function removeSPhoto(i){_sPhotos.splice(i,1);_renderSPhotos();}
+
 function openStageModal(pid,sid){
   _stagePid=pid;_stageEditId=sid||null;
   const s=sid?D.stages.find(x=>x.id===sid):null;
@@ -2817,6 +2840,8 @@ function openStageModal(pid,sid){
   $('s-name').value=s?s.name:'';
   $('s-icon').value=s&&s.icon?s.icon:'📋';
   $('s-deadline').value=s&&s.deadline?s.deadline:'';
+  _sPhotos=[...(s?.photos||[])];
+  _renderSPhotos();
   $('s-del-btn').style.display=s?'':'none';
   openM('m-stage');
 }
@@ -2829,10 +2854,10 @@ function saveStageModal(){
   if(!deadline){toast('Укажи дедлайн','err');return;}
   if(_stageEditId){
     const s=D.stages.find(x=>x.id===_stageEditId);
-    if(s){s.name=name;s.deadline=deadline;s.icon=icon;}
+    if(s){s.name=name;s.deadline=deadline;s.icon=icon;s.photos=_sPhotos.length?[..._sPhotos]:undefined;}
   } else {
     const maxOrder=D.stages.filter(s=>s.pid===_stagePid).reduce((m,s)=>Math.max(m,s.order||0),0);
-    D.stages.push({id:uid(),pid:_stagePid,name,icon,deadline,done:false,order:maxOrder+1});
+    D.stages.push({id:uid(),pid:_stagePid,name,icon,deadline,done:false,order:maxOrder+1,photos:_sPhotos.length?[..._sPhotos]:undefined});
     addLog(`${icon} Этап «${name}» добавлен`,_stagePid);
     const proj=D.projects.find(p=>p.id===_stagePid);
     sendPush(`${icon} Новый этап`,`«${name}»${proj?' — '+proj.name:''}${deadline?' · срок '+deadline:''}${currentUser?' · '+currentUser.name:''}`,`construction`);
@@ -3851,9 +3876,10 @@ async function addTaskPhotos(inp){
   _renderPhotos();
 }
 function removePhoto(i){_tPhotos.splice(i,1);_renderPhotos();}
-function viewPhoto(i){
+function viewPhoto(arrOrIdx,idx){
+  const src=Array.isArray(arrOrIdx)?arrOrIdx[idx||0]:_tPhotos[arrOrIdx];
   const w=window.open();
-  w.document.write(`<img src="${_tPhotos[i]}" style="max-width:100%;max-height:100vh">`);
+  w.document.write(`<img src="${src}" style="max-width:100%;max-height:100vh;display:block;margin:auto">`);
 }
 function _compressPhoto(file,max=800,q=0.65){
   return new Promise(res=>{

@@ -4521,13 +4521,13 @@ async function sendPush(title,body,tag){
     const q=data?.data||[];
     q.push({title,body,tag:tag||'fsc',ts:Date.now()});
     await sb.from('app_data').upsert({id:'push_queue',data:q});
-    // Триггерим GitHub Action
+    // Триггерим GitHub Action через workflow_dispatch
     const pat=D.githubPat;
     if(pat){
-      fetch('https://api.github.com/repos/fscfigma-lab/fsc-app/dispatches',{
+      fetch('https://api.github.com/repos/fscfigma-lab/fsc-app/actions/workflows/web-push.yml/dispatches',{
         method:'POST',
         headers:{'Authorization':'token '+pat,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'},
-        body:JSON.stringify({event_type:'send-push'})
+        body:JSON.stringify({ref:'main'})
       }).catch(()=>{});
     }
   }catch(e){console.warn('sendPush queue error:',e);}

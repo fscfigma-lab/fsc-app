@@ -1,7 +1,4 @@
-// OneSignal должен быть первым
-importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
-
-const CACHE = 'fsc-v33';
+const CACHE = 'fsc-v34';
 const BASE = '/fsc-app';
 
 self.addEventListener('install', e => {
@@ -31,6 +28,33 @@ self.addEventListener('fetch', e => {
   }
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request))
+  );
+});
+
+self.addEventListener('push', e => {
+  let data = {title: 'FSC', body: 'Новое уведомление', tag: 'fsc'};
+  try { data = e.data.json(); } catch(_) {}
+  e.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: BASE + '/icon-192.png',
+      badge: BASE + '/icon-192.png',
+      tag: data.tag || 'fsc',
+      renotify: true,
+      data: {url: 'https://fscfigma-lab.github.io/fsc-app/'}
+    })
+  );
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(
+    clients.matchAll({type:'window'}).then(list => {
+      for (const c of list) {
+        if (c.url.includes('fsc-app') && 'focus' in c) return c.focus();
+      }
+      return clients.openWindow('https://fscfigma-lab.github.io/fsc-app/');
+    })
   );
 });
 

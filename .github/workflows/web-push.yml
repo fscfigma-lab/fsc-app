@@ -1,7 +1,9 @@
 name: 📲 Web Push (от FSC App)
 
 on:
-  workflow_dispatch:  # только вручную, cron отключён (заменён на OneSignal)
+  workflow_dispatch:
+  repository_dispatch:
+    types: [send-push]
 
 jobs:
   send:

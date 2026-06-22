@@ -398,35 +398,37 @@ body{background:var(--bg)}
 .mob-more-item .mob-more-icon{font-size:22px;width:28px;text-align:center}
 .mob-more-item .mob-more-sub{font-size:11px;color:var(--t3);display:block;margin-top:1px;font-weight:400}
 
-/* ── QUICK-ADD SHEET (mobile) ── */
+/* ── QUICK-ADD SHEET (Todoist-style) ── */
 .qadd-sheet{position:fixed;bottom:0;left:0;right:0;background:var(--s1);border-radius:20px 20px 0 0;
-  z-index:300;padding:10px 16px max(28px,calc(env(safe-area-inset-bottom)+16px));
+  z-index:300;padding:14px 16px max(24px,calc(env(safe-area-inset-bottom)+14px));
   box-shadow:0 -8px 32px rgba(0,0,0,.25);border-top:1px solid var(--b1);
   transform:translateY(100%);transition:transform .28s cubic-bezier(.32,1,.64,1)}
 .qadd-sheet.open{transform:translateY(0)}
 .qadd-ov{position:fixed;inset:0;z-index:299;background:rgba(0,0,0,.4);
   backdrop-filter:blur(3px);display:none}
 .qadd-ov.open{display:block}
-.qadd-handle{width:36px;height:4px;background:var(--b2);border-radius:2px;margin:0 auto 14px}
-.qadd-inp-row{display:flex;align-items:center;gap:8px;padding-bottom:12px;border-bottom:1.5px solid var(--b2);margin-bottom:12px}
-.qadd-inp{flex:1;border:none;outline:none;background:transparent;
-  font-size:17px;color:var(--t1);font-family:inherit;padding:0;line-height:1.4}
+.qadd-handle{width:36px;height:4px;background:var(--b2);border-radius:2px;margin:0 auto 12px}
+/* Title input */
+.qadd-inp{width:100%;border:none;outline:none;background:transparent;
+  font-size:17px;color:var(--t1);font-family:inherit;padding:0 0 2px;line-height:1.4;box-sizing:border-box}
 .qadd-inp::placeholder{color:var(--t3)}
-.qadd-mic{background:none;border:none;font-size:22px;cursor:pointer;padding:2px 4px;
-  opacity:.45;color:var(--t1);transition:opacity .15s;line-height:1;flex-shrink:0}
-.qadd-mic:active{opacity:1}
-/* Action bar */
-.qadd-actions{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;margin-bottom:10px;-webkit-overflow-scrolling:touch}
-.qadd-act{display:flex;align-items:center;gap:5px;padding:7px 13px;border-radius:20px;
+/* Description input */
+.qadd-desc-inp{width:100%;border:none;outline:none;background:transparent;
+  font-size:13px;color:var(--t2);font-family:inherit;padding:5px 0 12px;line-height:1.4;box-sizing:border-box}
+.qadd-desc-inp::placeholder{color:var(--t3);opacity:.75}
+/* Action chips row */
+.qadd-actions{display:flex;gap:7px;overflow-x:auto;padding-bottom:10px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.qadd-actions::-webkit-scrollbar{display:none}
+.qadd-act{display:flex;align-items:center;gap:4px;padding:6px 12px;border-radius:20px;
   border:1.5px solid var(--b2);background:transparent;cursor:pointer;
   font-size:12px;color:var(--t2);font-family:inherit;white-space:nowrap;
-  transition:all .15s;flex-shrink:0}
+  transition:all .15s;flex-shrink:0;line-height:1}
 .qadd-act:active{transform:scale(.96)}
 .qadd-act.a-on{background:var(--acc-bg);border-color:var(--acc-bd);color:var(--acc)}
 .qadd-act.a-ph{background:rgba(185,28,28,.07);border-color:rgba(185,28,28,.3);color:var(--red)}
 .qadd-act.a-pm{background:#FEF3E2;border-color:#EDD4A0;color:#D97706}
 .qadd-act.a-who{background:var(--grn-bg);border-color:var(--grn-bd);color:var(--grn)}
-/* Date chips */
+/* Date expand panel */
 .qadd-drow{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;margin-bottom:10px}
 .qadd-dc{padding:6px 14px;border-radius:20px;border:1.5px solid var(--b2);font-size:13px;
   color:var(--t2);cursor:pointer;white-space:nowrap;transition:all .15s;background:transparent;font-family:inherit;flex-shrink:0}
@@ -439,13 +441,31 @@ body{background:var(--bg)}
 .qadd-wchip{padding:6px 12px;border-radius:20px;border:1.5px solid var(--b2);font-size:12px;
   color:var(--t2);cursor:pointer;transition:all .15s;background:transparent;font-family:inherit}
 .qadd-wchip.on{background:var(--grn-bg);border-color:var(--grn-bd);color:var(--grn);font-weight:600}
-/* Footer */
-.qadd-foot{display:flex;align-items:center;gap:10px;margin-top:4px}
-.qadd-sel{flex:1;border:1.5px solid var(--b2);border-radius:10px;padding:9px 10px;
-  background:var(--s2);color:var(--t1);font-size:13px;font-family:inherit;outline:none}
-.qadd-btn{background:var(--acc);color:#fff;border:none;border-radius:10px;padding:10px 20px;
-  font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;letter-spacing:.4px;white-space:nowrap}
-.qadd-btn:active{opacity:.8}
+/* Divider above footer */
+.qadd-divider{height:1px;background:var(--b2);margin:0 0 10px}
+/* Footer bar */
+.qadd-foot{display:flex;align-items:center;justify-content:space-between}
+.qadd-proj-btn{display:flex;align-items:center;gap:5px;background:transparent;border:none;
+  cursor:pointer;font-size:13px;color:var(--t2);font-family:inherit;padding:4px 0;
+  flex:1;min-width:0;text-align:left}
+.qadd-proj-btn:active{opacity:.65}
+.qadd-foot-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.qadd-dictate{font-size:11px;font-weight:700;letter-spacing:.6px;color:var(--t3);cursor:pointer;
+  text-transform:uppercase;padding:4px 0;user-select:none}
+.qadd-dictate:active{opacity:.65}
+.qadd-send{width:36px;height:36px;border-radius:50%;background:#E44332;border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;line-height:1;
+  flex-shrink:0;transition:transform .12s,opacity .12s;padding:0}
+.qadd-send:active{transform:scale(.9);opacity:.85}
+/* Project picker dropdown */
+.qadd-proj-list{position:absolute;bottom:100%;left:0;right:0;
+  background:var(--s1);border-radius:16px 16px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.18);
+  border:1px solid var(--b1);border-bottom:none;max-height:220px;overflow-y:auto;z-index:320;display:none}
+.qadd-proj-list.open{display:block}
+.qadd-proj-item{padding:12px 16px;font-size:14px;color:var(--t1);cursor:pointer;border-bottom:1px solid var(--b2)}
+.qadd-proj-item:last-child{border-bottom:none}
+.qadd-proj-item:active{background:var(--s2)}
+.qadd-proj-item.on{color:var(--acc);font-weight:600}
 /* ── MOBILE TODAY / UPCOMING pages ── */
 .mob-ph{padding:20px 16px 10px;background:var(--s1)}
 .mob-ph-ttl{font-size:30px;font-weight:800;letter-spacing:-.5px;color:var(--t1);
@@ -1385,26 +1405,19 @@ body{background:var(--bg)}
 
 <!-- QUICK-ADD SHEET -->
 <div class="qadd-ov" id="qadd-ov" onclick="closeQuickAdd()"></div>
-<div class="qadd-sheet" id="qadd-sheet">
+<div class="qadd-sheet" id="qadd-sheet" style="position:relative">
   <div class="qadd-handle"></div>
-  <!-- Строка ввода + микрофон -->
-  <div class="qadd-inp-row">
-    <input class="qadd-inp" id="qadd-inp" type="text" placeholder="Что нужно сделать?" onkeydown="if(event.key==='Enter')saveQuickTask()">
-    <button class="qadd-mic" onclick="closeQuickAdd();setTimeout(toggleVoice,80)" title="Голосовой ввод">🎤</button>
-  </div>
-  <!-- Панель действий -->
+  <!-- Название задачи -->
+  <input class="qadd-inp" id="qadd-inp" type="text" placeholder="Напр., Позвонить заказчику" onkeydown="if(event.key==='Enter')saveQuickTask()">
+  <!-- Описание (опционально) -->
+  <input class="qadd-desc-inp" id="qadd-desc" type="text" placeholder="Описание">
+  <!-- Чипы действий -->
   <div class="qadd-actions">
-    <button class="qadd-act" id="qadd-act-date" onclick="toggleQDatePicker()">
-      <span>📅</span><span id="qadd-date-lbl">Сегодня</span>
-    </button>
-    <button class="qadd-act" id="qadd-act-prio" onclick="cycleQPrio()">
-      <span id="qadd-prio-ico">🏳</span><span id="qadd-prio-lbl">Приоритет</span>
-    </button>
-    <button class="qadd-act" id="qadd-act-who" onclick="toggleQWho()">
-      <span>👤</span><span id="qadd-who-lbl">Исполнитель</span>
-    </button>
+    <button class="qadd-act" id="qadd-act-date" onclick="toggleQDatePicker()">📅 <span id="qadd-date-lbl">Сегодня</span></button>
+    <button class="qadd-act" id="qadd-act-prio" onclick="cycleQPrio()"><span id="qadd-prio-ico">🏳</span> <span id="qadd-prio-lbl">Приоритет</span></button>
+    <button class="qadd-act" id="qadd-act-who" onclick="toggleQWho()">👤 <span id="qadd-who-lbl">Исполнитель</span></button>
   </div>
-  <!-- Выбор даты (скрыт) -->
+  <!-- Выбор даты (раскрывается) -->
   <div class="qadd-drow" id="qadd-drow" style="display:none">
     <button class="qadd-dc on" id="qdcToday" onclick="setQDate('today')">☀️ Сегодня</button>
     <button class="qadd-dc" id="qdcTmrw" onclick="setQDate('tomorrow')">🌅 Завтра</button>
@@ -1412,15 +1425,22 @@ body{background:var(--bg)}
     <input type="date" id="qdcDateIn" style="opacity:0;position:absolute;width:0;height:0" onchange="setQDate('custom',this.value)">
     <input type="time" id="qdcTime" class="qadd-time-in" placeholder="⏰ время" onchange="_qtime=this.value;_updQdateLbl()">
   </div>
-  <!-- Выбор исполнителя (скрыт) -->
+  <!-- Исполнители (раскрываются) -->
   <div class="qadd-who-row" id="qadd-who-row" style="display:none"></div>
-  <!-- Футер -->
+  <!-- Разделитель -->
+  <div class="qadd-divider"></div>
+  <!-- Футер: проект слева, ДИКТОВАТЬ + кнопка отправки справа -->
   <div class="qadd-foot">
-    <select class="qadd-sel" id="qadd-proj">
-      <option value="">📁 Без проекта</option>
-    </select>
-    <button class="qadd-btn" onclick="saveQuickTask()">Добавить ➔</button>
+    <button class="qadd-proj-btn" id="qadd-proj-btn" onclick="toggleQProjList()">
+      📁 <span id="qadd-proj-lbl">Без проекта</span> ▾
+    </button>
+    <div class="qadd-foot-right">
+      <span class="qadd-dictate" onclick="closeQuickAdd();setTimeout(toggleVoice,80)">ДИКТОВАТЬ</span>
+      <button class="qadd-send" onclick="saveQuickTask()">➔</button>
+    </div>
   </div>
+  <!-- Выпадающий список проектов -->
+  <div class="qadd-proj-list" id="qadd-proj-list"></div>
 </div>
 
 <!-- VOICE OVERLAY -->
@@ -3419,21 +3439,18 @@ function fabAction(){
   else openTaskModal();
 }
 
-let _qdate=TODAY(),_qtime='',_qprio='medium',_qwho='',_qShowDate=false,_qShowWho=false;
+let _qdate=TODAY(),_qtime='',_qprio='medium',_qwho='',_qprojId=null,_qShowDate=false,_qShowWho=false,_qShowProj=false;
 
 function openQuickAdd(){
-  _qdate=TODAY();_qtime='';_qprio='medium';_qwho='';_qShowDate=false;_qShowWho=false;
+  _qdate=TODAY();_qtime='';_qprio='medium';_qwho='';_qShowDate=false;_qShowWho=false;_qShowProj=false;
+  _qprojId=curProjDetail||null;
   const inp=$('qadd-inp');if(inp)inp.value='';
+  const desc=$('qadd-desc');if(desc)desc.value='';
   const tin=$('qdcTime');if(tin)tin.value='';
-  const sel=$('qadd-proj');
-  if(sel){
-    sel.innerHTML=`<option value="">📁 Без проекта</option>`+
-      visibleProjects().map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
-    if(curProjDetail)sel.value=curProjDetail;
-  }
   const dr=$('qadd-drow');if(dr)dr.style.display='none';
   const wr=$('qadd-who-row');if(wr)wr.style.display='none';
-  _updQdateBtns();_updQPrio();_updQWhoBtn();
+  const pl=$('qadd-proj-list');if(pl)pl.classList.remove('open');
+  _updQdateBtns();_updQPrio();_updQWhoBtn();_updQProjBtn();
   const sheet=$('qadd-sheet'),ov=$('qadd-ov');
   sheet.classList.add('open');ov.classList.add('open');
   setTimeout(()=>{if(inp)inp.focus();},120);
@@ -3441,13 +3458,51 @@ function openQuickAdd(){
 function closeQuickAdd(){
   $('qadd-sheet').classList.remove('open');
   $('qadd-ov').classList.remove('open');
+  const pl=$('qadd-proj-list');if(pl)pl.classList.remove('open');
+  _qShowProj=false;
+}
+
+// ── Проект ──
+function toggleQProjList(){
+  const inp=$('qadd-inp');if(inp)inp.blur();
+  _qShowProj=!_qShowProj;
+  if(_qShowDate){_qShowDate=false;const dr=$('qadd-drow');if(dr)dr.style.display='none';$('qadd-act-date').classList.remove('a-on');}
+  if(_qShowWho){_qShowWho=false;const wr=$('qadd-who-row');if(wr)wr.style.display='none';$('qadd-act-who').classList.remove('a-on');}
+  const pl=$('qadd-proj-list');
+  if(!pl)return;
+  if(_qShowProj){
+    const projs=visibleProjects();
+    pl.innerHTML=`<div class="qadd-proj-item${!_qprojId?' on':''}" onclick="setQProj(null,'Без проекта')">📁 Без проекта</div>`+
+      projs.map(p=>`<div class="qadd-proj-item${_qprojId===p.id?' on':''}" onclick="setQProj('${p.id}','${p.name.replace(/'/g,'&#39;')}')">${p.name}</div>`).join('');
+    pl.classList.add('open');
+  } else {
+    pl.classList.remove('open');
+  }
+}
+function setQProj(id,name){
+  _qprojId=id||null;
+  _updQProjBtn();
+  const pl=$('qadd-proj-list');if(pl)pl.classList.remove('open');
+  _qShowProj=false;
+  setTimeout(()=>{const inp=$('qadd-inp');if(inp)inp.focus();},80);
+}
+function _updQProjBtn(){
+  const lbl=$('qadd-proj-lbl');
+  if(!lbl)return;
+  if(_qprojId){
+    const p=D.projects.find(x=>x.id===_qprojId);
+    lbl.textContent=p?p.name:'Без проекта';
+  } else {
+    lbl.textContent='Без проекта';
+  }
 }
 
 // ── Дата ──
 function toggleQDatePicker(){
   const inp=$('qadd-inp');if(inp)inp.blur();
   _qShowDate=!_qShowDate;
-  if(_qShowWho){_qShowWho=false;const wr=$('qadd-who-row');if(wr)wr.style.display='none';}
+  if(_qShowWho){_qShowWho=false;const wr=$('qadd-who-row');if(wr)wr.style.display='none';$('qadd-act-who').classList.remove('a-on');}
+  if(_qShowProj){_qShowProj=false;const pl=$('qadd-proj-list');if(pl)pl.classList.remove('open');}
   const dr=$('qadd-drow');if(dr)dr.style.display=_qShowDate?'flex':'none';
   $('qadd-act-date').classList.toggle('a-on',_qShowDate);
 }
@@ -3479,6 +3534,7 @@ function _updQdateLbl(){_updQdateBtns();}
 // ── Приоритет ──
 function cycleQPrio(){
   const inp=$('qadd-inp');if(inp)inp.blur();
+  if(_qShowProj){_qShowProj=false;const pl=$('qadd-proj-list');if(pl)pl.classList.remove('open');}
   const order=['medium','high','low'];
   _qprio=order[(order.indexOf(_qprio)+1)%order.length];
   _updQPrio();
@@ -3497,6 +3553,7 @@ function toggleQWho(){
   const inp=$('qadd-inp');if(inp)inp.blur();
   _qShowWho=!_qShowWho;
   if(_qShowDate){_qShowDate=false;const dr=$('qadd-drow');if(dr)dr.style.display='none';$('qadd-act-date').classList.remove('a-on');}
+  if(_qShowProj){_qShowProj=false;const pl=$('qadd-proj-list');if(pl)pl.classList.remove('open');}
   const wr=$('qadd-who-row');
   if(wr){
     if(_qShowWho){
@@ -3524,8 +3581,9 @@ function _updQWhoBtn(){
 function saveQuickTask(){
   const name=($('qadd-inp').value||'').trim();
   if(!name){$('qadd-inp').focus();return;}
-  const pid=$('qadd-proj').value||null;
-  const t={id:uid(),name,pid,dead:_qdate,time:_qtime||null,who:_qwho||null,prio:_qprio,done:false};
+  const desc=($('qadd-desc')?.value||'').trim()||null;
+  const pid=_qprojId||null;
+  const t={id:uid(),name,desc,pid,dead:_qdate,time:_qtime||null,who:_qwho||null,prio:_qprio,done:false};
   D.tasks.push(t);
   const proj=pid?D.projects.find(p=>p.id===pid):null;
   addLog(`📌 Новая задача: «${t.name}»${proj?' → '+proj.name:''}${t.who?' · '+t.who:''}`,pid);
@@ -5018,7 +5076,7 @@ function speak(text){
 
 // PWA Service Worker
 // Версия приложения — должна совпадать с CACHE в sw.js
-const APP_VER='fsc-v15';
+const APP_VER='fsc-v16';
 let _swBusy=false;
 
 // При каждом открытии: тихо проверяем sw.js на сервере

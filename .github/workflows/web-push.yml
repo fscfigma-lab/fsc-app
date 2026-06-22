@@ -21,76 +21,62 @@ jobs:
         env:
           SUPA_URL: 'https://yhsedgaimfgbcqbjltkv.supabase.co'
           SUPA_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inloc2VkZ2FpbWZnYmNxYmpsdGt2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMjQxOTMsImV4cCI6MjA5NjYwMDE5M30.aThP2KxMEmw0DHf0PPIMF82SiqSLBRbA9Q-HuHENxIE'
-          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
-          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
-          VAPID_EMAIL: ${{ secrets.VAPID_EMAIL }}
         with:
           script: |
             const webpush = require('./node_modules/web-push');
 
             const SUPA_URL = process.env.SUPA_URL;
             const SUPA_KEY = process.env.SUPA_KEY;
-
-            if (!process.env.VAPID_PRIVATE_KEY) {
-              core.setFailed('VAPID_PRIVATE_KEY не задан в GitHub Secrets!');
-              return;
-            }
-
-            webpush.setVapidDetails(
-              process.env.VAPID_EMAIL || 'mailto:fscfigma@gmail.com',
-              process.env.VAPID_PUBLIC_KEY,
-              process.env.VAPID_PRIVATE_KEY
-            );
-
-            console.log('VAPID Public Key (первые 20 символов):', process.env.VAPID_PUBLIC_KEY?.slice(0,20));
-
             const headers = {
               'apikey': SUPA_KEY,
               'Authorization': `Bearer ${SUPA_KEY}`
             };
 
-            // 1. Загружаем очередь
+            // 1. Загружаем VAPID ключи из Supabase
+            const cfgRes = await fetch(`${SUPA_URL}/rest/v1/app_data?id=eq.push_config&select=data`, { headers });
+            const cfgRows = await cfgRes.json();
+            const cfg = cfgRows?.[0]?.data;
+            if (!cfg?.vapidPrivate) {
+              core.setFailed('VAPID ключи не найдены в Supabase (push_config)');
+              return;
+            }
+            webpush.setVapidDetails(cfg.vapidEmail || 'mailto:fscfigma@gmail.com', cfg.vapidPublic, cfg.vapidPrivate);
+            console.log('VAPID загружен из Supabase ✅');
+
+            // 2. Загружаем очередь
             const qRes = await fetch(`${SUPA_URL}/rest/v1/app_data?id=eq.push_queue&select=data`, { headers });
             const qRows = await qRes.json();
             const queue = qRows?.[0]?.data || [];
-
             if (queue.length === 0) { console.log('Очередь пуста'); return; }
             console.log(`В очереди: ${queue.length} уведомлений`);
 
-            // 2. Загружаем подписки
+            // 3. Загружаем подписки
             const sRes = await fetch(`${SUPA_URL}/rest/v1/app_data?id=eq.push_subs&select=data`, { headers });
             const sRows = await sRes.json();
             const subs = sRows?.[0]?.data || {};
-
             const subEntries = Object.entries(subs);
             if (subEntries.length === 0) { console.log('Подписчиков нет'); return; }
             console.log(`Подписчиков: ${subEntries.length}`);
 
-            // 3. Отправляем
+            // 4. Отправляем
             const deadSubs = new Set();
             let sent = 0, failed = 0;
             for (const notif of queue) {
-              const payload = JSON.stringify({
-                title: notif.title,
-                body: notif.body,
-                tag: notif.tag || 'fsc'
-              });
+              const payload = JSON.stringify({ title: notif.title, body: notif.body, tag: notif.tag || 'fsc' });
               for (const [devId, sub] of subEntries) {
                 try {
                   const result = await webpush.sendNotification(sub, payload);
-                  console.log(`✅ Отправлено [${devId.slice(0,6)}]: статус ${result.statusCode}`);
+                  console.log(`✅ [${devId.slice(0,6)}]: ${result.statusCode}`);
                   sent++;
                 } catch (e) {
-                  console.error(`❌ Ошибка [${devId.slice(0,6)}]: ${e.statusCode} — ${e.message}`);
+                  console.error(`❌ [${devId.slice(0,6)}]: ${e.statusCode} — ${e.message}`);
                   failed++;
-                  if (e.statusCode === 410 || e.statusCode === 404) {
-                    deadSubs.add(devId);
-                  }
+                  if (e.statusCode === 410 || e.statusCode === 404) deadSubs.add(devId);
                 }
               }
             }
 
-            // 4. Чистим просроченные подписки
+            // 5. Чистим мёртвые подписки
             if (deadSubs.size > 0) {
               for (const id of deadSubs) delete subs[id];
               await fetch(`${SUPA_URL}/rest/v1/app_data`, {
@@ -98,15 +84,7 @@ jobs:
                 headers: { ...headers, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
                 body: JSON.stringify({ id: 'push_subs', data: subs })
               });
-              console.log(`Удалено устаревших: ${deadSubs.size}`);
             }
-
-            // 5. Пишем результат в Supabase для диагностики
-            await fetch(`${SUPA_URL}/rest/v1/app_data`, {
-              method: 'POST',
-              headers: { ...headers, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
-              body: JSON.stringify({ id: 'push_log', data: { ts: new Date().toISOString(), sent, failed, queue: queue.length, subs: subEntries.length } })
-            });
 
             // 6. Очищаем очередь
             await fetch(`${SUPA_URL}/rest/v1/app_data`, {
@@ -115,7 +93,5 @@ jobs:
               body: JSON.stringify({ id: 'push_queue', data: [] })
             });
 
-            console.log(`✅ Итого: отправлено ${sent}, ошибок ${failed}`);
-            if (failed > 0 && sent === 0) {
-              core.setFailed(`Все отправки провалились: ${failed} ошибок`);
-            }
+            console.log(`Итого: отправлено ${sent}, ошибок ${failed}`);
+            if (failed > 0 && sent === 0) core.setFailed(`Все отправки провалились: ${failed} ошибок`);

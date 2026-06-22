@@ -4484,14 +4484,22 @@ async function enablePushFromBanner(){
 
 async function subscribeWebPush(){
   try{
-    toast('Запрашиваем разрешение…','ok');
-    await OneSignal.Notifications.requestPermission();
-    if(OneSignal.Notifications.permission){
-      await OneSignal.User.PushSubscription.optIn();
-      toast('✅ Подписка активирована!','ok');
-    }else{
-      toast('Разрешение на уведомления отклонено','err');
+    // Используем нативный API — OneSignal.requestPermission зависает
+    if(Notification.permission==='denied'){
+      toast('Уведомления заблокированы. Нажми на 🔒 в адресной строке → Уведомления → Разрешить','err');
+      return;
     }
+    if(Notification.permission!=='granted'){
+      toast('Запрашиваем разрешение…','ok');
+      const r=await Notification.requestPermission();
+      if(r!=='granted'){toast('Разрешение отклонено','err');return;}
+    }
+    toast('Подписываемся…','ok');
+    if(!window.OneSignal?.User?.PushSubscription){
+      toast('OneSignal ещё загружается — попробуй снова через 3 сек','err');return;
+    }
+    await window.OneSignal.User.PushSubscription.optIn();
+    toast('✅ Подписка активирована! Нажми Тест','ok');
     _checkPushStatus();
   }catch(e){
     console.error('Subscribe failed:',e);

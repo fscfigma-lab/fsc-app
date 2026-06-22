@@ -4395,8 +4395,31 @@ document.addEventListener('DOMContentLoaded',async()=>{
     if(D.sheetsUrl)setTimeout(()=>syncFromSheets(true),3000);
     // И каждые 10 минут пока приложение открыто
     setInterval(()=>{if(D.sheetsUrl)syncFromSheets(true);},10*60*1000);
+    // Фоновая синхронизация данных — подтягиваем изменения с других устройств каждые 30 сек
+    setInterval(_cloudSync,30000);
   }
 });
+
+/* ── Фоновая синхронизация с облаком ── */
+async function _cloudSync(){
+  if(!D.currentUser)return;
+  try{
+    const {data,error}=await sb.from('app_data').select('data').eq('id','main').maybeSingle();
+    if(error||!data?.data?.projects)return;
+    const newD=data.data;
+    // Сравниваем ключевые массивы — если изменились, обновляем и перерисовываем
+    const sig=x=>JSON.stringify([x.projects,x.tasks,x.stages,x.log?.slice(0,5)]);
+    if(sig(newD)===sig(D))return;
+    const savedUser=D.currentUser;
+    D=newD;
+    D.currentUser=savedUser;
+    if(!D.stages)D.stages=[];
+    if(!D.log)D.log=[];
+    localStorage.setItem('fsc4',JSON.stringify(D));
+    render(curPage);
+    updateBadges&&updateBadges();
+  }catch(e){}
+}
 
 /* ═══════════════════════════════════════
    PERSISTENT STORAGE
@@ -5240,7 +5263,7 @@ function speak(text){
 
 // PWA Service Worker
 // Версия приложения — должна совпадать с CACHE в sw.js
-const APP_VER='fsc-v19';
+const APP_VER='fsc-v20';
 let _swBusy=false;
 
 // При каждом открытии: тихо проверяем sw.js на сервере

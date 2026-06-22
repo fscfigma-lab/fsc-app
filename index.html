@@ -4493,11 +4493,9 @@ async function subscribeWebPush(){
       userVisibleOnly:true,
       applicationServerKey:_urlBase64ToUint8Array(VAPID_PUBLIC)
     });
-    // Сохраняем подписку в Supabase
-    const key=btoa(String.fromCharCode(...new Uint8Array(sub.getKey('p256dh'))));
-    const auth=btoa(String.fromCharCode(...new Uint8Array(sub.getKey('auth'))));
+    // Сохраняем подписку в формате web-push: {endpoint, keys:{p256dh, auth}}
     const devId='dev_'+Math.random().toString(36).slice(2,10);
-    const subData={endpoint:sub.endpoint,p256dh:key,auth:auth};
+    const subData=JSON.parse(JSON.stringify(sub));
     const {data}=await sb.from('app_data').select('data').eq('id','push_subs').maybeSingle();
     const subs=data?.data||{};
     subs[devId]=subData;

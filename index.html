@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -4451,19 +4452,24 @@ async function getStorageInfo(){
 /* ═══════════════════════════════════════
    PUSH NOTIFICATIONS (Web Push / VAPID)
 ═══════════════════════════════════════ */
-const VAPID_PUBLIC_KEY='BESCyBVi7rANPtvZIP5yuCPUjdjXtJ1a-hVlOVlb2BF-v-jsp12rnmcHSfmSeXyt5mXCAgUw-C8gUnJX9yae2Zo';
+const ONESIGNAL_APP_ID='00e0da53-ae8a-4e4f-a2c9-bb74f68f97ef';
 
-function _urlBase64ToUint8(base64String){
-  const padding='='.repeat((4-base64String.length%4)%4);
-  const base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
-  const raw=atob(base64);
-  return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
-}
+// Инициализация OneSignal
+window.OneSignalDeferred=window.OneSignalDeferred||[];
+OneSignalDeferred.push(async function(OneSignal){
+  await OneSignal.init({
+    appId:ONESIGNAL_APP_ID,
+    serviceWorkerPath:'OneSignalSDKWorker.js',
+    serviceWorkerParam:{scope:'/fsc-app/'},
+    notifyButton:{enable:false},
+    promptOptions:{slidedown:{enabled:false}}
+  });
+  _checkPushStatus();
+});
 
 function _showPushBanner(){
-  if(!('serviceWorker' in navigator)||!('PushManager' in window))return;
-  if(Notification.permission==='granted')return; // уже разрешено
-  if(localStorage.getItem('fsc_push_dismissed'))return; // закрыл баннер
+  if(Notification.permission==='granted')return;
+  if(localStorage.getItem('fsc_push_dismissed'))return;
   const b=$('push-banner');
   if(b)setTimeout(()=>b.classList.add('show'),800);
 }
@@ -4477,96 +4483,35 @@ async function enablePushFromBanner(){
 }
 
 async function subscribeWebPush(){
-  if(!('serviceWorker' in navigator)){toast('Браузер не поддерживает SW','err');return;}
-  if(!('PushManager' in window)){toast('Браузер не поддерживает Push','err');return;}
   try{
     toast('Запрашиваем разрешение…','ok');
-    const perm=await Notification.requestPermission();
-    if(perm!=='granted'){toast('Разрешение на уведомления отклонено','err');return;}
-    toast('Сбрасываем старую подписку…','ok');
-    // Полный сброс: снимаем ВСЕ SW регистрации чтобы FCM дал новый endpoint
-    const regs=await navigator.serviceWorker.getRegistrations();
-    for(const r of regs){
-      const s=await r.pushManager.getSubscription();
-      if(s) await s.unsubscribe();
-      await r.unregister();
+    await OneSignal.Notifications.requestPermission();
+    if(OneSignal.Notifications.permission){
+      await OneSignal.User.PushSubscription.optIn();
+      toast('✅ Подписка активирована!','ok');
+    }else{
+      toast('Разрешение на уведомления отклонено','err');
     }
-    // Перерегистрируем SW
-    const newReg=await navigator.serviceWorker.register('/fsc-app/sw.js',{scope:'/fsc-app/'});
-    await new Promise(res=>{
-      if(newReg.active){res();return;}
-      newReg.addEventListener('updatefound',()=>{
-        const w=newReg.installing;
-        w.addEventListener('statechange',()=>{ if(w.state==='activated')res(); });
-      });
-      // Fallback если SW уже активен
-      navigator.serviceWorker.ready.then(res);
-    });
-    const reg=await navigator.serviceWorker.ready;
-    toast('Создаём новую подписку…','ok');
-    const sub=await reg.pushManager.subscribe({
-      userVisibleOnly:true,
-      applicationServerKey:_urlBase64ToUint8(VAPID_PUBLIC_KEY)
-    });
-    const devId=localStorage.getItem('fsc_dev_id')||(()=>{const id='d'+Math.random().toString(36).slice(2);localStorage.setItem('fsc_dev_id',id);return id;})();
-    const subObj={endpoint:sub.endpoint,keys:{p256dh:btoa(String.fromCharCode(...new Uint8Array(sub.getKey('p256dh')))),auth:btoa(String.fromCharCode(...new Uint8Array(sub.getKey('auth'))))}};
-    const existing=await _loadPushSubs();
-    existing[devId]=subObj;
-    await _savePushSubs(existing);
-    toast('✅ Новая подписка сохранена! Нажми Тест','ok');
     _checkPushStatus();
   }catch(e){
-    console.error('WebPush subscribe failed:',e);
+    console.error('Subscribe failed:',e);
     toast('❌ Ошибка: '+e.message,'err');
   }
 }
 
-async function _loadPushSubs(){
-  try{
-    const r=await fetch(`${SUPA_URL}/rest/v1/app_data?id=eq.push_subs&select=data`,
-      {headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}});
-    const rows=await r.json();
-    return rows?.[0]?.data||{};
-  }catch(e){return{};}
-}
-async function _savePushSubs(subs){
-  await fetch(`${SUPA_URL}/rest/v1/app_data`,{
+async function sendPush(title,body){
+  const apiKey=D.oneSignalApiKey;
+  if(!apiKey)return;
+  fetch('https://onesignal.com/api/v1/notifications',{
     method:'POST',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,
-      'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},
-    body:JSON.stringify({id:'push_subs',data:subs})
-  });
-}
-async function _queueWebPush(title,body,tag){
-  try{
-    const r=await fetch(`${SUPA_URL}/rest/v1/app_data?id=eq.push_queue&select=data`,
-      {headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}});
-    const rows=await r.json();
-    const queue=rows?.[0]?.data||[];
-    queue.push({title,body,tag:tag||'fsc',ts:Date.now()});
-    await fetch(`${SUPA_URL}/rest/v1/app_data`,{
-      method:'POST',
-      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,
-        'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},
-      body:JSON.stringify({id:'push_queue',data:queue})
-    });
-    // Мгновенный триггер — запускаем GitHub Actions без ожидания 10 минут
-    _triggerPushWorkflow();
-  }catch(e){console.warn('Queue push failed:',e);}
-}
-
-function _triggerPushWorkflow(){
-  const pat=D.githubPat;
-  if(!pat)return;
-  fetch('https://api.github.com/repos/fscfigma-lab/fsc-app/actions/workflows/web-push.yml/dispatches',{
-    method:'POST',
-    headers:{'Authorization':'Bearer '+pat,'Accept':'application/vnd.github+json','Content-Type':'application/json'},
-    body:JSON.stringify({ref:'main'})
+    headers:{'Content-Type':'application/json','Authorization':'Basic '+apiKey},
+    body:JSON.stringify({
+      app_id:ONESIGNAL_APP_ID,
+      included_segments:['All'],
+      headings:{en:title},
+      contents:{en:body}
+    })
   }).catch(()=>{});
-}
-
-async function sendPush(title, body, tags='fsc'){
-  _queueWebPush(title,body,tags).catch(()=>{});
 }
 
 // Проверка просроченных задач — шлём push при открытии приложения
@@ -4650,13 +4595,13 @@ async function showSettingsModal(){
       <button class="btn btn-s" style="font-size:12px" onclick="testPush()">🔔 Тест</button>
     </div>
     <div class="fg" style="margin-bottom:0">
-      <label class="fl">⚡ GitHub PAT для мгновенных уведомлений</label>
-      <input type="password" class="fi" id="gh-pat" value="${D.githubPat||''}" placeholder="github_pat_..."
+      <label class="fl">🔑 OneSignal REST API Key</label>
+      <input type="password" class="fi" id="onesignal-key" value="${D.oneSignalApiKey||''}" placeholder="os_v2_..."
         style="font-family:monospace;font-size:12px">
     </div>
     <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
-      <button class="btn btn-p" style="font-size:12px" onclick="saveGithubPat()">Сохранить PAT</button>
-      <span style="font-size:11px;color:var(--t3)">github.com → Settings → Developer settings → PAT → Fine-grained → repo:Actions:write</span>
+      <button class="btn btn-p" style="font-size:12px" onclick="saveOneSignalKey()">Сохранить ключ</button>
+      <span style="font-size:11px;color:var(--t3)">OneSignal → Settings → Keys &amp; IDs → REST API Key</span>
     </div>
 
     <div class="sec-title" style="margin-top:16px">🗓 Google Календарь</div>
@@ -4714,15 +4659,9 @@ async function showSettingsModal(){
 async function _checkPushStatus(){
   const chip=$('push-status-chip'),btn=$('push-sub-btn');
   if(!chip||!btn)return;
-  if(!('serviceWorker' in navigator)||!('PushManager' in window)){
-    chip.textContent='❌ Этот браузер не поддерживает push. Открой в Chrome.';
-    chip.style.cssText='font-size:12px;padding:4px 12px;border-radius:8px;background:var(--red-bg);color:var(--red)';
-    btn.style.display='none';return;
-  }
   try{
-    const reg=await navigator.serviceWorker.ready;
-    const sub=await reg.pushManager.getSubscription();
-    if(sub){
+    const subscribed=window.OneSignal?.User?.PushSubscription?.optedIn;
+    if(subscribed){
       chip.textContent='✅ Подписан на этом устройстве';
       chip.style.cssText='font-size:12px;padding:4px 12px;border-radius:8px;background:var(--grn-bg);color:var(--grn)';
       btn.textContent='Переподписаться';
@@ -4731,25 +4670,21 @@ async function _checkPushStatus(){
       chip.style.cssText='font-size:12px;padding:4px 12px;border-radius:8px;background:var(--yel-bg);color:var(--yel)';
       btn.textContent='Подписаться';
     }
-  }catch(e){
-    chip.textContent='⚠️ Ошибка проверки';
-  }
+  }catch(e){chip.textContent='⚠️ Ошибка проверки';}
 }
 
 async function testPush(){
-  if(Notification.permission!=='granted'){
-    toast('Сначала включите уведомления','err');return;
-  }
+  if(!D.oneSignalApiKey){toast('Сначала сохрани OneSignal API ключ в настройках','err');return;}
   toast('Отправляем…','ok');
-  await sendPush('🔔 Тест FSC уведомлений','Если видишь это — push работает! ✅','white_check_mark');
-  toast(D.githubPat?'✅ Отправлено — придёт через ~30 сек':'✅ Отправлено — придёт до 10 минут','ok');
+  await sendPush('🔔 Тест FSC уведомлений','Если видишь это — push работает! ✅');
+  toast('✅ Отправлено!','ok');
 }
 
-function saveGithubPat(){
-  const val=($('gh-pat').value||'').trim();
-  D.githubPat=val||undefined;
+function saveOneSignalKey(){
+  const val=($('onesignal-key').value||'').trim();
+  D.oneSignalApiKey=val||undefined;
   save();
-  toast(val?'⚡ PAT сохранён — теперь push мгновенные':'PAT удалён','ok');
+  toast(val?'✅ OneSignal ключ сохранён':'Ключ удалён','ok');
   showSettingsModal();
 }
 
@@ -5313,7 +5248,7 @@ function speak(text){
 
 // PWA Service Worker
 // Версия приложения — должна совпадать с CACHE в sw.js
-const APP_VER='fsc-v30';
+const APP_VER='fsc-v31';
 let _swBusy=false;
 
 // При каждом открытии: тихо проверяем sw.js на сервере

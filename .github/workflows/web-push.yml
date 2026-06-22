@@ -1,9 +1,7 @@
 name: 📲 Web Push (от FSC App)
 
 on:
-  schedule:
-    - cron: '*/10 * * * *'   # каждые 10 минут
-  workflow_dispatch:
+  workflow_dispatch:  # только вручную, cron отключён (заменён на OneSignal)
 
 jobs:
   send:

@@ -9,6 +9,7 @@
 <meta name="theme-color" content="#ECEAE5">
 <title>FSC — Задачи</title>
 <link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -4699,8 +4700,8 @@ async function _checkPushStatus(){
     if(nativePerm==='denied'){
       chip.textContent='🚫 Заблокировано браузером — открой настройки сайта';
       chip.style.cssText='font-size:12px;padding:4px 12px;border-radius:8px;background:var(--red-bg,#fee);color:var(--red,#c00)';
-      btn.textContent='Сбросить разрешение →';
-      btn.onclick=()=>{window.open('chrome://settings/content/notifications','_blank');};
+      btn.textContent='Как разблокировать?';
+      btn.onclick=()=>toast('Chrome: 🔒 у адресной строки → Уведомления → Разрешить. Safari: Настройки → Сайты → Уведомления','ok');
     }else if(subscribed){
       chip.textContent='✅ Подписан | '+diag;
       chip.style.cssText='font-size:12px;padding:4px 12px;border-radius:8px;background:var(--grn-bg);color:var(--grn)';

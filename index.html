@@ -4407,18 +4407,15 @@ async function _cloudSync(){
   try{
     const {data,error}=await sb.from('app_data').select('data,updated_at').eq('id','main').maybeSingle();
     if(error||!data?.data?.projects)return;
-    const newD=data.data;
-    // Берём данные из облака только если они НОВЕЕ локальных
     const cloudTs=new Date(data.updated_at||0).getTime();
     const localTs=new Date(D.savedAt||0).getTime();
     if(cloudTs<=localTs)return;
-    // Дополнительная защита: никогда не уменьшаем кол-во проектов из облака
-    if((newD.projects?.length||0)<(D.projects?.length||0))return;
     const savedUser=D.currentUser;
-    D=newD;
+    D=data.data;
     D.currentUser=savedUser;
     if(!D.stages)D.stages=[];
     if(!D.log)D.log=[];
+    D.savedAt=data.updated_at;
     localStorage.setItem('fsc4',JSON.stringify(D));
     render(curPage);
     updateBadges&&updateBadges();
@@ -5292,7 +5289,7 @@ function speak(text){
 
 // PWA Service Worker
 // Версия приложения — должна совпадать с CACHE в sw.js
-const APP_VER='fsc-v22';
+const APP_VER='fsc-v23';
 let _swBusy=false;
 
 // При каждом открытии: тихо проверяем sw.js на сервере

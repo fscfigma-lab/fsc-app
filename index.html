@@ -4484,26 +4484,32 @@ async function enablePushFromBanner(){
 
 async function subscribeWebPush(){
   try{
-    // Используем нативный API — OneSignal.requestPermission зависает
-    if(Notification.permission==='denied'){
-      toast('Уведомления заблокированы. Нажми на 🔒 в адресной строке → Уведомления → Разрешить','err');
+    const p=Notification?.permission;
+    toast('Шаг 1: разрешение браузера = "'+p+'"','ok');
+    await new Promise(r=>setTimeout(r,1500));
+    if(p==='denied'){
+      toast('❌ Браузер заблокировал уведомления. Нажми 🔒 в адресной строке → Уведомления → Разрешить','err');
       return;
     }
-    if(Notification.permission!=='granted'){
-      toast('Запрашиваем разрешение…','ok');
+    if(p!=='granted'){
+      toast('Шаг 2: показываем диалог браузера…','ok');
       const r=await Notification.requestPermission();
-      if(r!=='granted'){toast('Разрешение отклонено','err');return;}
+      toast('Шаг 2 результат: "'+r+'"','ok');
+      await new Promise(x=>setTimeout(x,1500));
+      if(r!=='granted'){toast('❌ Разрешение отклонено','err');return;}
     }
-    toast('Подписываемся…','ok');
+    toast('Шаг 3: проверяем OneSignal…','ok');
+    await new Promise(r=>setTimeout(r,1000));
     if(!window.OneSignal?.User?.PushSubscription){
-      toast('OneSignal ещё загружается — попробуй снова через 3 сек','err');return;
+      toast('❌ OneSignal не инициализирован — перезагрузи страницу','err');return;
     }
+    toast('Шаг 4: optIn()…','ok');
     await window.OneSignal.User.PushSubscription.optIn();
-    toast('✅ Подписка активирована! Нажми Тест','ok');
+    toast('✅ Подписка активирована! Теперь нажми Тест','ok');
     _checkPushStatus();
   }catch(e){
     console.error('Subscribe failed:',e);
-    toast('❌ Ошибка: '+e.message,'err');
+    toast('❌ Ошибка на шаге: '+e.message,'err');
   }
 }
 
@@ -4668,17 +4674,32 @@ async function _checkPushStatus(){
   const chip=$('push-status-chip'),btn=$('push-sub-btn');
   if(!chip||!btn)return;
   try{
+    const nativePerm=Notification?.permission||'нет API';
+    const osReady=!!window.OneSignal?.User?.PushSubscription;
     const subscribed=window.OneSignal?.User?.PushSubscription?.optedIn;
-    if(subscribed){
-      chip.textContent='✅ Подписан на этом устройстве';
+    let swStatus='нет';
+    try{
+      const regs=await navigator.serviceWorker?.getRegistrations();
+      swStatus=regs?.length?regs.map(r=>r.active?.state||'...').join(','):'нет';
+    }catch(_){}
+    const diag=`браузер:${nativePerm} | OS:${osReady?'готов':'нет'} | SW:${swStatus}`;
+    if(nativePerm==='denied'){
+      chip.textContent='🚫 Заблокировано браузером — открой настройки сайта';
+      chip.style.cssText='font-size:12px;padding:4px 12px;border-radius:8px;background:var(--red-bg,#fee);color:var(--red,#c00)';
+      btn.textContent='Сбросить разрешение →';
+      btn.onclick=()=>{window.open('chrome://settings/content/notifications','_blank');};
+    }else if(subscribed){
+      chip.textContent='✅ Подписан | '+diag;
       chip.style.cssText='font-size:12px;padding:4px 12px;border-radius:8px;background:var(--grn-bg);color:var(--grn)';
       btn.textContent='Переподписаться';
+      btn.onclick=()=>subscribeWebPush().then(()=>showSettingsModal());
     }else{
-      chip.textContent='⚠️ Не подписан — нажмите кнопку';
+      chip.textContent='⚠️ '+diag;
       chip.style.cssText='font-size:12px;padding:4px 12px;border-radius:8px;background:var(--yel-bg);color:var(--yel)';
       btn.textContent='Подписаться';
+      btn.onclick=()=>subscribeWebPush().then(()=>showSettingsModal());
     }
-  }catch(e){chip.textContent='⚠️ Ошибка проверки';}
+  }catch(e){chip.textContent='⚠️ Ошибка: '+e.message;}
 }
 
 async function testPush(){

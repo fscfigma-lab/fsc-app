@@ -2634,7 +2634,10 @@ function showProjectDetail(pid){
       <div class="proj-detail-header">
         <div>
           <div class="proj-detail-name">${p.name}</div>
-          <div class="proj-detail-meta">${p.client||''} ${p.manager?'· '+p.manager:''} ${p.budget?'· '+fmoney(p.budget):''}</div>
+          <div class="proj-detail-meta">${p.mgr||p.manager||''} ${p.designer?'· '+p.designer:''} ${p.budget?'· '+fmoney(p.budget):''}</div>
+          ${p.address?`<div style="font-size:11px;color:var(--t3);margin-top:3px">📍 ${p.address}</div>`:''}
+          ${p.client?`<div style="font-size:11px;color:var(--t3);margin-top:2px">📞 ${p.client}</div>`:''}
+          ${p.weekPlan?`<div style="margin-top:10px;padding:10px 12px;background:var(--acc-bg);border:1.5px solid var(--acc-bd);border-radius:10px;font-size:12px;color:var(--t1);line-height:1.5"><span style="font-size:11px;font-weight:600;color:var(--acc);display:block;margin-bottom:4px">📋 ПЛАН НА НЕДЕЛЮ (из таблицы)</span>${p.weekPlan}</div>`:''}
         </div>
         <div style="display:flex;gap:6px;align-items:center">
           <span class="rbadge ${r}" style="font-size:12px">${riskLabel(r)}</span>
@@ -4458,17 +4461,20 @@ async function syncFromSheets(silent){
     const text=await resp.text();
     const rows=_parseCSV(text);
     if(rows.length<2){toast('Таблица пустая или нет данных','err');return;}
-    // Columns (0-indexed): 0=Дата, 1=Проект, 2=РП, 3=Дизайнер, 4=%, 5=Адрес, 6=Клиент, ..., 24=Начало, 25=Дедлайн
+    // Columns (0-indexed): 1=Проект, 2=РП, 3=Проектировщик, 4=%, 5=Адрес, 6=Контакт, 24=Начало, 25=Дедлайн, 26=План на неделю
     let added=0,updated=0;
     for(let i=1;i<rows.length;i++){
       const r=rows[i];
       const name=(r[1]||'').trim();
       if(!name)continue;
       const mgr=(r[2]||'').trim();
+      const designer=(r[3]||'').trim();
       const pct=_parseSheetPct(r[4]||'');
-      const client=(r[6]||'').trim()||(r[5]||'').trim();
+      const address=(r[5]||'').trim();
+      const contact=(r[6]||'').trim();
       const start=_parseSheetDate(r[24]||'');
       const deadline=_parseSheetDate(r[25]||'');
+      const weekPlan=(r[26]||'').trim();
       // Ищем совпадение: точное или через подстроку (имя в таблице может содержать код договора)
       const nameLow=name.toLowerCase();
       const ex=D.projects.find(p=>{
@@ -4477,16 +4483,21 @@ async function syncFromSheets(silent){
       });
       if(ex){
         if(mgr)ex.mgr=mgr;
+        if(designer)ex.designer=designer;
         if(pct!==null)ex.pct=pct;
-        if(client)ex.client=client;
+        if(address)ex.address=address;
+        if(contact)ex.client=contact;
         if(start)ex.start=start;
         if(deadline)ex.deadline=deadline;
+        if(weekPlan)ex.weekPlan=weekPlan;
         ex.sheetSync=new Date().toISOString();
         updated++;
       }else{
-        D.projects.push({id:uid(),name,mgr:mgr||'',client:client||'',
+        D.projects.push({id:uid(),name,mgr:mgr||'',designer:designer||'',
+          client:contact||'',address:address||'',
           start:start||TODAY(),deadline:deadline||addDays(TODAY(),90),
-          pct:pct||0,status:'active',sheetSync:new Date().toISOString()});
+          pct:pct||0,status:'active',weekPlan:weekPlan||'',
+          sheetSync:new Date().toISOString()});
         added++;
       }
     }

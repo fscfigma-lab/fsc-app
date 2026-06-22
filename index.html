@@ -689,6 +689,19 @@ body{background:var(--bg)}
 .empty-sub{font-size:13px}
 
 /* TOAST */
+/* Push permission banner */
+.push-banner{position:fixed;top:0;left:0;right:0;z-index:9990;
+  background:#1a1a2e;color:#fff;padding:12px 16px;
+  display:flex;align-items:center;gap:10px;
+  box-shadow:0 2px 12px rgba(0,0,0,.3);transform:translateY(-100%);
+  transition:transform .3s ease}
+.push-banner.show{transform:translateY(0)}
+.push-banner-text{flex:1;font-size:13px;line-height:1.4}
+.push-banner-btn{background:#E44332;color:#fff;border:none;border-radius:8px;
+  padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;
+  font-family:inherit;flex-shrink:0;white-space:nowrap}
+.push-banner-close{background:none;border:none;color:rgba(255,255,255,.5);
+  font-size:20px;cursor:pointer;padding:0 4px;flex-shrink:0;line-height:1}
 .toast{position:fixed;bottom:24px;right:24px;
   background:var(--acc-dark);color:#fff;
   border:none;
@@ -1409,6 +1422,13 @@ body{background:var(--bg)}
 <button class="voice-btn" id="voice-btn" onclick="toggleVoice()" title="Голосовой ассистент">🎤</button>
 
 <!-- QUICK-ADD SHEET -->
+<!-- Push permission banner -->
+<div class="push-banner" id="push-banner">
+  <span class="push-banner-text">🔔 Включить уведомления от FSC App</span>
+  <button class="push-banner-btn" onclick="enablePushFromBanner()">Включить</button>
+  <button class="push-banner-close" onclick="hidePushBanner()">✕</button>
+</div>
+
 <div class="qadd-ov" id="qadd-ov" onclick="closeQuickAdd()"></div>
 <div class="qadd-sheet" id="qadd-sheet">
   <div class="qadd-handle"></div>
@@ -2148,7 +2168,7 @@ function checkPin(){
     save();hideLoginScreen();applyUser();
     try{nav(startPage);}catch(e){console.error('nav err',e);nav('dashboard');}
     setTimeout(()=>showMorningBrief(),400);
-    setTimeout(()=>subscribeWebPush(),2000);
+    setTimeout(()=>checkNotifs(),1500);
     toast(`👋 Привет, ${_pinUser.name}!`,'ok');
   } else {
     $('pin-err').textContent='Неверный PIN';
@@ -4275,18 +4295,9 @@ function toast(msg,type='ok'){
    NOTIFICATIONS
 ═══════════════════════════════════════ */
 function checkNotifs(){
-  if(!('Notification'in window))return;
-  if(Notification.permission==='default')setTimeout(()=>Notification.requestPermission(),5000);
-  if(Notification.permission!=='granted')return;
-  const t=TODAY(),last=localStorage.getItem('fsc_nd');if(last===t)return;
-  const od=D.tasks.filter(x=>!x.done&&x.dead&&x.dead<t);
-  const crit=D.projects.filter(p=>calcRisk(p.id)==='critical');
-  if(od.length>0||crit.length>0){
-    const msg=[];
-    if(od.length)msg.push(`⚠️ ${decl(od.length,'задача','задачи','задач')} просрочено`);
-    if(crit.length)msg.push(`🔴 ${crit.map(p=>p.name).join(', ')} — критический риск`);
-    new Notification('FSC Задачи',{body:msg.join('\n')});
-    localStorage.setItem('fsc_nd',t);
+  // Проверяем подписку Web Push — если нет, покажем баннер (не через setTimeout!)
+  if('Notification' in window && Notification.permission==='default'){
+    _showPushBanner();
   }
 }
 
@@ -4313,10 +4324,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
   // 1. Persistent Storage — просим браузер никогда не удалять данные
   requestPersistentStorage();
 
-  // 2. Запрашиваем разрешение на уведомления
-  if('Notification' in window && Notification.permission==='default'){
-    setTimeout(()=>Notification.requestPermission(),3000);
-  }
+  // 2. Разрешение на уведомления — только через кнопку, не через setTimeout
 
   const lo=$('supa-loading');if(lo)lo.style.display='none';
 
@@ -4370,6 +4378,22 @@ function _urlBase64ToUint8(base64String){
   const base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
   const raw=atob(base64);
   return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
+}
+
+function _showPushBanner(){
+  if(!('serviceWorker' in navigator)||!('PushManager' in window))return;
+  if(Notification.permission==='granted')return; // уже разрешено
+  if(localStorage.getItem('fsc_push_dismissed'))return; // закрыл баннер
+  const b=$('push-banner');
+  if(b)setTimeout(()=>b.classList.add('show'),800);
+}
+function hidePushBanner(){
+  const b=$('push-banner');if(b)b.classList.remove('show');
+  localStorage.setItem('fsc_push_dismissed','1');
+}
+async function enablePushFromBanner(){
+  hidePushBanner();
+  await subscribeWebPush();
 }
 
 async function subscribeWebPush(){

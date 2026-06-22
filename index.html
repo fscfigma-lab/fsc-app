@@ -1425,6 +1425,10 @@ body{background:var(--bg)}
     <span class="mob-more-icon">👥</span>
     <div><span>Команда</span><span class="mob-more-sub">Сотрудники и роли</span></div>
   </div>
+  <div class="mob-more-item" id="mob-settings-item" style="display:none" onclick="closeMobMore();showSettingsModal()">
+    <span class="mob-more-icon">⚙️</span>
+    <div><span>Настройки</span><span class="mob-more-sub">Уведомления и интеграции</span></div>
+  </div>
 </div>
 <button class="fab" onclick="fabAction()">＋</button>
 <button class="voice-btn" id="voice-btn" onclick="toggleVoice()" title="Голосовой ассистент">🎤</button>
@@ -2396,6 +2400,8 @@ function applyPermissions(){
   // Кнопка настроек — только admin
   const stBtn=$('settings-btn');
   if(stBtn)stBtn.style.display=isAdmin()?'flex':'none';
+  const mobStBtn=$('mob-settings-item');
+  if(mobStBtn)mobStBtn.style.display=isAdmin()?'flex':'none';
   // Кнопка Google Calendar — всем у кого настроен Client ID
   const gcBtn=$('gcal-btn');
   if(gcBtn)gcBtn.style.display=D.googleClientId?'flex':'none';

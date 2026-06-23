@@ -3015,9 +3015,11 @@ let gOff=0;
 const MS=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 
 let gZoom='months';
-let gExpanded=new Set(); // expanded project IDs
-let gGroupByMgr=false;  // group by manager toggle
-let gMgrFilter='';       // filter by specific manager
+let gExpanded=new Set();
+let gGroupByMgr=false;
+let gMgrFilter='';
+let _gVP={total:1,pStartMs:0};
+let _gDrag=null;
 
 function gSetZoom(z){
   gZoom=z;gOff=0;
@@ -3048,6 +3050,7 @@ function rGantt(){
   }
 
   const total=Math.max(1,Math.round((pEnd-pStart)/86400000)+1);
+  _gVP={total,pStartMs:pStart.getTime()};
   function pos(d){if(!d)return null;const diff=Math.round((pd(d)-pStart)/86400000);
     return Math.max(0,Math.min(100,diff/total*100))}
   const todayPos=pos(TODAY());
@@ -3153,7 +3156,7 @@ function rGantt(){
           ${gridLines()}
           ${todayLine}
           ${(p.bl_start||p.bl_deadline)?`<div class="g-baseline" style="left:${(pos(p.bl_start)||0).toFixed(1)}%;width:${Math.max(1,(pos(p.bl_deadline)||100)-(pos(p.bl_start)||0)).toFixed(1)}%" title="Базовая линия: ${fdate(p.bl_start,true)} → ${fdate(p.bl_deadline,true)}"></div>`:''}
-          ${ep>0&&sp<100?`<div class="g-bar ${cls}" style="left:${sp.toFixed(1)}%;width:${w.toFixed(1)}%" title="${p.name}&#10;${fdate(p.start,true)} → ${fdate(p.deadline,true)}&#10;Прогресс: ${pct}%&#10;Риск: ${riskLabel(r)}${p.client?'&#10;Клиент: '+p.client:''}">
+          ${ep>0&&sp<100?`<div class="g-bar ${cls}" style="left:${sp.toFixed(1)}%;width:${w.toFixed(1)}%;cursor:grab" onmousedown="gBarDown(event,'proj','${p.id}')" title="${p.name}&#10;${fdate(p.start,true)} → ${fdate(p.deadline,true)}&#10;Прогресс: ${pct}%&#10;Перетащи чтобы сдвинуть сроки">
             <div class="g-pf" style="width:${pct}%"></div>
             ${w>8?`<span style="position:relative;z-index:1;padding-left:5px;font-size:10px;font-weight:700">${pct}%</span>`:''}
             ${w>22?`<span style="position:relative;z-index:1;padding-left:6px;font-size:10px;opacity:.85">${p.name}</span>`:''}
@@ -3181,7 +3184,7 @@ function rGantt(){
             <div class="g-rtl">
               ${gridLines()}
               ${todayLine}
-              ${sEnd>0&&sStart<100?`<div class="g-sbar ${sBarCls}" style="left:${sStart.toFixed(1)}%;width:${sW.toFixed(1)}%" title="${s.name}&#10;Дедлайн: ${fdate(s.deadline,true)}&#10;${s.done?'✓ Выполнен':dlLabel(s.deadline,false)||'В работе'}">${sW>8?sLabel+' '+s.name.slice(0,18):sLabel}</div>`:''}
+              ${sEnd>0&&sStart<100?`<div class="g-sbar ${sBarCls}" style="left:${sStart.toFixed(1)}%;width:${sW.toFixed(1)}%;${!s.done?'cursor:grab':''}" ${!s.done?`onmousedown="gBarDown(event,'stage','${s.id}')"`:''}  title="${s.name}&#10;Дедлайн: ${fdate(s.deadline,true)}&#10;${s.done?'✓ Выполнен':(dlLabel(s.deadline,false)||'В работе')}${!s.done?'&#10;Перетащи чтобы изменить срок':''}">${sW>8?sLabel+' '+s.name.slice(0,18):sLabel}</div>`:''}
               ${sPos!==null&&sPos>=0&&sPos<=102?`<div class="g-milestone ${s.done?'done':sds==='overdue'?'overdue':sds==='soon'?'soon':'ok'}" style="left:${sPos.toFixed(1)}%;width:8px;height:8px" title="${s.name}: ${fdate(s.deadline)}"></div>`:''}
             </div>
           </div>`;
@@ -3217,6 +3220,70 @@ function gToggleGroup(){gGroupByMgr=!gGroupByMgr;rGantt();}
 function gSetMgrF(m){gMgrFilter=m;rGantt();}
 function gExpandAll(){visibleProjects().forEach(p=>gExpanded.add(p.id));rGantt();}
 function gCollapseAll(){gExpanded.clear();rGantt();}
+
+function gBarDown(e,type,id){
+  if(e.button!==0)return;
+  e.preventDefault();e.stopPropagation();
+  const obj=type==='stage'?D.stages.find(s=>s.id===id):D.projects.find(p=>p.id===id);
+  if(!obj)return;
+  const rtl=e.currentTarget.closest('.g-rtl');
+  if(!rtl)return;
+  const rect=rtl.getBoundingClientRect();
+  _gDrag={type,id,obj,bar:e.currentTarget,
+    startX:e.clientX,cw:rect.width,
+    origDead:type==='stage'?obj.deadline:obj.deadline,
+    origStart:type==='proj'?obj.start:null,moved:false};
+  document.addEventListener('mousemove',_gMove);
+  document.addEventListener('mouseup',_gUp);
+  document.body.style.userSelect='none';
+}
+
+function _gMove(e){
+  if(!_gDrag)return;
+  const dx=e.clientX-_gDrag.startX;
+  if(Math.abs(dx)<4)return;
+  _gDrag.moved=true;
+  _gDrag.bar.style.opacity='0.65';
+  _gDrag.bar.style.cursor='grabbing';
+  const days=Math.round(dx/_gDrag.cw*_gVP.total);
+  const nd=new Date(new Date(_gDrag.origDead).getTime()+days*86400000).toISOString().slice(0,10);
+  let tip=document.getElementById('g-dtip');
+  if(!tip){
+    tip=document.createElement('div');tip.id='g-dtip';
+    tip.style.cssText='position:fixed;background:#D4A853;color:#1C2B1C;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;pointer-events:none;z-index:9999;white-space:nowrap;box-shadow:0 2px 10px rgba(0,0,0,.25)';
+    document.body.appendChild(tip);
+  }
+  tip.textContent='📅 '+fdate(nd,true)+(days>0?' (+'+days+' дн.)':days<0?' ('+days+' дн.)':'');
+  tip.style.left=(e.clientX-tip.offsetWidth/2)+'px';
+  tip.style.top=(e.clientY-44)+'px';
+  tip.style.display='block';
+}
+
+function _gUp(e){
+  if(!_gDrag)return;
+  const dx=e.clientX-_gDrag.startX;
+  const days=Math.round(dx/_gDrag.cw*_gVP.total);
+  if(_gDrag.moved&&Math.abs(days)>=1){
+    const obj=_gDrag.obj;
+    const ms=days*86400000;
+    const nd=new Date(new Date(_gDrag.origDead).getTime()+ms).toISOString().slice(0,10);
+    if(_gDrag.type==='stage'){
+      obj.deadline=nd;
+      addLog(`📅 Этап «${obj.name}» → ${fdate(nd,true)}`,obj.pid);
+    } else {
+      if(_gDrag.origStart)obj.start=new Date(new Date(_gDrag.origStart).getTime()+ms).toISOString().slice(0,10);
+      obj.deadline=nd;
+      addLog(`📅 ${obj.name}: сроки сдвинуты ${days>0?'+':''}${days} дн.`,obj.id);
+    }
+    save();rGantt();
+  }
+  _gDrag.bar.style.opacity='';_gDrag.bar.style.cursor='grab';
+  document.removeEventListener('mousemove',_gMove);
+  document.removeEventListener('mouseup',_gUp);
+  document.body.style.userSelect='';
+  const tip=document.getElementById('g-dtip');if(tip)tip.style.display='none';
+  _gDrag=null;
+}
 
 // Зафиксировать базовую линию проекта
 function saveBaseline(pid){

@@ -1952,8 +1952,21 @@ function save(){
   localStorage.setItem('fsc4', JSON.stringify(D));
   const cloudD = Object.assign({}, D);
   delete cloudD.currentUser;
-  sb.from('app_data').upsert({id:'main',data:cloudD,updated_at:D.savedAt})
-    .then(({error})=>{if(error)console.error('Supabase save error:',error)});
+  // Сохраняем критичные конфиг-поля — они могут быть только в Supabase,
+  // но не в локальном D (добавляются вручную, не через UI)
+  const _PRESERVE=['tgBotToken','tgAdminId','tgTechDirId','anthropicKey','githubPat'];
+  const _missing=_PRESERVE.filter(k=>!cloudD[k]);
+  if(_missing.length){
+    sb.from('app_data').select('data').eq('id','main').maybeSingle()
+      .then(({data})=>{
+        if(data?.data){_missing.forEach(k=>{if(data.data[k])cloudD[k]=data.data[k];});}
+        sb.from('app_data').upsert({id:'main',data:cloudD,updated_at:D.savedAt})
+          .then(({error})=>{if(error)console.error('Supabase save error:',error)});
+      });
+  } else {
+    sb.from('app_data').upsert({id:'main',data:cloudD,updated_at:D.savedAt})
+      .then(({error})=>{if(error)console.error('Supabase save error:',error)});
+  }
   // Авто-бэкап каждые 20 сохранений
   _saveCount++;
   if(_saveCount%20===0)autoBackup();

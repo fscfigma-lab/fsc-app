@@ -4776,7 +4776,7 @@ async function syncFromSheets(silent){
         const oldMgr=ex.mgr||'';
         if(mgr)ex.mgr=mgr;
         if(designer)ex.designer=designer;
-        if(pct!==null)ex.pct=pct;
+        if(pct!==null){ex.pct=pct;if(pct===100)ex.status='done';}
         if(address)ex.address=address;
         if(contact)ex.client=contact;
         if(start)ex.start=start;

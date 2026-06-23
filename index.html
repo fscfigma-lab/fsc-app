@@ -2895,7 +2895,7 @@ function projectGanttHTML(pid){
   // Секция задач (только со сроками)
   if(tasks.length){
     // Группируем по приоритету
-    const byPrio={high:[],medium:[],low:[]};
+    const byPrio={critical:[],high:[],medium:[],low:[]};
     tasks.forEach(t=>{(byPrio[t.prio||'medium']).push(t);});
     const prioLabel={critical:'🚨 Критический',high:'🔴 Высокий',medium:'🟡 Обычный',low:'⚪ Низкий'};
     ['critical','high','medium','low'].forEach(prio=>{

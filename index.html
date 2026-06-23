@@ -4851,12 +4851,23 @@ function _parseCSV(text){
 function _parseSheetDate(s){
   if(!s||!s.trim())return null;
   s=s.trim();
+  // Вырезаем текст после даты: "20.01.2026 (закончен)" → "20.01.2026"
+  s=s.replace(/[\s(]+[а-яёА-ЯЁa-zA-Z,)].*/,'').trim();
+  const curY=new Date().getFullYear();
+  // DD.MM.YYYY
   let m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
   if(m)return`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
-  m=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if(m)return s;
-  const d=new Date(s);
-  if(!isNaN(d.getTime()))return d.toISOString().split('T')[0];
+  // DD.MM.YY → 20YY
+  m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2})$/);
+  if(m)return`20${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  // DD.MM (без года) → текущий или следующий год
+  m=s.match(/^(\d{1,2})\.(\d{1,2})$/);
+  if(m){
+    const y=parseInt(m[2])<=new Date().getMonth()+1?curY+1:curY;
+    return`${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  }
+  // YYYY-MM-DD
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;
   return null;
 }
 

@@ -3021,6 +3021,7 @@ let gGroupByMgr=false;
 let gMgrFilter='';
 let _gVP={total:1,pStartMs:0};
 let _gDrag=null;
+let _gUndo=[]; // стек отмен [{type,id,fields:{field:oldVal}}]
 
 function gSetZoom(z){
   gZoom=z;gOff=0;
@@ -3268,6 +3269,12 @@ function _gUp(e){
     const obj=_gDrag.obj;
     const ms=days*86400000;
     const nd=new Date(new Date(_gDrag.origDead).getTime()+ms).toISOString().slice(0,10);
+    // Сохраняем в стек для отмены
+    const snap={type:_gDrag.type,id:_gDrag.id,fields:{deadline:_gDrag.origDead}};
+    if(_gDrag.type==='proj'&&_gDrag.origStart)snap.fields.start=_gDrag.origStart;
+    _gUndo.push(snap);
+    if(_gUndo.length>10)_gUndo.shift();
+    // Применяем
     if(_gDrag.type==='stage'){
       obj.deadline=nd;
       addLog(`📅 Этап «${obj.name}» → ${fdate(nd,true)}`,obj.pid);
@@ -3277,6 +3284,7 @@ function _gUp(e){
       addLog(`📅 ${obj.name}: сроки сдвинуты ${days>0?'+':''}${days} дн.`,obj.id);
     }
     save();rGantt();
+    _gShowUndoBtn();
   }
   _gDrag.bar.style.opacity='';_gDrag.bar.style.cursor='grab';
   document.removeEventListener('mousemove',_gMove);
@@ -3285,6 +3293,40 @@ function _gUp(e){
   const tip=document.getElementById('g-dtip');if(tip)tip.style.display='none';
   _gDrag=null;
 }
+
+function gUndoDrag(){
+  if(!_gUndo.length)return;
+  const snap=_gUndo.pop();
+  const obj=snap.type==='stage'
+    ?D.stages.find(s=>s.id===snap.id)
+    :D.projects.find(p=>p.id===snap.id);
+  if(!obj)return;
+  Object.assign(obj,snap.fields);
+  addLog(`↩ Отменено изменение сроков`,snap.type==='proj'?snap.id:obj.pid);
+  save();rGantt();
+  if(!_gUndo.length){const b=document.getElementById('g-undo-btn');if(b)b.remove();}
+}
+
+function _gShowUndoBtn(){
+  let b=document.getElementById('g-undo-btn');
+  if(!b){
+    b=document.createElement('button');b.id='g-undo-btn';
+    b.onclick=gUndoDrag;
+    b.style.cssText='position:fixed;bottom:80px;right:20px;z-index:999;background:#D4A853;color:#1C2B1C;border:none;border-radius:24px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.25);display:flex;align-items:center;gap:6px';
+    document.body.appendChild(b);
+  }
+  b.textContent='↩ Отменить перенос';
+  b.style.display='flex';
+  clearTimeout(b._t);
+  b._t=setTimeout(()=>{b.style.display='none';},8000);
+}
+
+// Ctrl+Z / Cmd+Z
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==='z'&&_gUndo.length&&curPage==='gantt'){
+    e.preventDefault();gUndoDrag();
+  }
+});
 
 // Зафиксировать базовую линию проекта
 function saveBaseline(pid){

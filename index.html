@@ -1585,8 +1585,9 @@ body{background:var(--bg)}
       <div><label class="fl">Ответственный</label><select class="fi" id="t-who"></select></div>
       <div><label class="fl">Приоритет</label>
         <select class="fi" id="t-prio">
+          <option value="critical">🚨 Критический</option>
           <option value="high">🔴 Высокий</option>
-          <option value="medium" selected>🟡 Средний</option>
+          <option value="medium" selected>🟡 Обычный</option>
           <option value="low">⚪ Низкий</option>
         </select>
       </div>
@@ -1626,7 +1627,8 @@ body{background:var(--bg)}
     <div class="mtitle">Новый сотрудник</div>
     <div class="fg"><label class="fl">Имя Фамилия *</label><input type="text" class="fi" id="mb-name"></div>
     <div class="fg"><label class="fl">Должность</label><input type="text" class="fi" id="mb-role" placeholder="РП, Дизайнер, Монтажник..."></div>
-    <div class="fg"><label class="fl">Telegram для уведомлений</label><input type="text" class="fi" id="mb-tg" placeholder="@username"></div>
+    <div class="fg"><label class="fl">Telegram @username</label><input type="text" class="fi" id="mb-tg" placeholder="@username"></div>
+    <div class="fg"><label class="fl">Telegram ID <span style="font-size:10px;color:var(--t3)">(число — для уведомлений)</span></label><input type="text" class="fi" id="mb-tgid" placeholder="123456789" inputmode="numeric"></div>
     <div class="mfoot">
       <button class="btn btn-s" onclick="closeM('m-member')">Отмена</button>
       <button class="btn btn-p" onclick="saveMember()">Добавить</button>
@@ -2093,7 +2095,7 @@ function fmoney(n){if(!n)return'—';
 function decl(n,a,b,c){const m=n%100,r=n%10;
   if(m>=11&&m<=19)return n+' '+c;if(r===1)return n+' '+a;
   if(r>=2&&r<=4)return n+' '+b;return n+' '+c}
-function prioW(p){return p==='high'?3:p==='medium'?2:1}
+function prioW(p){return p==='critical'?4:p==='high'?3:p==='medium'?2:1}
 function addDays(dateStr,n){const d=pd(dateStr);d.setDate(d.getDate()+Math.round(n));
   return d.toISOString().split('T')[0]}
 function $(id){return document.getElementById(id)}
@@ -2895,8 +2897,8 @@ function projectGanttHTML(pid){
     // Группируем по приоритету
     const byPrio={high:[],medium:[],low:[]};
     tasks.forEach(t=>{(byPrio[t.prio||'medium']).push(t);});
-    const prioLabel={high:'🔴 Высокий приоритет',medium:'🟡 Средний приоритет',low:'🟢 Низкий приоритет'};
-    ['high','medium','low'].forEach(prio=>{
+    const prioLabel={critical:'🚨 Критический',high:'🔴 Высокий',medium:'🟡 Обычный',low:'⚪ Низкий'};
+    ['critical','high','medium','low'].forEach(prio=>{
       if(!byPrio[prio].length)return;
       html+=`<div class="pg-section">${prioLabel[prio]}</div>`;
       html+=byPrio[prio].map(t=>{
@@ -3612,7 +3614,7 @@ function _updQdateLbl(){_updQdateBtns();}
 function cycleQPrio(){
   const inp=$('qadd-inp');if(inp)inp.blur();
   if(_qShowProj){_qShowProj=false;const pl=$('qadd-proj-list');if(pl)pl.classList.remove('open');}
-  const order=['medium','high','low'];
+  const order=['medium','high','critical','low'];
   _qprio=order[(order.indexOf(_qprio)+1)%order.length];
   _updQPrio();
 }
@@ -3620,9 +3622,10 @@ function _updQPrio(){
   const btn=$('qadd-act-prio'),ico=$('qadd-prio-ico'),lbl=$('qadd-prio-lbl');
   if(!btn)return;
   btn.className='qadd-act';
-  if(_qprio==='high'){btn.classList.add('a-ph');if(ico)ico.textContent='🔴';if(lbl)lbl.textContent='Срочно';}
-  else if(_qprio==='medium'){btn.classList.add('a-pm');if(ico)ico.textContent='🟡';if(lbl)lbl.textContent='Важно';}
-  else{if(ico)ico.textContent='🏳';if(lbl)lbl.textContent='Приоритет';}
+  if(_qprio==='critical'){btn.classList.add('a-ph');if(ico)ico.textContent='🚨';if(lbl)lbl.textContent='Критический';}
+  else if(_qprio==='high'){btn.classList.add('a-ph');if(ico)ico.textContent='🔴';if(lbl)lbl.textContent='Высокий';}
+  else if(_qprio==='medium'){btn.classList.add('a-pm');if(ico)ico.textContent='🟡';if(lbl)lbl.textContent='Обычный';}
+  else{if(ico)ico.textContent='⚪';if(lbl)lbl.textContent='Низкий';}
 }
 
 // ── Исполнитель ──
@@ -4077,10 +4080,10 @@ function checkReminders(){
 /* ═══════════════════════════════════════
    MODAL: MEMBER
 ═══════════════════════════════════════ */
-function openMemberModal(){$('mb-name').value='';$('mb-role').value='';$('mb-tg').value='';openM('m-member')}
+function openMemberModal(){$('mb-name').value='';$('mb-role').value='';$('mb-tg').value='';$('mb-tgid').value='';openM('m-member')}
 function saveMember(){
   const name=$('mb-name').value.trim();if(!name){toast('Введи имя','err');return}
-  D.team.push({id:uid(),name,role:$('mb-role').value.trim()||'Сотрудник',ini:ini(name),tg:$('mb-tg').value.trim()||null});
+  D.team.push({id:uid(),name,role:$('mb-role').value.trim()||'Сотрудник',ini:ini(name),tg:$('mb-tg').value.trim()||null,tgId:$('mb-tgid').value.trim()||null});
   save();closeM('m-member');rTeam();toast('👤 Сотрудник добавлен','ok');
 }
 

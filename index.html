@@ -283,8 +283,9 @@ body{background:var(--bg)}
 .g-today{position:absolute;top:0;bottom:0;width:2px;background:var(--red);z-index:5}
 .g-bar{position:absolute;height:26px;border-radius:6px;border:1px solid var(--b2);
   display:flex;align-items:center;padding:0 10px;font-size:11px;overflow:hidden;
-  cursor:pointer;transition:all .2s;white-space:nowrap;font-weight:500}
-.g-bar:hover{z-index:10;overflow:visible;min-width:max-content;box-shadow:var(--shadow-md)}
+  cursor:grab;transition:all .2s;white-space:nowrap;font-weight:500}
+.g-bar:hover{z-index:10;overflow:visible;min-width:max-content;box-shadow:var(--shadow-md);filter:brightness(1.15)}
+.g-bar:hover::after{content:'⠿⠿';position:absolute;right:5px;top:50%;transform:translateY(-50%);font-size:10px;opacity:.5;pointer-events:none}
 .g-bar.on-track{background:rgba(201,149,42,0.10);border-color:var(--acc-bd);color:var(--acc)}
 .g-bar.overdue{background:var(--red-bg);border-color:var(--red-bd);color:var(--red)}
 .g-bar.done{background:var(--grn-bg);border-color:var(--grn-bd);color:var(--grn)}
@@ -342,8 +343,8 @@ body{background:var(--bg)}
 /* Stage bar */
 .g-sbar{position:absolute;height:12px;border-radius:3px;border:1px solid;
   display:flex;align-items:center;padding:0 4px;font-size:9px;font-weight:600;
-  white-space:nowrap;overflow:hidden;cursor:pointer;transition:all .15s}
-.g-sbar:hover{z-index:10;overflow:visible;box-shadow:0 2px 8px rgba(0,0,0,0.15)}
+  white-space:nowrap;overflow:hidden;cursor:grab;transition:all .15s}
+.g-sbar:not(.sdone):hover{z-index:10;overflow:visible;box-shadow:0 2px 8px rgba(0,0,0,0.15);filter:brightness(1.2);height:16px;top:-2px}
 .g-sbar.sdone{background:var(--grn-bg);border-color:var(--grn-bd);color:var(--grn)}
 .g-sbar.sod{background:var(--red-bg);border-color:var(--red-bd);color:var(--red)}
 .g-sbar.ssoon{background:var(--yel-bg);border-color:var(--yel-bd);color:var(--yel)}

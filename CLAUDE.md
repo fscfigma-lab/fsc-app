@@ -3,141 +3,140 @@
 ## Где живёт приложение
 - **Продакшн**: https://fscfigma-lab.github.io/fsc-app/
 - **Стейджинг**: https://fscfigma-lab.github.io/fsc-app-dev/
-- **Файл**: `/Users/margarita/Desktop/FSC_App/index.html` (~3300+ строк)
-- **Service Worker**: `sw.js` (кэш `fsc-v5`, BASE = `/fsc-app`)
+- **Главный файл**: `index.html` (~5400 строк, всё в одном файле)
+- **Service Worker**: `sw.js` (кэш `fsc-v34`, BASE = `/fsc-app`)
 - **Манифест**: `manifest.json` (start_url и scope = `/fsc-app/`)
+- **Push worker**: `OneSignalSDKWorker.js` (нативный VAPID web push)
 
 ## Backend
-- **Supabase**: `https://yhsedgaimfgbcqbjltkv.supabase.co`
-- Данные хранятся как JSON blob: таблица `app_data`, строка `{id:'main', data:D}`
-- Стейджинг использует строку `{id:'dev', data:D}`
-- Бэкапы: строки `{id:'bk_{timestamp}', data:D}`, хранятся последние 10
-- **Anthropic API key**: в `D.anthropicKey` (не в коде!)
+- **Supabase URL**: `https://yhsedgaimfgbcqbjltkv.supabase.co`
 - **Supabase anon key**: в коде (допустимо, row-level security не нужен)
+- Данные — JSON blob: таблица `app_data`, строка `{id:'main', data:D}`
+- Стейджинг: строка `{id:'dev', data:D}`
+- Бэкапы: `{id:'bk_{timestamp}', data:D}`, хранятся последние 10
 
-## Сессия и роли
+## Секретные ключи — где хранятся (НИКОГДА не в коде/git)
+- `D.anthropicKey` — Anthropic API key
+- `D.tgBotToken` — Telegram bot token
+- `D.tgAdminId` — Telegram ID администратора
+- `D.tgTechDirId` — Telegram ID техдиректора
+- `D.githubPat` — GitHub Personal Access Token
+- `D.ntfyTopic` — ntfy.sh топик для push-уведомлений
+- `D.gcalClientId` — Google OAuth Client ID
 - `currentUser` — **только** в `localStorage('fsc4_user')`, никогда в Supabase
-- Роли: `admin` | `management` | `manager`
-- При логине сбрасывается: `curProjDetail=null; curPage='dashboard'`
+
+> GitHub push protection блокирует Anthropic API ключи — никогда не коммитить!
+
+## Роли
+- `admin` | `management` | `manager`
+- При логине: `curProjDetail=null; curPage='dashboard'`
 
 ## Глобальные переменные состояния
 ```
-D            — весь объект данных (projects, tasks, stages, team, log, ...)
-curPage      — текущая страница
+D             — весь объект данных (projects, tasks, stages, team, log, ...)
+curPage       — текущая страница
 curProjDetail — ID открытого проекта (null = список)
-pfilt        — фильтр статуса проектов ('all'|'active'|'overdue'|'paused'|'done')
-pSearch      — строка поиска проектов
-pMgrFilt     — фильтр по менеджеру
-gZoom        — зум Ганта ('weeks'|'months'|'quarters')
+pfilt         — фильтр статуса ('all'|'active'|'overdue'|'paused'|'done')
+pSearch       — строка поиска проектов
+pMgrFilt      — фильтр по менеджеру
+gZoom         — зум Ганта ('weeks'|'months'|'quarters')
 ```
 
-## Поля данных (важно не путать)
-- Этапы (stages): `s.deadline` (не s.dead!)
-- Задачи (tasks): `t.dead`
-- Проекты: `p.start`, `p.deadline`
-- Базовая линия: `p.bl_start`, `p.bl_deadline`, `p.bl_stages`
+## Поля данных — ВАЖНО не путать
+| Объект | Поле дедлайна | Другие поля |
+|--------|--------------|-------------|
+| Этап (stage) | `s.deadline` (НЕ s.dead!) | `s.id`, `s.pid`, `s.name`, `s.icon`, `s.done` |
+| Задача (task) | `t.dead` | `t.id`, `t.pid`, `t.name`, `t.who`, `t.prio`, `t.done`, `t.notes` (НЕ t.note!) |
+| Проект | `p.deadline`, `p.start` | `p.id`, `p.name`, `p.client`, `p.status`, `p.pct`, `p.mgr` |
+| Базовая линия | `p.bl_deadline`, `p.bl_start` | `p.bl_stages` |
 
-## Что умеет приложение
+### Приоритеты задач
+`critical` | `high` | `medium` | `low` (поле `prio`)
 
-### Авторизация
-- PIN-код вход, изоляция сессий по устройству
-- Выход сбрасывает локальное состояние
-
-### Дашборд
-- Приветствие по времени суток
-- Сводка: просроченные / сегодня / активные задачи
-- Лента изменений 🔔
-
-### Проекты
-- Создание, редактирование, удаление
-- Статусы: активный, на паузе, просрочен, завершён
-- Фильтры: поиск по названию/клиенту, статус-чипы, менеджер (для admin)
-- Детальная карточка с прогрессом
-
-### Этапы
-- Полный CRUD внутри проекта
-- Поля: название, иконка, дедлайн
-- Редактирование через модальное окно (`openStageModal`)
-
-### Задачи
-- CRUD, приоритеты: normal / high / critical
-- Поля: название, проект, дедлайн, исполнитель
-- Фильтр по проекту
-
-### Команда
-- CRUD участников: имя, роль, инициалы, Telegram
-
-### Гант (Gantt)
-- **Глобальный**: все проекты на шкале, зум недели/месяцы/кварталы
-- Прогресс % на барах, milestone diamonds ◆
-- Базовая линия (план vs факт)
-- **Мини-Гант**: внутри каждого проекта — этапы + задачи по критичности
-- Ручное создание этапов если нет AI-плана
-
-### AI / Голосовой ассистент
-- Anthropic Claude API (ключ в `D.anthropicKey`)
-- Генерация умного плана проекта (этапы автоматически)
-
-### Резервное копирование
-- Авто-бэкап каждые 20 сохранений → Supabase
-- Хранит последние 10 бэкапов
-- Ручной экспорт / импорт JSON
-- Восстановление из облачного бэкапа
-- Кнопка 🗄️ в сайдбаре (только admin)
-
-### Push-уведомления (ntfy.sh)
-- Бесплатно, без регистрации, работает на iOS и Android
-- Admin настраивает канал в ⚙️ Настройках (`D.ntfyTopic`)
-- Команда устанавливает приложение ntfy и подписывается на канал
-- Триггеры:
-  - Просроченные задачи при открытии приложения (макс 1×/час)
-  - Сегодняшние дедлайны
-  - Назначение новой задачи исполнителю
-  - Выполнение этапа
-
-### Persistent Storage
-- `navigator.storage.persist()` запрашивается при старте
-- Защищает данные от автоматической очистки браузером
-- Статус виден в ⚙️ Настройках
-
-### Google Calendar
-- OAuth 2.0 через Google Identity Services (GIS, без сервера)
-- Admin вводит OAuth Client ID в ⚙️ (инструкция прямо в модалке)
-- Кнопка 🗓 в сайдбаре — видна всем если Client ID настроен
-- Синхронизирует:
-  - Дедлайны проектов → красный, напоминание за 24ч
-  - Дедлайны этапов → жёлтый, напоминание за 24ч
-  - Задачи high/critical → оранжевый, напоминание за 1ч
-- Upsert: не дублирует, обновляет существующие
-- Event ID в `D.gcalEvents`, последняя синхронизация в `D.gcalLastSync`
-- Токен в памяти 58 минут
-
-### Настройки ⚙️ (только admin)
-- Статус Persistent Storage
-- ntfy топик + тест-кнопка
-- Google OAuth Client ID + пошаговая инструкция
-
-### Адаптивность
-- Нижняя навигация на мобильном
-- Кнопка «Назад» + scroll-to-top при открытии проекта
-- mob-ubar: имя пользователя и кнопка выхода вверху
+### Статусы проектов
+`active` | `overdue` | `paused` | `done`  
+Статус **авто-вычисляется** при синке с Google Sheets: pct=100 → done, иначе сравнивается deadline с сегодня.
 
 ## Функции сохранения
 ```javascript
-save()           // сохраняет в localStorage + Supabase, каждые 20 вызовов делает autoBackup()
-autoBackup()     // bk_{timestamp} в Supabase
-exportJSON()     // скачивает .json файл
-importJSON()     // загружает из файла
+save()        // localStorage + Supabase; каждые 20 вызовов → autoBackup()
+              // ВАЖНО: перед сохранением читает Supabase и восстанавливает
+              // отсутствующие секретные ключи (tgBotToken, anthropicKey и др.)
+autoBackup()  // bk_{timestamp} в Supabase
+exportJSON()  // скачивает .json
+importJSON()  // загружает из файла
 ```
 
-## Что ещё можно сделать (бэклог)
-- 📷 Камера — фото к задачам/этапам с стройки
-- 🔗 Зависимости задач + критический путь (Гант уровень 2)
-- ↔️ Drag-to-reschedule в Ганте (уровень 3)
-- 📄 PDF-экспорт Ганта
+## Google Sheets синхронизация
+- `syncFromSheets()` — запускается **автоматически каждые 10 минут**
+- Читает лист «Текущие проекты»: название, клиент, %, дедлайн, менеджер
+- Авто-вычисляет статус по pct + deadline
+- `_parseSheetDate()` понимает форматы: `DD.MM.YYYY`, `DD.MM.YY`, `DD.MM`, ISO, с текстовыми суффиксами типа `30.06.26(закончен)`
+
+## Гант
+- `rGantt()` — рендер всего Ганта
+- `pos(d)` — дата → % позиция на шкале
+- `pStart`, `pEnd`, `total` — диапазон текущего вида
+- Классы: `.g-bar` (проект), `.g-sbar` (этап)
+- **Drag-to-reschedule**: мышь и touch, хранит последние 10 операций в `_gUndo`
+- Кнопка «↩ Отменить перенос» появляется на 8 сек после перетаскивания
+- Ctrl+Z / Cmd+Z — undo последнего переноса
 
 ## GitHub
 - Репо: `https://github.com/fscfigma-lab/fsc-app`
-- Ветка: `main` → автодеплой на GitHub Pages
-- GitHub push protection блокирует Anthropic API ключи — никогда не коммитить!
+- Ветка: `main` → автодеплой на GitHub Pages (~2 мин после push)
+- `.github/workflows/web-push.yml` — каждые 30 мин
+- `.github/workflows/daily-push.yml` — 09:00 + 18:00 МСК
 - `.gitignore` включает `*.bak`
+
+## Функции приложения
+
+### Авторизация
+PIN-код, изоляция сессий по устройству.
+
+### Дашборд
+Приветствие, сводка задач (просрочен/сегодня/активные), лента изменений 🔔
+
+### Проекты
+CRUD, статусы, фильтры по поиску/статусу/менеджеру, детальная карточка с прогрессом.
+
+### Этапы
+CRUD внутри проекта, модальное окно `openStageModal`.
+
+### Задачи
+CRUD, приоритеты, фильтр по проекту.
+
+### Команда
+CRUD: имя, роль, инициалы, Telegram.
+
+### Гант
+- Глобальный: все проекты, зум недели/месяцы/кварталы, прогресс %, milestone ◆, базовая линия
+- Мини-Гант: внутри проекта — этапы + задачи по критичности
+- Drag-to-reschedule с undo
+
+### AI / Голосовой ассистент
+Anthropic Claude API, генерация плана проекта с этапами.
+
+### Push-уведомления (ntfy.sh + native VAPID)
+- ntfy.sh: бесплатно, без регистрации, iOS/Android
+- Native web push через VAPID (OneSignalSDKWorker.js)
+- Триггеры: просрочка, сегодняшний дедлайн, назначение задачи, выполнение этапа
+
+### Резервное копирование
+Авто-бэкап каждые 20 сохранений, последние 10 бэкапов, экспорт/импорт JSON, восстановление из облака. Кнопка 🗄️ (только admin).
+
+### Google Calendar
+OAuth 2.0 без сервера. Синхронизирует дедлайны проектов (красный), этапов (жёлтый), задач high/critical (оранжевый). Upsert — не дублирует.
+
+### Persistent Storage
+`navigator.storage.persist()` при старте.
+
+### Адаптивность
+Нижняя навигация на мобильном, кнопка «Назад», mob-ubar.
+
+## Бэклог
+- 📷 Камера — фото к задачам/этапам
+- 🔗 Зависимости задач + стрелки на Ганте
+- 🔴 Критический путь
+- 📄 PDF-экспорт Ганта
+- 👥 Загрузка ресурсов (кто перегружен)

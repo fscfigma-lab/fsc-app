@@ -4521,22 +4521,24 @@ function _urlBase64ToUint8Array(b64){
 }
 
 async function sendPush(title,body,tag){
-  // Добавляем в очередь push_queue → GitHub Actions отправит через VAPID
+  // Только добавляем в очередь. GitHub Action сам проверяет её по крону каждые 30 мин.
   try{
     const {data}=await sb.from('app_data').select('data').eq('id','push_queue').maybeSingle();
     const q=data?.data||[];
     q.push({title,body,tag:tag||'fsc',ts:Date.now()});
     await sb.from('app_data').upsert({id:'push_queue',data:q});
-    // Триггерим GitHub Action через workflow_dispatch
-    const pat=D.githubPat;
-    if(pat){
-      fetch('https://api.github.com/repos/fscfigma-lab/fsc-app/actions/workflows/web-push.yml/dispatches',{
-        method:'POST',
-        headers:{'Authorization':'token '+pat,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'},
-        body:JSON.stringify({ref:'main'})
-      }).catch(()=>{});
-    }
   }catch(e){console.warn('sendPush queue error:',e);}
+}
+
+async function flushPushQueue(){
+  // Вызывается только кнопкой Тест — немедленно запускает Action
+  const pat=D.githubPat;
+  if(!pat)return;
+  fetch('https://api.github.com/repos/fscfigma-lab/fsc-app/actions/workflows/web-push.yml/dispatches',{
+    method:'POST',
+    headers:{'Authorization':'token '+pat,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'},
+    body:JSON.stringify({ref:'main'})
+  }).catch(()=>{});
 }
 
 // Проверка просроченных задач — шлём push при открытии приложения
@@ -4713,7 +4715,8 @@ async function _checkPushStatus(){
 async function testPush(){
   toast('Отправляем тест…','ok');
   await sendPush('🔔 Тест FSC уведомлений','Если видишь это — push работает! ✅','test');
-  toast('✅ Запрос отправлен — уведомление придёт через ~10 сек','ok');
+  await flushPushQueue();
+  toast('✅ Запрос отправлен — уведомление придёт через ~15 сек','ok');
 }
 
 /* ═══════════════════════════════════════

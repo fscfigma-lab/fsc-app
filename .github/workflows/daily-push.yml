@@ -3,13 +3,13 @@ name: 🔔 Ежедневные уведомления
 on:
   schedule:
     - cron: '0 5 * * *'   # каждый день в 08:00 МСК (UTC+3)
-  workflow_dispatch:        # ← кнопка "запустить вручную" на GitHub
+  workflow_dispatch:
 
 jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Проверить дедлайны и отправить push
+      - name: Проверить дедлайны и добавить в push_queue
         uses: actions/github-script@v7
         env:
           SUPA_URL: 'https://yhsedgaimfgbcqbjltkv.supabase.co'
@@ -18,151 +18,87 @@ jobs:
           script: |
             const SUPA_URL = process.env.SUPA_URL;
             const SUPA_KEY = process.env.SUPA_KEY;
+            const headers = { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${SUPA_KEY}` };
 
-            // ── 1. Загружаем данные из Supabase ──────────────────────────────
-            const res = await fetch(
-              `${SUPA_URL}/rest/v1/app_data?id=eq.main&select=data`,
-              { headers: { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${SUPA_KEY}` } }
-            );
+            const res = await fetch(`${SUPA_URL}/rest/v1/app_data?id=eq.main&select=data`, { headers });
             const rows = await res.json();
-            if (!rows?.length) { console.log('Нет данных в Supabase'); return; }
-
+            if (!rows?.length) { console.log('Нет данных'); return; }
             const D = rows[0].data;
-            const topic = D.ntfyTopic;
-            if (!topic) { console.log('ntfyTopic не настроен — уведомления отключены'); return; }
 
-            // ── 2. Вспомогательные функции ───────────────────────────────────
             const today = new Date().toISOString().slice(0, 10);
-            const fmt = d => d ? d.slice(5).replace('-', '/') : '?';   // "2025-12-31" → "12/31"
-
-            async function sendPush(title, body, tags = 'construction') {
-              const isUrgent = tags.includes('warning') || tags.includes('skull');
-              const r = await fetch('https://ntfy.sh', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  topic,
-                  title,
-                  message: body,
-                  tags: tags.split(',').map(t => t.trim()),
-                  priority: isUrgent ? 4 : 3
-                })
-              });
-              console.log(`→ Push [${r.status}]: ${title}`);
-            }
-
-            // ── 3. Задачи ────────────────────────────────────────────────────
-            const tasks    = D.tasks  || [];
+            const fmt = d => d ? d.slice(5).replace('-', '/') : '?';
+            const tasks = D.tasks || [];
             const projects = D.projects || [];
-            const stages   = D.stages || [];
+            const stages = D.stages || [];
             const getProjName = pid => projects.find(p => p.id === pid)?.name || '—';
+
+            const messages = [];
 
             const overdueTasks = tasks.filter(t => !t.done && t.dead && t.dead < today);
             const todayTasks   = tasks.filter(t => !t.done && t.dead === today);
-
-            if (overdueTasks.length > 0) {
-              const lines = overdueTasks.slice(0, 5)
-                .map(t => `• ${t.title || t.name} (${t.who || '—'}) [${fmt(t.dead)}]`);
-              if (overdueTasks.length > 5) lines.push(`...и ещё ${overdueTasks.length - 5}`);
-              await sendPush(
-                `⚠️ Просрочено задач: ${overdueTasks.length}`,
-                lines.join('\n'),
-                'warning,construction'
-              );
-            }
-
-            if (todayTasks.length > 0) {
-              const lines = todayTasks.slice(0, 5)
-                .map(t => `• ${t.title || t.name} (${t.who || '—'})`);
-              await sendPush(
-                `📅 Дедлайн сегодня: ${todayTasks.length} задач`,
-                lines.join('\n'),
-                'calendar,construction'
-              );
-            }
-
-            // ── 4. Этапы ─────────────────────────────────────────────────────
             const overdueStages = stages.filter(s => !s.done && s.deadline && s.deadline < today);
             const todayStages   = stages.filter(s => !s.done && s.deadline === today);
 
+            if (overdueTasks.length > 0) {
+              const lines = overdueTasks.slice(0, 5).map(t => `• ${t.title||t.name} (${t.who||'—'}) [${fmt(t.dead)}]`);
+              if (overdueTasks.length > 5) lines.push(`...и ещё ${overdueTasks.length-5}`);
+              messages.push({ title: `⚠️ Просрочено задач: ${overdueTasks.length}`, body: lines.join('\n'), tag: 'warning' });
+            }
+
+            if (todayTasks.length > 0) {
+              const lines = todayTasks.slice(0, 5).map(t => `• ${t.title||t.name} (${t.who||'—'})`);
+              messages.push({ title: `📅 Дедлайн сегодня: ${todayTasks.length} задач`, body: lines.join('\n'), tag: 'today' });
+            }
+
             if (overdueStages.length > 0) {
-              const lines = overdueStages.slice(0, 5)
-                .map(s => `• ${s.name} — ${getProjName(s.pid)} [${fmt(s.deadline)}]`);
-              if (overdueStages.length > 5) lines.push(`...и ещё ${overdueStages.length - 5}`);
-              await sendPush(
-                `🏗 Просрочено этапов: ${overdueStages.length}`,
-                lines.join('\n'),
-                'warning,construction'
-              );
+              const lines = overdueStages.slice(0, 5).map(s => `• ${s.name} — ${getProjName(s.pid)} [${fmt(s.deadline)}]`);
+              if (overdueStages.length > 5) lines.push(`...и ещё ${overdueStages.length-5}`);
+              messages.push({ title: `🏗 Просрочено этапов: ${overdueStages.length}`, body: lines.join('\n'), tag: 'warning' });
             }
 
             if (todayStages.length > 0) {
-              const lines = todayStages.slice(0, 5)
-                .map(s => `• ${s.name} — ${getProjName(s.pid)}`);
-              await sendPush(
-                `📌 Срок этапа сегодня: ${todayStages.length}`,
-                lines.join('\n'),
-                'memo,construction'
-              );
+              const lines = todayStages.slice(0, 5).map(s => `• ${s.name} — ${getProjName(s.pid)}`);
+              messages.push({ title: `📌 Срок этапа сегодня: ${todayStages.length}`, body: lines.join('\n'), tag: 'today' });
             }
 
-            // ── 5. Понедельник: напоминание РП обновить план ─────────────────
-            const dayOfWeek = new Date().getDay(); // 1 = понедельник
-            if (dayOfWeek === 1) {
-              const sevenDaysAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString();
-              const stale = projects.filter(p =>
-                p.status === 'active' &&
-                (!p.sheetSync || p.sheetSync < sevenDaysAgo)
-              );
-              if (stale.length > 0) {
-                const lines = stale.slice(0, 7).map(p => `• ${p.name} (${p.mgr || '—'})`);
-                if (stale.length > 7) lines.push(`...и ещё ${stale.length - 7}`);
-                await sendPush(
-                  `📋 Обновите план на неделю: ${stale.length} проектов`,
-                  lines.join('\n'),
-                  'loudspeaker,construction'
-                );
-              }
-            }
-
-            // ── 6. Алерт: проект не обновлялся 7+ дней ───────────────────────
-            const sevenDaysAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString();
-            const staleProjects = projects.filter(p =>
-              p.status === 'active' &&
-              p.sheetSync && p.sheetSync < sevenDaysAgo
-            );
-            if (staleProjects.length > 0) {
-              const lines = staleProjects.slice(0, 5).map(p => {
-                const days = Math.floor((Date.now() - new Date(p.sheetSync)) / 86400000);
-                return `• ${p.name} (${p.mgr || '—'}) — ${days} дн. без обновления`;
-              });
-              if (staleProjects.length > 5) lines.push(`...и ещё ${staleProjects.length - 5}`);
-              await sendPush(
-                `⚠️ Проекты без обновления: ${staleProjects.length}`,
-                lines.join('\n'),
-                'warning,construction'
-              );
-            }
-
-            // ── 7. Пятница 17:00: еженедельный отчёт ────────────────────────
-            const hour = new Date().getUTCHours(); // 14 UTC = 17 МСК
-            if (dayOfWeek === 5 && hour >= 13 && hour <= 15) {
+            const dayOfWeek = new Date().getDay();
+            if (dayOfWeek === 5) {
               const active = projects.filter(p => p.status === 'active').length;
-              const done   = projects.filter(p => p.status === 'done').length;
               const overdue = projects.filter(p => p.status === 'overdue').length;
-              const avgPct = projects.length
-                ? Math.round(projects.reduce((s,p) => s + (p.pct||0), 0) / projects.length)
-                : 0;
-              await sendPush(
-                '📊 Итоги недели FSC',
-                `Активных проектов: ${active}\nПросрочено: ${overdue}\nЗавершено: ${done}\nСредний прогресс: ${avgPct}%\nВсего задач: ${tasks.filter(t=>!t.done).length} открытых`,
-                'bar_chart,construction'
-              );
+              const done = projects.filter(p => p.status === 'done').length;
+              const avgPct = projects.length ? Math.round(projects.reduce((s,p) => s+(p.pct||0),0)/projects.length) : 0;
+              messages.push({
+                title: '📊 Итоги недели FSC',
+                body: `Активных: ${active} | Просрочено: ${overdue} | Завершено: ${done}\nСредний прогресс: ${avgPct}%\nОткрытых задач: ${tasks.filter(t=>!t.done).length}`,
+                tag: 'weekly'
+              });
             }
 
-            // ── 8. Итог ──────────────────────────────────────────────────────
-            const total = overdueTasks.length + todayTasks.length +
-                          overdueStages.length + todayStages.length;
-            if (total === 0) {
-              console.log('✅ Всё в порядке — просрочек нет');
+            if (messages.length === 0) {
+              console.log('✅ Всё в порядке — уведомлений нет'); return;
             }
+
+            // Добавляем в очередь push_queue
+            const qRes = await fetch(`${SUPA_URL}/rest/v1/app_data?id=eq.push_queue&select=data`, { headers });
+            const qRows = await qRes.json();
+            const queue = [...(qRows?.[0]?.data || []), ...messages.map(m => ({...m, ts: Date.now()}))];
+            await fetch(`${SUPA_URL}/rest/v1/app_data`, {
+              method: 'POST',
+              headers: { ...headers, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
+              body: JSON.stringify({ id: 'push_queue', data: queue })
+            });
+            console.log(`Добавлено ${messages.length} уведомлений в очередь`);
+
+      - name: Отправить через web-push
+        uses: actions/github-script@v7
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: 'fscfigma-lab',
+              repo: 'fsc-app',
+              workflow_id: 'web-push.yml',
+              ref: 'main'
+            });
+            console.log('web-push.yml запущен');

@@ -2,8 +2,8 @@ name: 📲 Web Push (от FSC App)
 
 on:
   workflow_dispatch:
-  repository_dispatch:
-    types: [send-push]
+  schedule:
+    - cron: '*/30 * * * *'  # каждые 30 минут — обрабатывает очередь
 
 jobs:
   send:

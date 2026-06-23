@@ -13,6 +13,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <style>
 @keyframes spin{to{transform:rotate(360deg)}}
 /* ── LOGIN ── */
@@ -1281,6 +1283,7 @@ body{background:var(--bg)}
           </div>
           <button class="btn btn-s" onclick="gShift(-1)">←</button>
           <button class="btn btn-s" onclick="gShift(1)">→</button>
+          <button class="btn btn-s" id="gantt-pdf-btn" onclick="exportGanttPDF()" style="margin-left:4px">📄 PDF</button>
         </div>
       </div>
       <div class="g-fbar" id="g-fbar"></div>
@@ -3211,6 +3214,39 @@ function rGantt(){
 }
 
 function gShift(d){gOff+=d;rGantt()}
+
+async function exportGanttPDF(){
+  const btn=document.getElementById('gantt-pdf-btn');
+  btn.textContent='⏳ Генерирую...';btn.disabled=true;
+  const ganttEl=document.getElementById('gantt');
+  const wrap=document.querySelector('.gantt-wrap');
+  const prevOverflow=wrap.style.overflow,prevMaxW=wrap.style.maxWidth;
+  wrap.style.overflow='visible';wrap.style.maxWidth='none';
+  try{
+    const canvas=await html2canvas(ganttEl,{scale:2,useCORS:true,logging:false,backgroundColor:'#ffffff'});
+    const {jsPDF}=window.jspdf;
+    const pdf=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+    const pw=pdf.internal.pageSize.getWidth(),ph=pdf.internal.pageSize.getHeight();
+    const ratio=canvas.height/canvas.width;
+    const imgW=pw-20,imgH=imgW*ratio;
+    pdf.setFont('helvetica','bold');pdf.setFontSize(13);
+    pdf.text('Диаграмма Ганта',10,11);
+    const lbl=document.getElementById('gantt-label');
+    if(lbl){pdf.setFont('helvetica','normal');pdf.setFontSize(8);pdf.setTextColor(120);pdf.text(lbl.textContent,10,17);pdf.setTextColor(0);}
+    const y=imgH+22>ph?22:22;
+    if(imgH+22>ph){
+      // масштабируем чтобы влезло по высоте
+      const scaleH=ph-26,scaleW=scaleH/ratio;
+      pdf.addImage(canvas.toDataURL('image/jpeg',0.92),'JPEG',10,22,scaleW,scaleH);
+    } else {
+      pdf.addImage(canvas.toDataURL('image/jpeg',0.92),'JPEG',10,22,imgW,imgH);
+    }
+    const d=new Date();
+    const ds=`${d.getDate().toString().padStart(2,'0')}-${(d.getMonth()+1).toString().padStart(2,'0')}-${d.getFullYear()}`;
+    pdf.save(`Гант_${ds}.pdf`);
+  }catch(e){console.error(e);alert('Ошибка генерации PDF');}
+  finally{wrap.style.overflow=prevOverflow;wrap.style.maxWidth=prevMaxW;btn.textContent='📄 PDF';btn.disabled=false;}
+}
 
 // Управление раскрытием этапов
 function gToggleExpand(pid,ev){

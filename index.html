@@ -3734,7 +3734,7 @@ function fabAction(){
 let _qdate=TODAY(),_qtime='',_qprio='low',_qwho='',_qprojId=null,_qShowDate=false,_qShowWho=false,_qShowProj=false,_qfiles=[];
 
 function openQuickAdd(){
-  _qdate=TODAY();_qtime='';_qprio='low';_qwho='';_qShowDate=false;_qShowWho=false;_qShowProj=false;_qfiles=[];
+  _qdate=TODAY();_qtime='';_qprio='low';_qwho=currentUser?.name||'';_qShowDate=false;_qShowWho=false;_qShowProj=false;_qfiles=[];
   _qprojId=curProjDetail||null;
   const inp=$('qadd-inp');if(inp)inp.value='';
   const desc=$('qadd-desc');if(desc)desc.value='';
@@ -4192,7 +4192,7 @@ function openTaskModal(tid,forceProj){
     $('t-name').value='';$('t-notes').value='';
     const defProj=forceProj||curProjDetail||(tfilt&&!['all','overdue','today','week'].includes(tfilt)?tfilt:'');
     $('t-proj').value=defProj;
-    $('t-dead').value=TODAY();$('t-time').value='';$('t-who').value='';$('t-prio').value='medium';
+    $('t-dead').value=TODAY();$('t-time').value='';$('t-who').value=currentUser?.name||'';$('t-prio').value='medium';
     _tTags=[];_tPhotos=[];_tFiles=[];$('t-remind-d').value='';$('t-remind-t').value='';
   }
   _renderTagPre();_renderTagList();_renderPhotos();_renderTaskFiles();

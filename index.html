@@ -4728,29 +4728,39 @@ async function flushPushQueue(){
 let _lastOverduePush=0;
 async function checkOverduePush(){
   const now=Date.now();
-  // Не чаще раза в час
   const lastCheck=parseInt(localStorage.getItem('fsc4_last_push')||'0');
   if(now-lastCheck<3600000)return;
   localStorage.setItem('fsc4_last_push',String(now));
+  await _sendOverdueSummary();
+}
 
+async function _sendOverdueSummary(){
   const today=TODAY();
   const overdue=D.tasks.filter(t=>!t.done&&t.dead&&t.dead<today);
   const todayTasks=D.tasks.filter(t=>!t.done&&t.dead===today);
-
   if(overdue.length>0){
     await sendPush(
-      `⚠️ ${overdue.length} просроченных задач`,
-      overdue.slice(0,3).map(t=>`• ${t.title||t.name} (${t.who||'—'})`).join('\n')+(overdue.length>3?`\n...и ещё ${overdue.length-3}`:''),
+      `⚠️ Просроченных задач: ${overdue.length}`,
+      overdue.slice(0,5).map(t=>`• ${t.name} (${t.who||'—'})`).join('\n')+(overdue.length>5?`\n...и ещё ${overdue.length-5}`:''),
       'warning,construction'
     );
   }
   if(todayTasks.length>0){
     await sendPush(
-      `📅 Сегодня дедлайн: ${todayTasks.length} задач`,
-      todayTasks.slice(0,3).map(t=>`• ${t.title||t.name} (${t.who||'—'})`).join('\n'),
+      `📅 Дедлайн сегодня: ${todayTasks.length} задач`,
+      todayTasks.slice(0,5).map(t=>`• ${t.name} (${t.who||'—'})`).join('\n'),
       'calendar,construction'
     );
   }
+  if(overdue.length===0&&todayTasks.length===0){
+    await sendTgNow('✅ Всё в порядке','Просроченных и срочных задач нет');
+  }
+}
+
+async function testNotifNow(){
+  localStorage.removeItem('fsc4_last_push');
+  await _sendOverdueSummary();
+  toast('📨 Уведомление отправлено в Telegram','ok');
 }
 
 // Уведомление при назначении задачи
@@ -4803,6 +4813,7 @@ async function showSettingsModal(){
       <span id="push-status-chip" style="font-size:12px;padding:4px 12px;border-radius:8px;background:var(--yel-bg);color:var(--yel)">⏳ Проверяем…</span>
       <button class="btn btn-p" style="font-size:12px" id="push-sub-btn" onclick="subscribeWebPush().then(()=>showSettingsModal())">Подписаться</button>
       <button class="btn btn-s" style="font-size:12px" onclick="testPush()">🔔 Тест</button>
+      <button class="btn btn-p" style="font-size:12px" onclick="testNotifNow()">📨 Отправить сводку в Telegram</button>
     </div>
     <div class="fg" style="margin-bottom:0">
       <label class="fl">🔑 OneSignal REST API Key</label>

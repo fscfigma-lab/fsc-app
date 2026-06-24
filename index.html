@@ -2972,8 +2972,8 @@ function projectGanttHTML(pid){
   // Секция задач (только со сроками)
   if(tasks.length){
     // Группируем по приоритету
-    const byPrio={critical:[],high:[],medium:[],low:[]};
-    tasks.forEach(t=>{(byPrio[t.prio||'medium']).push(t);});
+    const byPrio={critical:[],high:[],medium:[],low:[],normal:[]};
+    tasks.forEach(t=>{const k=t.prio||'medium';(byPrio[k]||(byPrio[k]=[])).push(t);});
     const prioLabel={critical:'🔴 Высокий',high:'🔴 Высокий',medium:'🟡 Средний',low:'⚪ Нормальный',normal:'⚪ Нормальный'};
     ['high','medium','normal','critical','low'].forEach(prio=>{
       if(!byPrio[prio].length)return;
@@ -5265,7 +5265,7 @@ async function doGCalSync(){
         }
       };
     }),
-    ...D.tasks.filter(t=>t.dead&&(t.prio==='high'||t.prio==='critical')).map(t=>{
+    ...D.tasks.filter(t=>t.dead&&(t.prio==='high'||t.prio==='critical'||t.fast)).map(t=>{
       const proj=D.projects.find(p=>p.id===t.pid);
       return{
         key:'task_'+t.id,
@@ -5273,7 +5273,7 @@ async function doGCalSync(){
           summary:`⚡ ${t.name}`,
           description:`Исполнитель: ${t.who||'—'}\nПроект: ${proj?.name||'—'}`,
           start:{date:t.dead},end:{date:t.dead},
-          colorId:t.prio==='critical'?'4':'6',
+          colorId:(t.prio==='critical'||t.fast)?'4':'6',
           reminders:{useDefault:false,overrides:[{method:'popup',minutes:60}]}
         }
       };
@@ -5446,7 +5446,7 @@ ${JSON.stringify(ctx)}
 По голосовой команде верни ТОЛЬКО JSON одного формата:
 
 Создать задачу:
-{"action":"create_task","name":"...","deadline":"YYYY-MM-DD или null","project_id":"id или null","who":"имя из team или null","prio":"high/medium/low"}
+{"action":"create_task","name":"...","deadline":"YYYY-MM-DD или null","project_id":"id или null","who":"имя из team или null","prio":"high/medium/normal"}
 
 Отметить этап выполненным/нет:
 {"action":"mark_stage","stage_id":"...","done":true/false}

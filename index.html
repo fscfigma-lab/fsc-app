@@ -4687,8 +4687,25 @@ function _urlBase64ToUint8Array(b64){
   return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
 }
 
+// Мгновенная отправка в Telegram прямо из браузера (без задержки)
+async function sendTgNow(title, body){
+  const token=D.tgBotToken;
+  if(!token)return;
+  const targets=[D.tgAdminId,D.tgTechDirId].filter(Boolean);
+  const text=`<b>${title}</b>${body?'\n'+body:''}`;
+  for(const id of targets){
+    fetch(`https://api.telegram.org/bot${token}/sendMessage`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({chat_id:id,text,parse_mode:'HTML'})
+    }).catch(()=>{});
+  }
+}
+
 async function sendPush(title,body,tag){
-  // Только добавляем в очередь. GitHub Action сам проверяет её по крону каждые 30 мин.
+  // 1. Мгновенно — в Telegram
+  sendTgNow(title,body);
+  // 2. В очередь — для web push (GitHub Action раз в 30 мин)
   try{
     const {data}=await sb.from('app_data').select('data').eq('id','push_queue').maybeSingle();
     const q=data?.data||[];
@@ -4698,7 +4715,6 @@ async function sendPush(title,body,tag){
 }
 
 async function flushPushQueue(){
-  // Вызывается только кнопкой Тест — немедленно запускает Action
   const pat=D.githubPat;
   if(!pat)return;
   fetch('https://api.github.com/repos/fscfigma-lab/fsc-app/actions/workflows/web-push.yml/dispatches',{

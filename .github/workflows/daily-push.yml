@@ -72,23 +72,22 @@ jobs:
               const member = getTeamMember(t.who);
               if (member?.tgId) await tgSend(member.tgId, msg);
 
-              // Эскалация через 2 дня — техдир + админ
+              // Эскалация через 2 дня — только админ
               if (days >= 2) {
-                await tgSend(TG_TECHDIR, `⚠️ <b>Эскалация (${days} дн.)</b>\n` + msg.replace('🚨 ', ''));
                 await tgSend(TG_ADMIN, `⚠️ <b>Эскалация (${days} дн.)</b>\n` + msg.replace('🚨 ', ''));
               }
             }
 
             // ── Только утром: остальные задачи и этапы ───────────────────────
             if (!isEvening) {
-              // Высокий приоритет: эскалация техдиру через 3 дня
+              // Высокий приоритет: эскалация админу через 3 дня
               const highOverdue = tasks.filter(t =>
                 !t.done && t.prio === 'high' && t.dead && t.dead < today && daysDiff(t.dead) >= 3
               );
               for (const t of highOverdue) {
                 const days = daysDiff(t.dead);
                 const proj = getProjName(t.pid);
-                await tgSend(TG_TECHDIR,
+                await tgSend(TG_ADMIN,
                   `🔴 <b>Высокий приоритет, просрочено ${days} дн.</b>\n«${t.title||t.name}»\nПроект: ${proj}\nИсполнитель: ${t.who||'не назначен'}\nДедлайн: ${fmt(t.dead)}`
                 );
               }

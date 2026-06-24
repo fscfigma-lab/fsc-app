@@ -4633,6 +4633,9 @@ const VAPID_PUBLIC='BH6RzcpUVh1IthqRn2TFafRHru_dlU1C0RnOSZW1YMtQ8irclAqNUB-h7eKW
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('/fsc-app/sw.js',{scope:'/fsc-app/'})
     .then(()=>_checkPushStatus()).catch(e=>console.warn('SW:',e));
+  navigator.serviceWorker.addEventListener('message',e=>{
+    if(e.data==='SW_UPDATED') window.location.reload();
+  });
 }
 
 function _showPushBanner(){

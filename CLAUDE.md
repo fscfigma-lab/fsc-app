@@ -51,7 +51,8 @@ gZoom         — зум Ганта ('weeks'|'months'|'quarters')
 | Базовая линия | `p.bl_deadline`, `p.bl_start` | `p.bl_stages` |
 
 ### Приоритеты задач
-`critical` | `high` | `medium` | `low` (поле `prio`)
+`high` | `medium` | `normal` (поле `prio`); `critical`/`low` — устаревшие алиасы, работают как `high`/`normal`
+Быстрые задачи: поле `t.fast=true` — авто-детект по ключевым словам + закрытие за <2 часов; значок ⚡, выводятся первыми в дашборде
 
 ### Статусы проектов
 `active` | `overdue` | `paused` | `done`  

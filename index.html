@@ -2478,33 +2478,35 @@ function rDash(){
   const urgentAll=[...od,...td].sort((a,b)=>prioW(b.prio)-prioW(a.prio));
   updateBadges(od.length+td.length);
 
-  // Фильтр-чипы по исполнителю
+  // Фильтр-чипы по менеджеру проекта
   const me=currentUser?.name||'';
+  const projById=Object.fromEntries((D.projects||[]).map(p=>[p.id,p]));
+  const taskMgr=t=>projById[t.pid]?.mgr||projById[t.pid]?.manager||'';
   const filtersEl=$('d-urgent-filters');
-  if(filtersEl){
-    // Уникальные исполнители с задачами (для admin/management — все, иначе только текущий)
-    const whoList=canSeeAll()
-      ? [...new Set(urgentAll.map(x=>x.who).filter(Boolean))].sort()
-      : (me ? [me] : []);
-    if(whoList.length>1||(whoList.length===1&&whoList[0]!==me)){
+  if(filtersEl&&canSeeAll()){
+    const mgrs=D.team.filter(m=>m.role_key==='manager'||m.role==='manager').map(m=>m.name);
+    const activeMgrs=mgrs.filter(name=>urgentAll.some(x=>taskMgr(x)===name));
+    if(activeMgrs.length>0){
+      const myMgrName=me;
       const chips=[
         `<button class="who-chip${!_dashWhoFilt?' active':''}" onclick="setDashWho(null)">Все (${urgentAll.length})</button>`,
-        me?`<button class="who-chip${_dashWhoFilt===me?' active':''}" onclick="setDashWho('${me}')">Мои</button>`:'',
-        ...whoList.filter(w=>w!==me).map(w=>{
-          const cnt=urgentAll.filter(x=>x.who===w).length;
-          const short=w.split(' ').slice(0,2).join(' ');
-          return`<button class="who-chip${_dashWhoFilt===w?' active':''}" onclick="setDashWho('${w}')">${short} (${cnt})</button>`;
+        activeMgrs.includes(myMgrName)?`<button class="who-chip${_dashWhoFilt===myMgrName?' active':''}" onclick="setDashWho('${myMgrName}')">Мои</button>`:'',
+        ...activeMgrs.filter(n=>n!==myMgrName).map(n=>{
+          const cnt=urgentAll.filter(x=>taskMgr(x)===n).length;
+          const short=n.split(' ').slice(0,2).join(' ');
+          return`<button class="who-chip${_dashWhoFilt===n?' active':''}" onclick="setDashWho('${n}')">${short} (${cnt})</button>`;
         })
       ].filter(Boolean);
       filtersEl.innerHTML=chips.join('');
       filtersEl.style.display='flex';
     } else {
-      filtersEl.innerHTML='';
-      filtersEl.style.display='none';
+      filtersEl.innerHTML='';filtersEl.style.display='none';
     }
+  } else if(filtersEl){
+    filtersEl.innerHTML='';filtersEl.style.display='none';
   }
 
-  const urgent=_dashWhoFilt ? urgentAll.filter(x=>x.who===_dashWhoFilt) : urgentAll;
+  const urgent=_dashWhoFilt ? urgentAll.filter(x=>taskMgr(x)===_dashWhoFilt) : urgentAll;
 
   // Risk summary
   const risks={critical:[],high:[],low:[]};

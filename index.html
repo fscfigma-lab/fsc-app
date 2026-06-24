@@ -1601,10 +1601,9 @@ body{background:var(--bg)}
       <div><label class="fl">Ответственный</label><select class="fi" id="t-who"></select></div>
       <div><label class="fl">Приоритет</label>
         <select class="fi" id="t-prio">
-          <option value="critical">🚨 Критический</option>
           <option value="high">🔴 Высокий</option>
-          <option value="medium" selected>🟡 Обычный</option>
-          <option value="low">⚪ Низкий</option>
+          <option value="medium" selected>🟡 Средний</option>
+          <option value="normal">⚪ Нормальный</option>
         </select>
       </div>
     </div>
@@ -2133,7 +2132,10 @@ function fmoney(n){if(!n)return'—';
 function decl(n,a,b,c){const m=n%100,r=n%10;
   if(m>=11&&m<=19)return n+' '+c;if(r===1)return n+' '+a;
   if(r>=2&&r<=4)return n+' '+b;return n+' '+c}
-function prioW(p){return p==='critical'?4:p==='high'?3:p==='medium'?2:1}
+function prioW(p){return(p==='critical'||p==='high')?3:p==='medium'?2:1}
+function _isFastTask(name){
+  return/позвон|звонок|отправ|послать|подписа|проверь|уточн|передай|напомн|согласу|ответ|написать|сообщи|уведом|скинь|зайти|купить|забрать|распечат|встреч|договор|перевод|оплат/i.test(name||'');
+}
 function addDays(dateStr,n){const d=pd(dateStr);d.setDate(d.getDate()+Math.round(n));
   return d.toISOString().split('T')[0]}
 function $(id){return document.getElementById(id)}
@@ -2475,7 +2477,11 @@ function rDash(){
   if(od.length>0){banner.style.display='flex';$('od-txt').innerHTML=`<strong>${decl(od.length,'задача','задачи','задач')} просрочено</strong>`}
   else banner.style.display='none';
 
-  const urgentAll=[...od,...td].sort((a,b)=>prioW(b.prio)-prioW(a.prio));
+  const urgentAll=[...od,...td].sort((a,b)=>{
+    const fa=a.fast&&!a.done?1:0,fb=b.fast&&!b.done?1:0;
+    if(fb!==fa)return fb-fa;
+    return prioW(b.prio)-prioW(a.prio);
+  });
   updateBadges(od.length+td.length);
 
   // Фильтр-чипы по менеджеру проекта
@@ -2968,8 +2974,8 @@ function projectGanttHTML(pid){
     // Группируем по приоритету
     const byPrio={critical:[],high:[],medium:[],low:[]};
     tasks.forEach(t=>{(byPrio[t.prio||'medium']).push(t);});
-    const prioLabel={critical:'🚨 Критический',high:'🔴 Высокий',medium:'🟡 Обычный',low:'⚪ Низкий'};
-    ['critical','high','medium','low'].forEach(prio=>{
+    const prioLabel={critical:'🔴 Высокий',high:'🔴 Высокий',medium:'🟡 Средний',low:'⚪ Нормальный',normal:'⚪ Нормальный'};
+    ['high','medium','normal','critical','low'].forEach(prio=>{
       if(!byPrio[prio].length)return;
       html+=`<div class="pg-section">${prioLabel[prio]}</div>`;
       html+=byPrio[prio].map(t=>{
@@ -3549,9 +3555,9 @@ function rTasks(){
   } else {
     // На десктопе: полный фильтр с приоритетом и проектом
     const prios=[
-      {id:'high',label:'🔴 Срочно'},
-      {id:'medium',label:'🟡 Важно'},
-      {id:'low',label:'🟢 Обычно'},
+      {id:'high',label:'🔴 Высокий'},
+      {id:'medium',label:'🟡 Средний'},
+      {id:'normal',label:'⚪ Нормальный'},
     ];
     $('task-filters').innerHTML=
       `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">`+
@@ -3731,10 +3737,10 @@ function fabAction(){
   else openTaskModal();
 }
 
-let _qdate=TODAY(),_qtime='',_qprio='low',_qwho='',_qprojId=null,_qShowDate=false,_qShowWho=false,_qShowProj=false,_qfiles=[];
+let _qdate=TODAY(),_qtime='',_qprio='normal',_qwho='',_qprojId=null,_qShowDate=false,_qShowWho=false,_qShowProj=false,_qfiles=[];
 
 function openQuickAdd(){
-  _qdate=TODAY();_qtime='';_qprio='low';_qwho=D.currentUser?.name||'';_qShowDate=false;_qShowWho=false;_qShowProj=false;_qfiles=[];
+  _qdate=TODAY();_qtime='';_qprio='normal';_qwho=D.currentUser?.name||'';_qShowDate=false;_qShowWho=false;_qShowProj=false;_qfiles=[];
   _qprojId=curProjDetail||null;
   const inp=$('qadd-inp');if(inp)inp.value='';
   const desc=$('qadd-desc');if(desc)desc.value='';
@@ -3847,7 +3853,7 @@ function onQFileChange(inp){
 function cycleQPrio(){
   const inp=$('qadd-inp');if(inp)inp.blur();
   if(_qShowProj){_qShowProj=false;const pl=$('qadd-proj-list');if(pl)pl.classList.remove('open');}
-  const order=['medium','high','critical','low'];
+  const order=['normal','medium','high'];
   _qprio=order[(order.indexOf(_qprio)+1)%order.length];
   _updQPrio();
 }
@@ -3855,10 +3861,9 @@ function _updQPrio(){
   const btn=$('qadd-act-prio'),ico=$('qadd-prio-ico'),lbl=$('qadd-prio-lbl');
   if(!btn)return;
   btn.className='qadd-act';
-  if(_qprio==='critical'){btn.classList.add('a-ph');if(ico)ico.textContent='🚨';if(lbl)lbl.textContent='Критический';}
-  else if(_qprio==='high'){btn.classList.add('a-ph');if(ico)ico.textContent='🔴';if(lbl)lbl.textContent='Высокий';}
-  else if(_qprio==='medium'){btn.classList.add('a-pm');if(ico)ico.textContent='🟡';if(lbl)lbl.textContent='Обычный';}
-  else{if(ico)ico.textContent='⚪';if(lbl)lbl.textContent='Низкий';}
+  if(_qprio==='high'){btn.classList.add('a-ph');if(ico)ico.textContent='🔴';if(lbl)lbl.textContent='Высокий';}
+  else if(_qprio==='medium'){btn.classList.add('a-pm');if(ico)ico.textContent='🟡';if(lbl)lbl.textContent='Средний';}
+  else{if(ico)ico.textContent='⚪';if(lbl)lbl.textContent='Нормальный';}
 }
 
 // ── Исполнитель ──
@@ -3896,7 +3901,7 @@ function saveQuickTask(){
   if(!name){$('qadd-inp').focus();return;}
   const desc=($('qadd-desc')?.value||'').trim()||null;
   const pid=_qprojId||null;
-  const t={id:uid(),name,desc,pid,dead:_qdate,time:_qtime||null,who:_qwho||null,prio:_qprio,done:false,files:_qfiles.length?[..._qfiles]:[]};
+  const t={id:uid(),name,desc,pid,dead:_qdate,time:_qtime||null,who:_qwho||null,prio:_qprio,done:false,files:_qfiles.length?[..._qfiles]:[],fast:_isFastTask(name),createdAt:new Date().toISOString()};
   D.tasks.push(t);
   const proj=pid?D.projects.find(p=>p.id===pid):null;
   addLog(`📌 Новая задача: «${t.name}»${proj?' → '+proj.name:''}${t.who?' · '+t.who:''}`,pid);
@@ -3933,7 +3938,7 @@ function tiHTML(task,showProj){
   return`<div class="ti ${task.done?'dn':''} ${ds==='overdue'&&!task.done?'od':''}" style="${urgStyle}" onclick="openTaskModal('${task.id}')">
     <div class="tchk ${task.done?'ck':''}" onclick="toggleTask('${task.id}',event)"></div>
     <div class="tbody">
-      <div class="ttitle">${task.name} ${urgBadge}${extraIcons?`<span style="font-size:11px;opacity:.6">${extraIcons}</span>`:''}</div>
+      <div class="ttitle">${task.fast&&!task.done?'<span style="font-size:10px;font-weight:700;background:#FEF9C3;color:#854D0E;padding:2px 6px;border-radius:6px;letter-spacing:.4px">⚡ Быстрая</span> ':''}${task.name} ${urgBadge}${extraIcons?`<span style="font-size:11px;opacity:.6">${extraIcons}</span>`:''}</div>
       ${notesPreview}
       ${mobProj}
       ${taskTags}
@@ -3954,7 +3959,14 @@ function toggleTask(id,event){
   if(t.done){
     const proj=t.pid?D.projects.find(p=>p.id===t.pid):null;
     addLog(`✅ Выполнена: «${t.name}»${proj?' ('+proj.name+')':''}`,t.pid);
-    sendPush('✅ Задача выполнена',`«${t.name}»${proj?' — '+proj.name:''}${currentUser?' · '+currentUser.name:''}`,'white_check_mark');
+    sendPush('✅ Задача выполнена',`«${t.name}»${proj?' — '+proj.name:''}${D.currentUser?' · '+D.currentUser.name:''}`,'white_check_mark');
+    t.closedAt=new Date().toISOString();
+    if(t.createdAt){
+      const mins=(Date.now()-new Date(t.createdAt).getTime())/60000;
+      if(mins<120)t.fast=true;
+    }
+  }else{
+    t.closedAt=undefined;
   }
   save();render(curPage);
   toast(t.done?'✅ Готово':'↩️ Возобновлено','ok');
@@ -4204,13 +4216,17 @@ function saveTask(){
   const rd=$('t-remind-d').value,rt=$('t-remind-t').value;
   const remind=rd?(rd+(rt?'T'+rt:'T00:00')):null;
   const notes=($('t-notes').value||'').trim()||undefined;
+  const existing=tedit?D.tasks.find(x=>x.id===tedit):null;
   const t={id:tedit||uid(),name,pid:$('t-proj').value||null,dead:$('t-dead').value||null,
     time:$('t-time').value||null,who:$('t-who').value||null,prio:$('t-prio').value,done:false,
     notes,
     tags:_tTags.length?[..._tTags]:undefined,
     photos:_tPhotos.length?[..._tPhotos]:undefined,
     files:_tFiles.length?[..._tFiles]:undefined,
-    remind:remind||undefined};
+    remind:remind||undefined,
+    fast:existing?existing.fast:_isFastTask(name),
+    createdAt:existing?.createdAt||new Date().toISOString(),
+    closedAt:existing?.closedAt};
   const isNew=!tedit;
   if(tedit){const idx=D.tasks.findIndex(x=>x.id===tedit);if(idx>=0){t.done=D.tasks[idx].done;D.tasks[idx]=t}}
   else D.tasks.push(t);

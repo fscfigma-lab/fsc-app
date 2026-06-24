@@ -4565,7 +4565,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
     const startPage=isMobile()&&$('p-mob-today')?'mob-today':'dashboard';
     nav(startPage);
     checkNotifs();
-    setTimeout(()=>checkOverduePush(),5000);
+    // Авто-сводка убрана — ежедневные уведомления идут через GitHub Action в 9:00 и 18:00
     setTimeout(()=>checkReminders(),6000);
     // Авто-синхронизация с Google Таблицей при каждом открытии
     if(D.sheetsUrl)setTimeout(()=>syncFromSheets(true),3000);

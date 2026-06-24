@@ -2947,7 +2947,7 @@ function toggleStage(id,event){
   const proj=D.projects.find(p=>p.id===s.pid);
   if(s.done){
     addLog(`${s.icon} Этап «${s.name}» выполнен${proj?' в «'+proj.name+'»':''}`,s.pid);
-    sendPush(`${s.icon} Этап выполнен`,`«${s.name}»${proj?' — '+proj.name:''}${currentUser?' · '+currentUser.name:''}`,'white_check_mark,construction');
+    sendPush(`${s.icon} Этап выполнен`,`«${s.name}»${proj?' — '+proj.name:''}${currentUser?' · '+currentUser.name:''}`,'white_check_mark,construction',true);
   }
   save();if(curProjDetail)showProjectDetail(curProjDetail);else render(curPage);
   toast(s.done?`✅ ${s.name}`:`↩️ ${s.name}`,'ok');
@@ -4703,10 +4703,10 @@ async function sendTgNow(title, body){
   }
 }
 
-async function sendPush(title,body,tag){
-  // 1. Мгновенно — в Telegram
-  sendTgNow(title,body);
-  // 2. В очередь — для web push (GitHub Action раз в 30 мин)
+async function sendPush(title,body,tag,tg=false){
+  // Telegram — только если явно запрошено (tg=true)
+  if(tg) sendTgNow(title,body);
+  // В очередь для web push
   try{
     const {data}=await sb.from('app_data').select('data').eq('id','push_queue').maybeSingle();
     const q=data?.data||[];
@@ -4743,14 +4743,14 @@ async function _sendOverdueSummary(){
     await sendPush(
       `⚠️ Просроченных задач: ${overdue.length}`,
       overdue.slice(0,5).map(t=>`• ${t.name} (${t.who||'—'})`).join('\n')+(overdue.length>5?`\n...и ещё ${overdue.length-5}`:''),
-      'warning,construction'
+      'warning,construction', true
     );
   }
   if(todayTasks.length>0){
     await sendPush(
       `📅 Дедлайн сегодня: ${todayTasks.length} задач`,
       todayTasks.slice(0,5).map(t=>`• ${t.name} (${t.who||'—'})`).join('\n'),
-      'calendar,construction'
+      'calendar,construction', true
     );
   }
   if(overdue.length===0&&todayTasks.length===0){
@@ -4770,7 +4770,7 @@ async function pushTaskAssigned(task){
   await sendPush(
     `📌 Новая задача: ${task.title||task.name}`,
     `Исполнитель: ${task.who}\nДедлайн: ${fdate(task.dead)||'не указан'}\nПроект: ${D.projects.find(p=>p.id===task.pid)?.name||'—'}`,
-    'memo,construction'
+    'memo,construction', true
   );
 }
 

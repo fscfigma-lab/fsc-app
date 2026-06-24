@@ -86,7 +86,28 @@ jobs:
               });
             }
 
-            // 6. Очищаем очередь
+            // 6. Telegram — дублируем все уведомления админу и техдиру
+            const mainRes = await fetch(`${SUPA_URL}/rest/v1/app_data?id=eq.main&select=data`, { headers });
+            const mainRows = await mainRes.json();
+            const D = mainRows?.[0]?.data;
+            const BOT = D?.tgBotToken;
+            const TG_TARGETS = [D?.tgAdminId, D?.tgTechDirId].filter(Boolean);
+            if (BOT && TG_TARGETS.length) {
+              async function tgSend(chatId, text) {
+                const r = await fetch(`https://api.telegram.org/bot${BOT}/sendMessage`, {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' })
+                });
+                const j = await r.json();
+                console.log(`TG → ${chatId}: ${j.ok ? '✅' : '❌ ' + j.description}`);
+              }
+              for (const notif of queue) {
+                const text = `<b>${notif.title}</b>\n${notif.body||''}`;
+                for (const id of TG_TARGETS) await tgSend(id, text);
+              }
+            }
+
+            // 7. Очищаем очередь
             await fetch(`${SUPA_URL}/rest/v1/app_data`, {
               method: 'POST',
               headers: { ...headers, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },

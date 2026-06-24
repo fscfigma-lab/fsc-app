@@ -1464,6 +1464,8 @@ body{background:var(--bg)}
     <button class="qadd-act" id="qadd-act-date" onclick="toggleQDatePicker()">📅 <span id="qadd-date-lbl">Сегодня</span></button>
     <button class="qadd-act" id="qadd-act-prio" onclick="cycleQPrio()"><span id="qadd-prio-ico">🏳</span> <span id="qadd-prio-lbl">Приоритет</span></button>
     <button class="qadd-act" id="qadd-act-who" onclick="toggleQWho()">👤 <span id="qadd-who-lbl">Исполнитель</span></button>
+    <button class="qadd-act" id="qadd-act-file" onclick="document.getElementById('qadd-file-in').click()">📎 <span id="qadd-file-lbl">Файл</span></button>
+    <input type="file" id="qadd-file-in" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" style="display:none" onchange="onQFileChange(this)">
   </div>
   <!-- Выбор даты (раскрывается) -->
   <div class="qadd-drow" id="qadd-drow" style="display:none">
@@ -1615,11 +1617,19 @@ body{background:var(--bg)}
       <textarea class="fi" id="t-notes" rows="3" placeholder="Комментарии, детали, ссылки…" style="resize:vertical;min-height:72px;line-height:1.5"></textarea>
     </div>
     <div class="fg">
-      <label class="fl">📎 Фото с объекта</label>
+      <label class="fl">📷 Фото с объекта</label>
       <div class="photos-row" id="t-photos-row"></div>
       <label class="btn btn-s" style="cursor:pointer;font-size:12px;display:inline-flex;align-items:center;gap:5px;margin-top:2px">
         📷 Добавить фото
         <input type="file" id="t-photo-inp" accept="image/*" capture="environment" multiple style="display:none" onchange="addTaskPhotos(this)">
+      </label>
+    </div>
+    <div class="fg">
+      <label class="fl">📎 Файлы</label>
+      <div id="t-files-row" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px"></div>
+      <label class="btn btn-s" style="cursor:pointer;font-size:12px;display:inline-flex;align-items:center;gap:5px">
+        📎 Прикрепить файл
+        <input type="file" id="t-file-inp" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" style="display:none" onchange="addTaskFiles(this)">
       </label>
     </div>
     </div>
@@ -3477,7 +3487,7 @@ function cShift(d){calOff+=d;calSelectedDay=null;rCal()}
 let tfilt='all';   // статус/дата: all|overdue|today|week|done
 let tprio=null;    // приоритет: null|high|medium|low
 let tpid=null;     // проект: null|id
-let tedit=null,_tTags=[],_tPhotos=[];
+let tedit=null,_tTags=[],_tPhotos=[],_tFiles=[];
 const TAG_PRESETS=['Согласование','Материалы','Замечание','Проверить','На подпись','Клиент','Срочно','Фото'];
 
 function rTasks(){
@@ -3683,14 +3693,17 @@ function fabAction(){
   else openTaskModal();
 }
 
-let _qdate=TODAY(),_qtime='',_qprio='low',_qwho='',_qprojId=null,_qShowDate=false,_qShowWho=false,_qShowProj=false;
+let _qdate=TODAY(),_qtime='',_qprio='low',_qwho='',_qprojId=null,_qShowDate=false,_qShowWho=false,_qShowProj=false,_qfiles=[];
 
 function openQuickAdd(){
-  _qdate=TODAY();_qtime='';_qprio='low';_qwho='';_qShowDate=false;_qShowWho=false;_qShowProj=false;
+  _qdate=TODAY();_qtime='';_qprio='low';_qwho='';_qShowDate=false;_qShowWho=false;_qShowProj=false;_qfiles=[];
   _qprojId=curProjDetail||null;
   const inp=$('qadd-inp');if(inp)inp.value='';
   const desc=$('qadd-desc');if(desc)desc.value='';
   const tin=$('qdcTime');if(tin)tin.value='';
+  const fin=$('qadd-file-in');if(fin)fin.value='';
+  const fl=$('qadd-file-lbl');if(fl)fl.textContent='Файл';
+  const fb=$('qadd-act-file');if(fb)fb.classList.remove('on');
   const dr=$('qadd-drow');if(dr)dr.style.display='none';
   const wr=$('qadd-who-row');if(wr)wr.style.display='none';
   const pl=$('qadd-proj-list');if(pl)pl.classList.remove('open');
@@ -3776,6 +3789,23 @@ function _updQdateBtns(){
 function _updQdateLbl(){_updQdateBtns();}
 
 // ── Приоритет ──
+function onQFileChange(inp){
+  if(!inp.files||!inp.files.length)return;
+  const btn=$('qadd-act-file'),lbl=$('qadd-file-lbl');
+  const newFiles=Array.from(inp.files);
+  const readers=newFiles.map(f=>new Promise(res=>{
+    const r=new FileReader();
+    r.onload=e=>res({name:f.name,size:f.size,type:f.type,data:e.target.result});
+    r.readAsDataURL(f);
+  }));
+  Promise.all(readers).then(loaded=>{
+    _qfiles=[..._qfiles,...loaded];
+    lbl.textContent=`${_qfiles.length} файл${_qfiles.length>1?'а':''}`;
+    btn.classList.add('on');
+    toast(`📎 ${_qfiles.length} файл(а) прикреплено`,'ok');
+  });
+}
+
 function cycleQPrio(){
   const inp=$('qadd-inp');if(inp)inp.blur();
   if(_qShowProj){_qShowProj=false;const pl=$('qadd-proj-list');if(pl)pl.classList.remove('open');}
@@ -3828,7 +3858,7 @@ function saveQuickTask(){
   if(!name){$('qadd-inp').focus();return;}
   const desc=($('qadd-desc')?.value||'').trim()||null;
   const pid=_qprojId||null;
-  const t={id:uid(),name,desc,pid,dead:_qdate,time:_qtime||null,who:_qwho||null,prio:_qprio,done:false};
+  const t={id:uid(),name,desc,pid,dead:_qdate,time:_qtime||null,who:_qwho||null,prio:_qprio,done:false,files:_qfiles.length?[..._qfiles]:[]};
   D.tasks.push(t);
   const proj=pid?D.projects.find(p=>p.id===pid):null;
   addLog(`📌 Новая задача: «${t.name}»${proj?' → '+proj.name:''}${t.who?' · '+t.who:''}`,pid);
@@ -4116,7 +4146,7 @@ function openTaskModal(tid,forceProj){
       $('t-dead').value=t.dead||'';$('t-time').value=t.time||'';
       $('t-who').value=t.who||'';$('t-prio').value=t.prio||'medium';
       $('t-notes').value=t.notes||'';
-      _tTags=[...(t.tags||[])];_tPhotos=[...(t.photos||[])];
+      _tTags=[...(t.tags||[])];_tPhotos=[...(t.photos||[])];_tFiles=[...(t.files||[])];
       const rd=t.remind?t.remind.split('T'):['',''];
       $('t-remind-d').value=rd[0]||'';$('t-remind-t').value=rd[1]||'';
     }
@@ -4125,9 +4155,9 @@ function openTaskModal(tid,forceProj){
     const defProj=forceProj||curProjDetail||(tfilt&&!['all','overdue','today','week'].includes(tfilt)?tfilt:'');
     $('t-proj').value=defProj;
     $('t-dead').value=TODAY();$('t-time').value='';$('t-who').value='';$('t-prio').value='medium';
-    _tTags=[];_tPhotos=[];$('t-remind-d').value='';$('t-remind-t').value='';
+    _tTags=[];_tPhotos=[];_tFiles=[];$('t-remind-d').value='';$('t-remind-t').value='';
   }
-  _renderTagPre();_renderTagList();_renderPhotos();
+  _renderTagPre();_renderTagList();_renderPhotos();_renderTaskFiles();
   openM('m-task');
 }
 
@@ -4141,6 +4171,7 @@ function saveTask(){
     notes,
     tags:_tTags.length?[..._tTags]:undefined,
     photos:_tPhotos.length?[..._tPhotos]:undefined,
+    files:_tFiles.length?[..._tFiles]:undefined,
     remind:remind||undefined};
   const isNew=!tedit;
   if(tedit){const idx=D.tasks.findIndex(x=>x.id===tedit);if(idx>=0){t.done=D.tasks[idx].done;D.tasks[idx]=t}}
@@ -4200,6 +4231,31 @@ async function addTaskPhotos(inp){
   _renderPhotos();
 }
 function removePhoto(i){_tPhotos.splice(i,1);_renderPhotos();}
+function _renderTaskFiles(){
+  const el=$('t-files-row');if(!el)return;
+  el.innerHTML=_tFiles.map((f,i)=>{
+    const isImg=f.type&&f.type.startsWith('image/');
+    const kb=Math.round(f.size/1024);
+    return `<div style="display:flex;align-items:center;gap:6px;background:var(--s2);border-radius:8px;padding:6px 10px;font-size:13px;max-width:100%">
+      ${isImg?`<img src="${f.data}" style="width:32px;height:32px;object-fit:cover;border-radius:4px">`:'📄'}
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</span>
+      <span style="color:var(--t3);font-size:11px">${kb}кб</span>
+      <button onclick="event.stopPropagation();_tFiles.splice(${i},1);_renderTaskFiles()" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:16px;padding:0 2px">✕</button>
+    </div>`;
+  }).join('');
+}
+async function addTaskFiles(inp){
+  const files=[...inp.files];
+  const readers=files.map(f=>new Promise(res=>{
+    const r=new FileReader();
+    r.onload=e=>res({name:f.name,size:f.size,type:f.type,data:e.target.result});
+    r.readAsDataURL(f);
+  }));
+  const loaded=await Promise.all(readers);
+  _tFiles=[..._tFiles,...loaded];
+  inp.value='';
+  _renderTaskFiles();
+}
 function viewPhoto(arrOrIdx,idx){
   const src=Array.isArray(arrOrIdx)?arrOrIdx[typeof idx==='number'?idx:0]:_tPhotos[arrOrIdx];
   const ov=document.createElement('div');

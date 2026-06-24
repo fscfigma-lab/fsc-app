@@ -5006,7 +5006,7 @@ async function syncFromSheets(silent){
     if(pushLines.length>0){
       const shown=pushLines.slice(0,6);
       if(pushLines.length>6)shown.push(`...и ещё ${pushLines.length-6}`);
-      sendPush('🔄 Обновления из таблицы',shown.join('\n'),'construction,memo');
+      // sendPush убран — синк не должен слать уведомления
     }
     if(!silent){
       toast(`✅ Готово: +${added} новых, ${updated} обновлено`,'ok');

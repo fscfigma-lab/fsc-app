@@ -634,6 +634,10 @@ body{background:var(--bg)}
 
 /* RISK SUMMARY ON DASHBOARD */
 .risk-row{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap}
+.who-chip{padding:5px 12px;border-radius:20px;border:1.5px solid var(--b2);background:var(--s1);
+  color:var(--t2);font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap;transition:all .15s;font-family:inherit}
+.who-chip:active{opacity:.7}
+.who-chip.active{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
 .risk-card{flex:1;min-width:120px;background:var(--s1);border:1px solid var(--b2);
   border-radius:8px;padding:16px;cursor:pointer;transition:all .18s;box-shadow:var(--shadow)}
 .risk-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
@@ -1233,6 +1237,7 @@ body{background:var(--bg)}
         <div class="risk-row" id="d-risks"></div>
 
         <div class="sec-title">📌 Требуют внимания сегодня</div>
+        <div id="d-urgent-filters" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
         <div id="d-urgent"></div>
 
         <div class="divider"></div>
@@ -2470,8 +2475,36 @@ function rDash(){
   if(od.length>0){banner.style.display='flex';$('od-txt').innerHTML=`<strong>${decl(od.length,'задача','задачи','задач')} просрочено</strong>`}
   else banner.style.display='none';
 
-  const urgent=[...od,...td].sort((a,b)=>prioW(b.prio)-prioW(a.prio));
+  const urgentAll=[...od,...td].sort((a,b)=>prioW(b.prio)-prioW(a.prio));
   updateBadges(od.length+td.length);
+
+  // Фильтр-чипы по исполнителю
+  const me=currentUser?.name||'';
+  const filtersEl=$('d-urgent-filters');
+  if(filtersEl){
+    // Уникальные исполнители с задачами (для admin/management — все, иначе только текущий)
+    const whoList=canSeeAll()
+      ? [...new Set(urgentAll.map(x=>x.who).filter(Boolean))].sort()
+      : (me ? [me] : []);
+    if(whoList.length>1||(whoList.length===1&&whoList[0]!==me)){
+      const chips=[
+        `<button class="who-chip${!_dashWhoFilt?' active':''}" onclick="setDashWho(null)">Все (${urgentAll.length})</button>`,
+        me?`<button class="who-chip${_dashWhoFilt===me?' active':''}" onclick="setDashWho('${me}')">Мои</button>`:'',
+        ...whoList.filter(w=>w!==me).map(w=>{
+          const cnt=urgentAll.filter(x=>x.who===w).length;
+          const short=w.split(' ').slice(0,2).join(' ');
+          return`<button class="who-chip${_dashWhoFilt===w?' active':''}" onclick="setDashWho('${w}')">${short} (${cnt})</button>`;
+        })
+      ].filter(Boolean);
+      filtersEl.innerHTML=chips.join('');
+      filtersEl.style.display='flex';
+    } else {
+      filtersEl.innerHTML='';
+      filtersEl.style.display='none';
+    }
+  }
+
+  const urgent=_dashWhoFilt ? urgentAll.filter(x=>x.who===_dashWhoFilt) : urgentAll;
 
   // Risk summary
   const risks={critical:[],high:[],low:[]};
@@ -2615,9 +2648,12 @@ function updateBadges(n){
   });
 }
 
+function setDashWho(who){_dashWhoFilt=who;rDash();}
+
 /* ═══════════════════════════════════════
    PROJECTS
 ═══════════════════════════════════════ */
+let _dashWhoFilt=null;
 let pfilt='all';
 let pSearch='';
 let pMgrFilt='';

@@ -4726,10 +4726,15 @@ const VAPID_PUBLIC='BH6RzcpUVh1IthqRn2TFafRHru_dlU1C0RnOSZW1YMtQ8irclAqNUB-h7eKW
 // Регистрируем наш SW и проверяем статус
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('/fsc-app/sw.js',{scope:'/fsc-app/'})
-    .then(()=>_checkPushStatus()).catch(e=>console.warn('SW:',e));
+    .then(reg=>{
+      _checkPushStatus();
+      reg.update(); // принудительно проверяем новую версию при каждом запуске
+    }).catch(e=>console.warn('SW:',e));
   navigator.serviceWorker.addEventListener('message',e=>{
     if(e.data==='SW_UPDATED') window.location.reload();
   });
+  // controllerchange срабатывает когда новый SW берёт контроль — перезагружаем страницу
+  navigator.serviceWorker.oncontrollerchange=()=>window.location.reload();
 }
 
 function _showPushBanner(){

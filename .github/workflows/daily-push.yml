@@ -60,7 +60,7 @@ jobs:
 
             // ── Критические задачи (утро + вечер) ────────────────────────────
             const criticalOverdue = tasks.filter(t =>
-              !t.done && t.prio === 'critical' && t.dead && t.dead <= today
+              !t.done && (t.prio === 'high' || t.prio === 'critical') && t.dead && t.dead <= today
             );
 
             for (const t of criticalOverdue) {

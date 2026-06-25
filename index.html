@@ -2770,7 +2770,8 @@ function rProj(){
     {id:'active',label:'Активные'},
     {id:'overdue',label:'Просроченные'},
     {id:'paused',label:'На паузе'},
-    {id:'done',label:'Завершённые'}
+    {id:'done',label:'Завершённые'},
+    {id:'no-stages',label:'⬜ Без этапов'}
   ];
   $('proj-filters').innerHTML=filters.map(f=>
     `<div class="fc ${pfilt===f.id?'active':''}" onclick="setPF('${f.id}')">${f.label}</div>`
@@ -2795,6 +2796,7 @@ function rProj(){
   else if(pfilt==='done')projs=projs.filter(p=>p.status==='done');
   else if(pfilt==='overdue')projs=projs.filter(p=>p.status==='overdue');
   else if(pfilt==='paused')projs=projs.filter(p=>p.status==='paused');
+  else if(pfilt==='no-stages')projs=projs.filter(p=>!D.stages.some(s=>s.pid===p.id));
   // Фильтр по менеджеру (из строки фильтров или из дашборда)
   const mf=pMgrFilt||_projMgrFilter;
   if(mf){
@@ -3189,6 +3191,7 @@ let _gVP={total:1,pStartMs:0};
 let _gDrag=null;
 let _gUndo=[]; // стек отмен [{type,id,fields:{field:oldVal}}] или {type:'cascade',snaps:[]}
 let _gCascade=false;
+let gStageFilter=''; // ''|'has'|'no'
 
 function gSetZoom(z){
   gZoom=z;gOff=0;
@@ -3239,6 +3242,9 @@ function rGantt(){
     fHTML+=`<button class="g-fchip gfn" onclick="gExpandAll()" title="Раскрыть все этапы">⊞ Все этапы</button>`;
     fHTML+=`<button class="g-fchip gfn" onclick="gCollapseAll()" title="Свернуть все">⊟ Свернуть</button>`;
     fHTML+=`<button class="g-fchip ${_gCascade?'gfg':''}" onclick="gToggleCascade()" title="Каскадный сдвиг: следующие этапы двигаются вместе">🔗 Каскад</button>`;
+    fHTML+=`<span style="width:1px;height:16px;background:var(--b2);margin:0 2px;flex-shrink:0"></span>`;
+    fHTML+=`<button class="g-fchip ${gStageFilter==='has'?'gfa':''}" onclick="gSetStageF('has')" title="Только проекты с этапами">📋 С этапами</button>`;
+    fHTML+=`<button class="g-fchip ${gStageFilter==='no'?'gfa':''}" onclick="gSetStageF('no')" title="Проекты без этапов — нужно заполнить">⬜ Без этапов</button>`;
     fb.innerHTML=fHTML;
   }
 
@@ -3276,6 +3282,8 @@ function rGantt(){
   // Фильтр + группировка
   let projs=visibleProjects();
   if(gMgrFilter)projs=projs.filter(p=>p.manager===gMgrFilter);
+  if(gStageFilter==='has')projs=projs.filter(p=>D.stages.some(s=>s.pid===p.id));
+  if(gStageFilter==='no')projs=projs.filter(p=>!D.stages.some(s=>s.pid===p.id));
 
   let groups;
   if(gGroupByMgr&&canSeeAll()){
@@ -3319,7 +3327,7 @@ function rGantt(){
       const stDone=stages.filter(s=>s.done).length;
       const riskCls=r==='critical'?'risk-c':r==='high'?'risk-h':'';
       const odCls=(ds==='overdue'||p.status==='overdue')?'is-od':'';
-      const stageHint=stages.length?` · ${stDone}/${stages.length} этап.`:'';
+      const stageHint=stages.length?` · ${stDone}/${stages.length} этап.`:` · <span style="color:var(--acc);opacity:.7;font-size:10px">нет этапов</span>`;
       // Подсвечиваем просроченные этапы
       const odStages=stages.filter(s=>!s.done&&s.deadline&&s.deadline<TODAY());
       const critPath=odStages.length>0?` · ⚠ ${odStages.length} эт. просроч.`:'';
@@ -3441,6 +3449,7 @@ function gToggleExpand(pid,ev){
 }
 function gToggleGroup(){gGroupByMgr=!gGroupByMgr;rGantt();}
 function gSetMgrF(m){gMgrFilter=m;rGantt();}
+function gSetStageF(f){gStageFilter=gStageFilter===f?'':f;rGantt();}
 function gExpandAll(){visibleProjects().forEach(p=>gExpanded.add(p.id));rGantt();}
 function gCollapseAll(){gExpanded.clear();rGantt();}
 function gToggleCascade(){_gCascade=!_gCascade;rGantt();toast(_gCascade?'🔗 Каскад включён — следующие этапы сдвигаются вместе':'Каскад выключен','ok');}

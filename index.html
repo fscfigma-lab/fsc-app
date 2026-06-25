@@ -4363,6 +4363,15 @@ function saveTask(){
   toast(tedit?'✏️ Задача обновлена':'✅ Задача создана','ok');
   // Push при создании новой задачи с исполнителем
   if(isNew&&t.who) pushTaskAssigned(t);
+  // Личный TG при назначении (новая задача или изменился исполнитель)
+  const whoChanged=!isNew&&existing&&existing.who!==t.who;
+  if(t.who&&(isNew||whoChanged)){
+    const member=D.team.find(m=>m.name===t.who);
+    if(member?.tgId){
+      const proj=t.pid?D.projects.find(p=>p.id===t.pid):null;
+      sendTgToUser(member.tgId,`📌 <b>Вам назначена задача</b>\n«${t.name}»${proj?'\nПроект: '+proj.name:''}${t.dead?'\nДедлайн: '+fdate(t.dead,true):''}`);
+    }
+  }
 }
 
 function deleteTask(){
@@ -4930,6 +4939,16 @@ function _urlBase64ToUint8Array(b64){
   const pad=b64.length%4?b64+'='.repeat(4-b64.length%4):b64;
   const raw=atob(pad.replace(/-/g,'+').replace(/_/g,'/'));
   return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
+}
+
+// Личное уведомление конкретному сотруднику по его tgId
+async function sendTgToUser(tgId, text){
+  const token=D.tgBotToken;
+  if(!token||!tgId)return;
+  fetch(`https://api.telegram.org/bot${token}/sendMessage`,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({chat_id:tgId,text,parse_mode:'HTML'})
+  }).catch(()=>{});
 }
 
 // Мгновенная отправка в Telegram прямо из браузера (без задержки)

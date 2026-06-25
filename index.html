@@ -336,7 +336,13 @@ body{background:var(--bg)}
 .g-mgr-hdr{display:flex;align-items:center;gap:8px;padding:7px 14px;
   background:rgba(28,43,28,0.08);border-bottom:1px solid var(--b1);
   font-size:10px;font-weight:700;color:var(--acc-dark);text-transform:uppercase;letter-spacing:.8px;
-  position:sticky;left:0}
+  position:sticky;left:0;cursor:pointer}
+.g-mgr-hdr:hover{background:rgba(28,43,28,0.16)}
+/* Stage tick marks (visible in collapsed mode) */
+.g-tick{position:absolute;width:2px;height:34px;top:-4px;z-index:4;border-radius:1px;pointer-events:all;cursor:default}
+.g-tick-done{background:var(--grn);opacity:.7}
+.g-tick-od{background:var(--red);opacity:.9}
+.g-tick-ok{background:var(--acc);opacity:.75}
 .g-mgr-badge{border-radius:3px;padding:1px 7px;font-size:9px;font-weight:600;
   background:var(--acc-dark);color:#fff}
 .g-mgr-badge.od{background:var(--red)}
@@ -3235,7 +3241,7 @@ function rGantt(){
     if(mgrs.length&&canSeeAll()){
       fHTML+=`<span style="font-size:10px;color:var(--t3);font-weight:600;white-space:nowrap">РП:</span>`;
       fHTML+=`<button class="g-fchip ${!gMgrFilter?'gfa':''}" onclick="gSetMgrF('')">Все</button>`;
-      mgrs.forEach(m=>{fHTML+=`<button class="g-fchip ${gMgrFilter===m?'gfa':''}" onclick="gSetMgrF('${m.replace(/'/g,"\\'")}'">${m.split(' ')[0]}</button>`;});
+      mgrs.forEach(m=>{const lbl=m.split(' ').map((w,i)=>i===0?w:w[0]&&w.length>2?w[0]+'.':w).join(' ');fHTML+=`<button class="g-fchip ${gMgrFilter===m?'gfa':''}" onclick="gSetMgrF('${m.replace(/'/g,"\\'")}'">${lbl}</button>`;});
       fHTML+=`<span style="width:1px;height:16px;background:var(--b2);margin:0 2px;flex-shrink:0"></span>`;
     }
     fHTML+=`<button class="g-fchip ${gGroupByMgr?'gfg':''}" onclick="gToggleGroup()" title="Группировать по менеджеру">👤 По РП</button>`;
@@ -3256,6 +3262,7 @@ function rGantt(){
     <span class="g-leg-item"><span class="g-leg-dot" style="background:var(--yel-bg);border-color:var(--yel-bd)"></span>Скоро дедлайн</span>
     <span class="g-leg-item" style="color:var(--red)"><span style="display:inline-block;width:2px;height:12px;background:var(--red);border-radius:1px"></span>Сегодня</span>
     <span class="g-leg-item" style="color:var(--t3)"><span style="display:inline-block;width:0;height:12px;border-left:2px dashed rgba(120,120,120,.55)"></span>Клиент. дедлайн</span>
+    <span class="g-leg-item" style="color:var(--t3)"><span style="display:inline-flex;gap:2px;align-items:center"><span style="display:inline-block;width:2px;height:12px;background:var(--grn);border-radius:1px"></span><span style="display:inline-block;width:2px;height:12px;background:var(--acc);border-radius:1px"></span><span style="display:inline-block;width:2px;height:12px;background:var(--red);border-radius:1px"></span></span> Этапы (тик)</span>
   </div>`;
 
   // Заголовок таблицы
@@ -3306,8 +3313,10 @@ function rGantt(){
         return sum+(ss.length?ss.filter(s=>s.done).length:0);
       },0);
       const stagesTotal=g.projs.reduce((sum,p)=>sum+D.stages.filter(s=>s.pid===p.id).length,0);
-      html+=`<div class="g-mgr-hdr">
+      const isMgrActive=gMgrFilter===g.mgr;
+      html+=`<div class="g-mgr-hdr" onclick="gSetMgrF(${isMgrActive?`''`:`'${g.mgr.replace(/'/g,"\\'")}';gGroupByMgr=true`})" title="${isMgrActive?'Сбросить фильтр':'Показать только этого РП'}">
         <span>${g.mgr}</span>
+        <span style="font-size:9px;opacity:.6">${isMgrActive?'✕ сбросить':'← фильтр'}</span>
         <span class="g-mgr-badge">${g.projs.length} объектов</span>
         ${stagesTotal?`<span class="g-mgr-badge" style="background:var(--acc)">${stagesDone}/${stagesTotal} эт.</span>`:''}
         ${odP>0?`<span class="g-mgr-badge od">⚠ ${odP} просрочено</span>`:''}
@@ -3353,6 +3362,15 @@ function rGantt(){
             ${w>22?`<span style="position:relative;z-index:1;padding-left:6px;font-size:10px;opacity:.85">${p.name}</span>`:''}
           </div>`:''}
           ${msPos!==null&&msPos>=0&&msPos<=102?`<div class="g-milestone ${cls}" style="left:${msPos.toFixed(1)}%" title="Дедлайн: ${fdate(p.deadline)}"></div>`:''}
+          ${!expanded?stages.map(s=>{
+            if(!s.deadline)return'';
+            const sdMs=pd(s.deadline).getTime();
+            if(sdMs<pStart.getTime()||sdMs>pEnd.getTime())return'';
+            const tp=pos(s.deadline);
+            const sds=dlStatus(s.deadline,s.done);
+            const tcl=s.done?'g-tick-done':sds==='overdue'?'g-tick-od':'g-tick-ok';
+            return`<div class="g-tick ${tcl}" style="left:${tp.toFixed(1)}%" title="${s.icon||'📋'} ${s.name}&#10;${fdate(s.deadline,true)}${s.done?' · ✓ выполнен':sds==='overdue'?' · ⚠ просрочен':' · в работе'}"></div>`;
+          }).join(''):''}
         </div>
       </div>`;
 

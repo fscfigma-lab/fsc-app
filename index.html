@@ -1402,6 +1402,7 @@ body{background:var(--bg)}
         <div class="ph-actions"><button class="btn btn-p" onclick="openMemberModal()">+ Сотрудник</button></div>
       </div>
       <div class="pc">
+        <div id="drift-stats" style="display:none;margin-bottom:16px"></div>
         <div class="tgrid" id="team-grid"></div>
         <div id="member-detail" style="display:none">
           <div class="divider"></div>
@@ -4673,10 +4674,18 @@ function tiHTML(task,showProj){
   const notesPreview=task.notes&&!task.done?`<div style="font-size:11px;color:var(--t3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">📝 ${task.notes}</div>`:'';
   const dlShiftBadge=(task.deadlineHistory?.length>=2&&(task.prio==='high'||task.prio==='critical')&&!task.done)
     ?`<span title="${task.deadlineHistory.length} переносов дедлайна" style="font-size:9px;font-weight:700;background:#FEE2E2;color:#B91C1C;padding:2px 5px;border-radius:6px;cursor:default">⚠️×${task.deadlineHistory.length}</span>`:'';
+  // Дрейф — отклонение от исходного срока
+  const _effOrig=task.origDead||(task.deadlineHistory?.[0]?.from)||null;
+  const _driftD=(_effOrig&&_effOrig!==task.dead&&!task.done&&task.dead)
+    ?Math.round((new Date(task.dead)-new Date(_effOrig))/86400000):0;
+  const driftBadge=_driftD>0
+    ?`<span title="Исходный срок: ${fdate(_effOrig,true)}" style="font-size:9px;font-weight:700;background:rgba(234,88,12,.13);color:#C2410C;padding:2px 6px;border-radius:5px;cursor:default">+${_driftD}д.</span>`
+    :_driftD<0?`<span title="Исходный срок: ${fdate(_effOrig,true)}" style="font-size:9px;font-weight:700;background:rgba(34,197,94,.13);color:#15803D;padding:2px 6px;border-radius:5px;cursor:default">${_driftD}д.</span>`
+    :'';
   return`<div class="ti ${task.done?'dn':''} ${ds==='overdue'&&!task.done?'od':''}" style="${urgStyle}" onclick="openTaskModal('${task.id}')">
     <div class="tchk ${task.done?'ck':''}" onclick="toggleTask('${task.id}',event)"></div>
     <div class="tbody">
-      <div class="ttitle">${task.fast&&!task.done?'<span style="font-size:10px;font-weight:700;background:#FEF9C3;color:#854D0E;padding:2px 6px;border-radius:6px;letter-spacing:.4px">⚡ Быстрая</span> ':''}${task.name} ${urgBadge}${dlShiftBadge}${extraIcons?`<span style="font-size:11px;opacity:.6">${extraIcons}</span>`:''}</div>
+      <div class="ttitle">${task.fast&&!task.done?'<span style="font-size:10px;font-weight:700;background:#FEF9C3;color:#854D0E;padding:2px 6px;border-radius:6px;letter-spacing:.4px">⚡ Быстрая</span> ':''}${task.name} ${urgBadge}${dlShiftBadge}${driftBadge}${extraIcons?`<span style="font-size:11px;opacity:.6">${extraIcons}</span>`:''}</div>
       ${notesPreview}
       ${mobProj}
       ${taskTags}
@@ -4713,11 +4722,63 @@ function toggleTask(id,event){
 /* ═══════════════════════════════════════
    TEAM
 ═══════════════════════════════════════ */
+function calcDriftStats(){
+  const stats={};
+  D.tasks.forEach(t=>{
+    if(!t.deadlineHistory?.length||!t.who)return;
+    t.deadlineHistory.forEach(h=>{
+      const d=Math.round((new Date(h.to)-new Date(h.from))/86400000);
+      if(d>0){
+        if(!stats[t.who])stats[t.who]={postpones:0,days:0,taskIds:new Set()};
+        stats[t.who].postpones++;
+        stats[t.who].days+=d;
+        stats[t.who].taskIds.add(t.id);
+      }
+    });
+  });
+  Object.values(stats).forEach(s=>{s.tasks=s.taskIds.size;delete s.taskIds;});
+  return stats;
+}
+
 function rTeam(){
   $('member-detail').style.display='none';
-  // Показываем кнопку "+ Сотрудник" только для admin
   const teamBtn=document.querySelector('#p-team .ph-actions');
   if(teamBtn)teamBtn.style.display=canManageTeam()?'':'none';
+
+  // Статистика дрейфа (только для admin/management)
+  const canSeeStats=['admin','management'].includes(D.currentUser?.role_key);
+  const ds=$('drift-stats');
+  if(canSeeStats&&ds){
+    const dstats=calcDriftStats();
+    const rows=Object.entries(dstats).sort((a,b)=>b[1].days-a[1].days);
+    if(rows.length){
+      const totalDrift=rows.reduce((s,[,v])=>s+v.days,0);
+      ds.innerHTML=`
+        <div style="background:var(--s1);border:1px solid var(--b1);border-radius:12px;padding:14px 16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div style="font-size:13px;font-weight:700;color:var(--t1)">📊 Дрейф сроков</div>
+            <div style="font-size:11px;color:var(--t3)">суммарно +${totalDrift} дн. по команде</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 12px;align-items:center">
+            <div style="font-size:10px;color:var(--t3);font-weight:600">Менеджер</div>
+            <div style="font-size:10px;color:var(--t3);font-weight:600;text-align:center">Переносов</div>
+            <div style="font-size:10px;color:var(--t3);font-weight:600;text-align:center">Задач</div>
+            <div style="font-size:10px;color:var(--t3);font-weight:600;text-align:right">Дрейф</div>
+            ${rows.map(([name,s])=>{
+              const col=s.days>14?'var(--red)':s.days>7?'#EA580C':'var(--t2)';
+              return`<div style="font-size:12px;color:var(--t1);padding:3px 0;border-top:1px solid var(--b1)">${name}</div>
+              <div style="font-size:12px;text-align:center;border-top:1px solid var(--b1);padding:3px 0">${s.postpones}</div>
+              <div style="font-size:12px;text-align:center;border-top:1px solid var(--b1);padding:3px 0;color:var(--t3)">${s.tasks}</div>
+              <div style="font-size:12px;font-weight:700;text-align:right;border-top:1px solid var(--b1);padding:3px 0;color:${col}">+${s.days} дн.</div>`;
+            }).join('')}
+          </div>
+        </div>`;
+      ds.style.display='block';
+    } else {
+      ds.innerHTML='';ds.style.display='none';
+    }
+  } else if(ds){ds.style.display='none';}
+
   const t=TODAY();
   $('team-grid').innerHTML=D.team.length?D.team.map(m=>{
     const tc=D.tasks.filter(x=>x.who===m.name&&!x.done).length;
@@ -4956,6 +5017,7 @@ function saveTask(){
   const remind=rd?(rd+(rt?'T'+rt:'T00:00')):null;
   const notes=($('t-notes').value||'').trim()||undefined;
   const existing=tedit?D.tasks.find(x=>x.id===tedit):null;
+  const isNew=!tedit;
   const t={id:tedit||uid(),name,pid:$('t-proj').value||null,dead:$('t-dead').value||null,
     time:$('t-time').value||null,who:$('t-who').value||null,prio:$('t-prio').value,done:false,
     notes,
@@ -4966,11 +5028,23 @@ function saveTask(){
     fast:existing?existing.fast:_isFastTask(name),
     createdAt:existing?.createdAt||new Date().toISOString(),
     closedAt:existing?.closedAt,
+    // origDead — исходный срок при создании, никогда не меняется
+    origDead:isNew?(($('t-dead').value)||null):(existing.origDead||existing.dead||null),
     deadlineHistory:existing?.deadlineHistory||([])};
   if(existing&&existing.dead&&t.dead&&existing.dead!==t.dead){
     t.deadlineHistory.push({from:existing.dead,to:t.dead,by:D.currentUser?.name||'',at:new Date().toISOString()});
+    // Тихое уведомление руководству при переносе вперёд важной/просроченной задачи
+    const driftDays=Math.round((new Date(t.dead)-new Date(existing.dead))/86400000);
+    if(driftDays>0&&(['high','critical'].includes(t.prio)||existing.dead<TODAY())){
+      const _proj2=t.pid?D.projects.find(p=>p.id===t.pid):null;
+      sendTgNow('📅 Перенос срока',
+        `${D.currentUser?.name||'Менеджер'} перенёс(ла)\n«${t.name}»`+
+        `${_proj2?'\n📁 '+_proj2.name:''}\n\n`+
+        `${fdate(existing.dead,true)} → ${fdate(t.dead,true)} (+${driftDays} дн.)`+
+        `${['high','critical'].includes(t.prio)?'\n⚠️ Высокий приоритет':''}${existing.dead<TODAY()?'\n🔴 Задача была просрочена':''}`
+      );
+    }
   }
-  const isNew=!tedit;
   if(tedit){const idx=D.tasks.findIndex(x=>x.id===tedit);if(idx>=0){t.done=D.tasks[idx].done;D.tasks[idx]=t}}
   else D.tasks.push(t);
   const proj=t.pid?D.projects.find(p=>p.id===t.pid):null;

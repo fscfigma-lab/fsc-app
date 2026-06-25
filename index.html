@@ -15,6 +15,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <style>
 @keyframes spin{to{transform:rotate(360deg)}}
 /* ── LOGIN ── */
@@ -1773,6 +1774,19 @@ body{background:var(--bg)}
   </div>
 </div>
 
+<!-- MODAL: QR CODE -->
+<div class="moverlay" id="m-qr">
+  <div class="modal" style="max-width:320px;text-align:center">
+    <div class="mtitle" id="m-qr-title">QR-код объекта</div>
+    <div id="m-qr-box" style="display:flex;justify-content:center;margin:16px 0;background:#fff;border-radius:12px;padding:16px"></div>
+    <div id="m-qr-sub" style="font-size:12px;color:var(--t3);margin-bottom:4px"></div>
+    <div class="mfoot" style="justify-content:center;gap:10px">
+      <button class="btn btn-s" onclick="closeM('m-qr')">Закрыть</button>
+      <button class="btn btn-p" onclick="printQR()">🖨 Распечатать</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: CONTRACT IMPORT -->
 <div class="moverlay" id="m-contract">
   <div class="modal" style="max-width:520px">
@@ -2866,9 +2880,15 @@ function rProj(){
     return`<div class="pcard risk-${r}" onclick="openProjectDetail('${p.id}')">
       <div class="pch">
         <div><div class="pname">${p.name}</div>${p.client?`<div class="pclient">${p.client}</div>`:''}</div>
-        <div class="pcard-badges">
-          <span class="rbadge ${r}">${riskLabel(r)}</span>
-          <span class="chip ${p.status}">${PSTATUS[p.status]||p.status}</span>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">
+          <div class="pcard-badges">
+            <span class="rbadge ${r}">${riskLabel(r)}</span>
+            <span class="chip ${p.status}">${PSTATUS[p.status]||p.status}</span>
+          </div>
+          <button onclick="showProjectQR('${p.id}');event.stopPropagation()" title="QR-код для сканирования на объекте"
+            style="background:none;border:1px solid var(--b2);border-radius:6px;cursor:pointer;font-size:11px;color:var(--t3);padding:2px 8px;display:flex;align-items:center;gap:4px;white-space:nowrap">
+            ▣ QR
+          </button>
         </div>
       </div>
       <div class="pmeta">
@@ -3363,6 +3383,41 @@ function _showContractPreview(d,fname){
     </div>
     ${roomsHTML}`;
   openM('m-contract');
+}
+
+/* ═══════════════════════════════════════
+   QR CODE
+═══════════════════════════════════════ */
+let _qrPid=null;
+
+function showProjectQR(pid){
+  _qrPid=pid;
+  const p=D.projects.find(x=>x.id===pid);
+  if(!p)return;
+  const url=`https://fscfigma-lab.github.io/fsc-app/?pid=${pid}`;
+  $('m-qr-title').textContent=p.name;
+  $('m-qr-sub').textContent='Менеджер сканирует → открывается проект';
+  const box=$('m-qr-box');
+  box.innerHTML='';
+  new QRCode(box,{text:url,width:220,height:220,colorDark:'#1C2B1C',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});
+  openM('m-qr');
+}
+
+function printQR(){
+  const p=D.projects.find(x=>x.id===_qrPid);
+  const box=$('m-qr-box');
+  const img=box.querySelector('img')||box.querySelector('canvas');
+  if(!img||!p)return;
+  const src=img.tagName==='CANVAS'?img.toDataURL():img.src;
+  const win=window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><title>QR — ${p.name}</title>
+  <style>body{font-family:sans-serif;text-align:center;padding:40px}
+  h2{font-size:18px;margin:16px 0 4px}p{color:#666;font-size:13px;margin:0 0 12px}
+  img{border:1px solid #ddd;border-radius:8px;padding:8px}</style></head>
+  <body><img src="${src}" width="240"><h2>${p.name}</h2>
+  <p>${p.client||''}</p><p style="font-size:11px;color:#aaa">FSC · Отсканируй для открытия проекта</p>
+  <script>window.onload=()=>window.print()<\/script></body></html>`);
+  win.document.close();
 }
 
 function confirmContractProject(){
@@ -5175,6 +5230,11 @@ document.addEventListener('DOMContentLoaded',async()=>{
     applyUser();
     const startPage=isMobile()&&$('p-mob-today')?'mob-today':'dashboard';
     nav(startPage);
+    // QR-ссылка: ?pid=... → сразу открываем проект
+    const _urlPid=new URLSearchParams(location.search).get('pid');
+    if(_urlPid&&D.projects.find(p=>p.id===_urlPid)){
+      setTimeout(()=>{nav('projects');openProjectDetail(_urlPid);},600);
+    }
     checkNotifs();
     // Авто-сводка убрана — ежедневные уведомления идут через GitHub Action в 9:00 и 18:00
     setTimeout(()=>checkReminders(),6000);

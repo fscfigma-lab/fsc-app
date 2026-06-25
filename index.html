@@ -283,6 +283,10 @@ body{background:var(--bg)}
 .g-rtl{flex:1;position:relative;display:flex;align-items:center}
 .g-grid{position:absolute;top:0;bottom:0;width:1px;background:var(--b1);opacity:.8}
 .g-today{position:absolute;top:0;bottom:0;width:2px;background:var(--red);z-index:5}
+/* "Сегодня" — только в шапке */
+.g-hrow .g-today::before{content:'Сегодня';position:absolute;top:4px;left:4px;font-size:9px;
+  font-weight:700;color:var(--red);white-space:nowrap;background:var(--s1);
+  padding:1px 5px;border-radius:3px;pointer-events:none}
 .g-bar{position:absolute;height:26px;border-radius:6px;border:1px solid var(--b2);
   display:flex;align-items:center;padding:0 10px;font-size:11px;overflow:hidden;
   cursor:grab;transition:all .2s;white-space:nowrap;font-weight:500}
@@ -300,11 +304,15 @@ body{background:var(--bg)}
 .g-baseline{position:absolute;height:4px;bottom:6px;border-radius:2px;
   background:rgba(150,150,150,.35);border:1px solid rgba(150,150,150,.4);
   pointer-events:none;z-index:1}
-/* Клиентский дедлайн — полупрозрачная серая полоса позади основного бара */
-.g-cbar{position:absolute;height:26px;border-radius:6px;
-  background:rgba(120,120,120,.13);border:1px dashed rgba(120,120,120,.35);
-  pointer-events:none;z-index:1}
-.g-cbar-warn{border-color:rgba(220,80,60,.5);background:rgba(220,80,60,.07)}
+/* Клиентский дедлайн — вертикальная пунктирная линия */
+.g-cbar{position:absolute;top:4px;bottom:4px;width:0;
+  border-left:2px dashed rgba(120,120,120,.55);
+  pointer-events:none;z-index:3}
+.g-cbar::after{content:'КД';position:absolute;top:2px;left:4px;font-size:8px;
+  font-weight:700;color:rgba(120,120,120,.8);white-space:nowrap;
+  background:var(--s1);padding:0 3px;border-radius:2px}
+.g-cbar-warn{border-color:rgba(220,80,60,.6)}
+.g-cbar-warn::after{color:rgba(220,80,60,.9)}
 /* Milestone — ромбик на дедлайне */
 .g-milestone{position:absolute;top:50%;transform:translate(-50%,-50%) rotate(45deg);
   width:10px;height:10px;border:2px solid currentColor;z-index:6;pointer-events:none}
@@ -358,6 +366,11 @@ body{background:var(--bg)}
 .g-sbar.sok{background:var(--acc-bg);border-color:var(--acc-bd);color:var(--acc)}
 @keyframes gPulse{0%,100%{box-shadow:none}50%{box-shadow:0 0 0 2px rgba(184,50,50,0.25)}}
 .g-sbar.sod{animation:gPulse 2s ease-in-out infinite}
+/* Gantt legend */
+.g-legend{display:flex;gap:14px;padding:5px 14px;border-bottom:1px solid var(--b1);
+  background:var(--s1);font-size:10px;flex-wrap:wrap;align-items:center}
+.g-leg-item{display:inline-flex;align-items:center;gap:5px;color:var(--t3);white-space:nowrap}
+.g-leg-dot{width:10px;height:10px;border-radius:2px;border:1px solid;flex-shrink:0}
 /* Gantt filter bar */
 .g-fbar{display:flex;align-items:center;gap:6px;padding:7px 14px;
   border-bottom:1px solid var(--b1);background:var(--s1);flex-wrap:wrap}
@@ -3229,16 +3242,28 @@ function rGantt(){
     fb.innerHTML=fHTML;
   }
 
+  // Легенда
+  const legendHTML=`<div class="g-legend">
+    <span class="g-leg-item"><span class="g-leg-dot" style="background:rgba(201,149,42,.1);border-color:var(--acc-bd)"></span>В работе</span>
+    <span class="g-leg-item"><span class="g-leg-dot" style="background:var(--red-bg);border-color:var(--red-bd)"></span>Просрочено</span>
+    <span class="g-leg-item"><span class="g-leg-dot" style="background:var(--grn-bg);border-color:var(--grn-bd)"></span>Выполнено</span>
+    <span class="g-leg-item"><span class="g-leg-dot" style="background:var(--yel-bg);border-color:var(--yel-bd)"></span>Скоро дедлайн</span>
+    <span class="g-leg-item" style="color:var(--red)"><span style="display:inline-block;width:2px;height:12px;background:var(--red);border-radius:1px"></span>Сегодня</span>
+    <span class="g-leg-item" style="color:var(--t3)"><span style="display:inline-block;width:0;height:12px;border-left:2px dashed rgba(120,120,120,.55)"></span>Клиент. дедлайн</span>
+  </div>`;
+
   // Заголовок таблицы
-  let html=`<div class="g-hrow"><div class="g-lcol">Проект / Этапы</div><div class="g-months">`;
+  let colsHTML='';
   cols.forEach(c=>{
     let lbl,cur=false;
     if(gZoom==='weeks'){lbl=`${c.getDate()} ${MS_SHORT[c.getMonth()]}`;cur=Math.abs(c-now)<7*86400000;}
     else if(gZoom==='months'){lbl=`${MS_SHORT[c.getMonth()]} ${c.getFullYear()}`;cur=c.getMonth()===now.getMonth()&&c.getFullYear()===now.getFullYear();}
     else{const q=Math.floor(c.getMonth()/3)+1;lbl=`Q${q} ${c.getFullYear()}`;cur=c.getFullYear()===now.getFullYear()&&Math.floor(now.getMonth()/3)===q-1;}
-    html+=`<div class="g-month ${cur?'cur':''}">${lbl}</div>`;
+    colsHTML+=`<div class="g-month ${cur?'cur':''}">${lbl}</div>`;
   });
-  html+=`</div></div>`;
+  // Today line с меткой — только в шапке
+  const hdrTodayLine=todayPos>=0&&todayPos<=100?`<div class="g-today" style="left:${todayPos.toFixed(1)}%;position:absolute;z-index:6"></div>`:'';
+  let html=legendHTML+`<div class="g-hrow"><div class="g-lcol">Проект / Этапы</div><div class="g-months" style="position:relative">${colsHTML}${hdrTodayLine}</div></div>`;
 
   // Хелперы
   function gridLines(){
@@ -3313,7 +3338,7 @@ function rGantt(){
           ${gridLines()}
           ${todayLine}
           ${(p.bl_start||p.bl_deadline)?`<div class="g-baseline" style="left:${(pos(p.bl_start)||0).toFixed(1)}%;width:${Math.max(1,(pos(p.bl_deadline)||100)-(pos(p.bl_start)||0)).toFixed(1)}%" title="Базовая линия: ${fdate(p.bl_start,true)} → ${fdate(p.bl_deadline,true)}"></div>`:''}
-          ${(()=>{if(!p.clientDeadline)return '';const cs=pos(p.start||p.deadline)||0,ce=pos(p.clientDeadline);if(ce===null)return '';const cw=Math.max(1,ce-cs);const warn=p.deadline&&p.clientDeadline&&(new Date(p.clientDeadline)-new Date(p.deadline))/86400000<=7;return `<div class="g-cbar${warn?' g-cbar-warn':''}" style="left:${cs.toFixed(1)}%;width:${cw.toFixed(1)}%;top:calc(50% - 13px)" title="Клиентский дедлайн: ${fdate(p.clientDeadline,true)}${warn?' ⚠️ До клиентского менее 7 дней!':''}"></div>`;})()}
+          ${(()=>{if(!p.clientDeadline)return '';const ce=pos(p.clientDeadline);if(ce===null)return '';const warn=p.deadline&&p.clientDeadline&&(new Date(p.clientDeadline)-new Date(p.deadline))/86400000<=7;return `<div class="g-cbar${warn?' g-cbar-warn':''}" style="left:${ce.toFixed(1)}%" title="Клиентский дедлайн: ${fdate(p.clientDeadline,true)}${warn?' ⚠️ До клиентского менее 7 дней!':''}"></div>`;})()}
           ${ep>0&&sp<100?`<div class="g-bar ${cls}" style="left:${sp.toFixed(1)}%;width:${w.toFixed(1)}%;cursor:grab;position:relative;z-index:2" onmousedown="gBarDown(event,'proj','${p.id}')" title="${p.name}&#10;${fdate(p.start,true)} → ${fdate(p.deadline,true)}&#10;Прогресс: ${pct}%&#10;Перетащи чтобы сдвинуть сроки">
             <div class="g-pf" style="width:${pct}%"></div>
             ${w>8?`<span style="position:relative;z-index:1;padding-left:5px;font-size:10px;font-weight:700">${pct}%</span>`:''}
@@ -3325,15 +3350,23 @@ function rGantt(){
 
       // Этапы (sub-rows) — показываем если раскрыто
       if(expanded&&stages.length){
-        stages.forEach(s=>{
+        stages.forEach((s,idx)=>{
           const sPos=pos(s.deadline);
           const sds=dlStatus(s.deadline,s.done);
           const sBarCls=s.done?'sdone':sds==='overdue'?'sod':(sds==='soon'||sds==='today')?'ssoon':'sok';
-          // Бар от начала проекта до дедлайна этапа
-          const sStart=Math.max(0,sp);
+          // Бар: от дедлайна предыдущего этапа (или старта проекта) до дедлайна этого этапа
+          const prevDead=idx===0?(p.start||null):stages[idx-1].deadline;
+          const sStart=Math.max(0,prevDead?pos(prevDead)||0:sp||0);
           const sEnd=sPos!==null?sPos:100;
-          const sW=Math.max(0.5,sEnd-sStart);
-          const sLabel=s.done?'✓':sds==='overdue'?'⚠':'';
+          const sW=sEnd-sStart;
+          const sLabel=s.done?'✓ ':sds==='overdue'?'⚠ ':'';
+          // Для прошлых этапов (бар нулевой ширины) — показываем пилюлю-статус
+          const isPast=sW<=0.5;
+          const pillCls=s.done?'sdone':sds==='overdue'?'sod':'sok';
+          const pillLbl=s.done?'✓ выполнен':'⚠ просрочен';
+          const barOrPill=isPast
+            ?`<div class="g-sbar ${pillCls}" style="left:0%;width:auto;padding:0 8px;cursor:${s.done?'default':'pointer'};min-width:fit-content" ${!s.done?`onclick="openStageModal('${p.id}','${s.id}')"`:''}>${pillLbl} · ${fdate(s.deadline,true)}</div>`
+            :`<div class="g-sbar ${sBarCls}" style="left:${sStart.toFixed(1)}%;width:${sW.toFixed(1)}%;${!s.done?'cursor:grab':''}" ${!s.done?`onmousedown="gBarDown(event,'stage','${s.id}')"`:''}  title="${s.name}&#10;Дедлайн: ${fdate(s.deadline,true)}&#10;${s.done?'✓ Выполнен':(dlLabel(s.deadline,false)||'В работе')}${!s.done?'&#10;Перетащи чтобы изменить срок':''}">${sW>8?sLabel+s.name.slice(0,20):sLabel}</div>`;
           html+=`<div class="g-subrow">
             <div class="g-rlabel" onclick="toggleStage('${s.id}',event)" title="${s.done?'Нажми чтобы отменить выполнение':'Отметить этап выполненным'}">
               <div class="g-sn">${s.done?'✓ ':''}${s.icon||'📋'} ${s.name}</div>
@@ -3342,8 +3375,7 @@ function rGantt(){
             <div class="g-rtl">
               ${gridLines()}
               ${todayLine}
-              ${sEnd>0&&sStart<100?`<div class="g-sbar ${sBarCls}" style="left:${sStart.toFixed(1)}%;width:${sW.toFixed(1)}%;${!s.done?'cursor:grab':''}" ${!s.done?`onmousedown="gBarDown(event,'stage','${s.id}')"`:''}  title="${s.name}&#10;Дедлайн: ${fdate(s.deadline,true)}&#10;${s.done?'✓ Выполнен':(dlLabel(s.deadline,false)||'В работе')}${!s.done?'&#10;Перетащи чтобы изменить срок':''}">${sW>8?sLabel+' '+s.name.slice(0,18):sLabel}</div>`:''}
-              ${sPos!==null&&sPos>=0&&sPos<=102?`<div class="g-milestone ${s.done?'done':sds==='overdue'?'overdue':sds==='soon'?'soon':'ok'}" style="left:${sPos.toFixed(1)}%;width:8px;height:8px" title="${s.name}: ${fdate(s.deadline)}"></div>`:''}
+              ${barOrPill}
             </div>
           </div>`;
         });

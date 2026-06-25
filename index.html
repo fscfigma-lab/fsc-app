@@ -346,6 +346,15 @@ body{background:var(--bg)}
 .g-mgr-badge{border-radius:3px;padding:1px 7px;font-size:9px;font-weight:600;
   background:var(--acc-dark);color:#fff}
 .g-mgr-badge.od{background:var(--red)}
+/* Room header rows within expanded project */
+.g-room-hdr{display:flex;align-items:center;gap:6px;padding:5px 8px 5px 36px;
+  background:rgba(201,149,42,0.06);border-bottom:1px solid var(--b1);
+  font-size:10px;font-weight:700;color:var(--t2);cursor:pointer;
+  position:sticky;left:0}
+.g-room-hdr:hover{background:rgba(201,149,42,0.12)}
+.g-room-badge{background:var(--acc-bg);border:1px solid var(--acc-bd);color:var(--acc);
+  border-radius:8px;padding:1px 6px;font-size:9px;font-weight:600}
+.g-subrow.in-room .g-rlabel{padding-left:50px}
 .g-row.risk-c{border-left:3px solid var(--red)}
 .g-row.risk-h{border-left:3px solid var(--yel)}
 .g-row.is-od .g-rname{color:var(--red);font-weight:600}
@@ -1729,8 +1738,18 @@ body{background:var(--bg)}
       </select>
     </div>
     <div class="fg">
-      <label class="fl">Дедлайн *</label>
-      <input type="date" class="fi" id="s-deadline">
+      <label class="fl">Помещение / зона</label>
+      <input type="text" class="fi" id="s-room" placeholder="-101 Hall, SPA, Гараж...">
+    </div>
+    <div class="fg" style="display:flex;gap:8px">
+      <div style="flex:1">
+        <label class="fl">Дата начала</label>
+        <input type="date" class="fi" id="s-startdate">
+      </div>
+      <div style="flex:1">
+        <label class="fl">Дедлайн *</label>
+        <input type="date" class="fi" id="s-deadline">
+      </div>
     </div>
     <div class="fg">
       <label class="fl">📎 Фото с объекта</label>
@@ -3136,6 +3155,8 @@ function openStageModal(pid,sid){
   $('m-stage-title').textContent=s?'Редактировать этап':'Новый этап';
   $('s-name').value=s?s.name:'';
   $('s-icon').value=s&&s.icon?s.icon:'📋';
+  $('s-room').value=s?.room||'';
+  $('s-startdate').value=s?.startDate||'';
   $('s-deadline').value=s&&s.deadline?s.deadline:'';
   _sPhotos=[...(s?.photos||[])];
   _renderSPhotos();
@@ -3147,6 +3168,8 @@ function saveStageModal(){
   const name=$('s-name').value.trim();
   const deadline=$('s-deadline').value;
   const icon=$('s-icon').value;
+  const room=$('s-room').value.trim()||undefined;
+  const startDate=$('s-startdate').value||undefined;
   if(!name){toast('Введи название этапа','err');return;}
   if(!deadline){toast('Укажи дедлайн','err');return;}
   if(_stageEditId){
@@ -3156,11 +3179,12 @@ function saveStageModal(){
         if(!s.deadlineHistory)s.deadlineHistory=[];
         s.deadlineHistory.push({from:s.deadline,to:deadline,by:D.currentUser?.name||'',at:new Date().toISOString()});
       }
-      s.name=name;s.deadline=deadline;s.icon=icon;s.photos=_sPhotos.length?[..._sPhotos]:undefined;
+      s.name=name;s.deadline=deadline;s.icon=icon;s.room=room;s.startDate=startDate;
+      s.photos=_sPhotos.length?[..._sPhotos]:undefined;
     }
   } else {
     const maxOrder=D.stages.filter(s=>s.pid===_stagePid).reduce((m,s)=>Math.max(m,s.order||0),0);
-    D.stages.push({id:uid(),pid:_stagePid,name,icon,deadline,done:false,order:maxOrder+1,photos:_sPhotos.length?[..._sPhotos]:undefined});
+    D.stages.push({id:uid(),pid:_stagePid,name,icon,deadline,startDate,room,done:false,order:maxOrder+1,photos:_sPhotos.length?[..._sPhotos]:undefined});
     addLog(`${icon} Этап «${name}» добавлен`,_stagePid);
     const proj=D.projects.find(p=>p.id===_stagePid);
     sendPush(`${icon} Новый этап`,`«${name}»${proj?' — '+proj.name:''}${deadline?' · срок '+deadline:''}${currentUser?' · '+currentUser.name:''}`,`construction`);
@@ -3376,27 +3400,27 @@ function rGantt(){
 
       // Этапы (sub-rows) — показываем если раскрыто
       if(expanded&&stages.length){
-        stages.forEach((s,idx)=>{
+        // Функция рендера одного этапа (используется и в flat и в room-grouped режиме)
+        function renderStageRow(s,prevDeadForBar,inRoom){
           const sPos=pos(s.deadline);
           const sds=dlStatus(s.deadline,s.done);
           const sBarCls=s.done?'sdone':sds==='overdue'?'sod':(sds==='soon'||sds==='today')?'ssoon':'sok';
-          // Бар: от дедлайна предыдущего этапа (или старта проекта) до дедлайна этого этапа
-          const prevDead=idx===0?(p.start||null):stages[idx-1].deadline;
-          const sStart=Math.max(0,prevDead?pos(prevDead)||0:sp||0);
+          // Бар: от startDate этапа (если задана) либо от дедлайна предыдущего, либо от старта проекта
+          const barFrom=s.startDate||prevDeadForBar||null;
+          const sStart=Math.max(0,barFrom?pos(barFrom)||0:sp||0);
           const sEnd=sPos!==null?sPos:100;
           const sW=sEnd-sStart;
           const sLabel=s.done?'✓ ':sds==='overdue'?'⚠ ':'';
-          // Для прошлых этапов (бар нулевой ширины) — показываем пилюлю-статус
           const isPast=sW<=0.5;
           const pillCls=s.done?'sdone':sds==='overdue'?'sod':'sok';
           const pillLbl=s.done?'✓ выполнен':'⚠ просрочен';
           const barOrPill=isPast
             ?`<div class="g-sbar ${pillCls}" style="left:0%;width:auto;padding:0 8px;cursor:${s.done?'default':'pointer'};min-width:fit-content" ${!s.done?`onclick="openStageModal('${p.id}','${s.id}')"`:''}>${pillLbl} · ${fdate(s.deadline,true)}</div>`
-            :`<div class="g-sbar ${sBarCls}" style="left:${sStart.toFixed(1)}%;width:${sW.toFixed(1)}%;${!s.done?'cursor:grab':''}" ${!s.done?`onmousedown="gBarDown(event,'stage','${s.id}')"`:''}  title="${s.name}&#10;Дедлайн: ${fdate(s.deadline,true)}&#10;${s.done?'✓ Выполнен':(dlLabel(s.deadline,false)||'В работе')}${!s.done?'&#10;Перетащи чтобы изменить срок':''}">${sW>8?sLabel+s.name.slice(0,20):sLabel}</div>`;
-          html+=`<div class="g-subrow">
+            :`<div class="g-sbar ${sBarCls}" style="left:${sStart.toFixed(1)}%;width:${sW.toFixed(1)}%;${!s.done?'cursor:grab':''}" ${!s.done?`onmousedown="gBarDown(event,'stage','${s.id}')"`:''}  title="${s.name}${s.startDate?'&#10;Начало: '+fdate(s.startDate,true):''}&#10;Дедлайн: ${fdate(s.deadline,true)}&#10;${s.done?'✓ Выполнен':(dlLabel(s.deadline,false)||'В работе')}${!s.done?'&#10;Перетащи чтобы изменить срок':''}">${sW>8?sLabel+s.name.slice(0,20):sLabel}</div>`;
+          html+=`<div class="g-subrow${inRoom?' in-room':''}">
             <div class="g-rlabel" onclick="toggleStage('${s.id}',event)" title="${s.done?'Нажми чтобы отменить выполнение':'Отметить этап выполненным'}">
               <div class="g-sn">${s.done?'✓ ':''}${s.icon||'📋'} ${s.name}</div>
-              <div class="g-sd">${fdate(s.deadline,true)}${s.done?' · выполнен':(dlLabel(s.deadline,s.done)?` · ${dlLabel(s.deadline,s.done)}`:'')}${!s.done&&sds==='overdue'?' ⚠️':''}</div>
+              <div class="g-sd">${s.startDate?fdate(s.startDate,true)+' → ':''}${fdate(s.deadline,true)}${s.done?' · выполнен':(dlLabel(s.deadline,s.done)?` · ${dlLabel(s.deadline,s.done)}`:'')}${!s.done&&sds==='overdue'?' ⚠️':''}</div>
             </div>
             <div class="g-rtl">
               ${gridLines()}
@@ -3404,7 +3428,40 @@ function rGantt(){
               ${barOrPill}
             </div>
           </div>`;
-        });
+        }
+
+        const hasRooms=stages.some(s=>s.room);
+        if(hasRooms){
+          // Группируем по помещению, сохраняя порядок первого появления комнаты
+          const roomOrder=[];
+          const roomMap={};
+          stages.forEach(s=>{
+            const r=s.room||'';
+            if(!roomMap[r]){roomMap[r]=[];roomOrder.push(r);}
+            roomMap[r].push(s);
+          });
+          roomOrder.forEach(room=>{
+            const rs=roomMap[room];
+            if(room){
+              const rdone=rs.filter(s=>s.done).length;
+              const rod=rs.filter(s=>!s.done&&s.deadline&&s.deadline<TODAY()).length;
+              html+=`<div class="g-room-hdr">
+                <span>🚪 ${room}</span>
+                <span class="g-room-badge">${rdone}/${rs.length} эт.</span>
+                ${rod>0?`<span class="g-room-badge" style="background:var(--red-bg);border-color:var(--red-bd);color:var(--red)">⚠ ${rod}</span>`:''}
+              </div>`;
+            }
+            rs.forEach((s,idx)=>{
+              const prevDead=s.startDate?null:(idx===0?(p.start||null):rs[idx-1].deadline);
+              renderStageRow(s,prevDead,!!room);
+            });
+          });
+        } else {
+          stages.forEach((s,idx)=>{
+            const prevDead=idx===0?(p.start||null):stages[idx-1].deadline;
+            renderStageRow(s,prevDead,false);
+          });
+        }
       } else if(expanded&&!stages.length){
         html+=`<div class="g-subrow">
           <div class="g-rlabel" style="padding-left:30px;cursor:default">
@@ -3520,27 +3577,36 @@ function _gUp(e){
     const nd=new Date(new Date(_gDrag.origDead).getTime()+ms).toISOString().slice(0,10);
     // Сохраняем в стек для отмены и применяем
     if(_gDrag.type==='stage'&&_gCascade){
-      // Каскад: сдвигаем все последующие этапы того же проекта
+      // Каскад: если у этапа есть помещение — сдвигаем только этапы в том же помещении;
+      // иначе — все последующие этапы проекта
       const pid=obj.pid;
-      const affected=D.stages.filter(s=>s.pid===pid&&!s.done&&s.deadline&&s.deadline>=_gDrag.origDead);
-      const cascSnap={type:'cascade',snaps:affected.map(s=>({id:s.id,deadline:s.deadline}))};
+      const room=obj.room;
+      const affected=D.stages.filter(s=>{
+        if(s.pid!==pid||s.done||!s.deadline)return false;
+        if(room)return s.room===room&&s.deadline>=_gDrag.origDead;
+        return s.deadline>=_gDrag.origDead;
+      });
+      const cascSnap={type:'cascade',snaps:affected.map(s=>({id:s.id,deadline:s.deadline,startDate:s.startDate}))};
       _gUndo.push(cascSnap);
       if(_gUndo.length>10)_gUndo.shift();
       affected.forEach(s=>{
         const oldD=s.deadline;
         s.deadline=new Date(new Date(s.deadline).getTime()+ms).toISOString().slice(0,10);
+        if(s.startDate)s.startDate=new Date(new Date(s.startDate).getTime()+ms).toISOString().slice(0,10);
         if(!s.deadlineHistory)s.deadlineHistory=[];
         s.deadlineHistory.push({from:oldD,to:s.deadline,by:D.currentUser?.name||'',at:new Date().toISOString()});
       });
-      addLog(`📅 Каскад: этап «${obj.name}» и ${affected.length-1} след. → ${days>0?'+':''}${days} дн.`,pid);
+      addLog(`📅 Каскад${room?' ('+room+')':''}: «${obj.name}» и ${affected.length-1} след. → ${days>0?'+':''}${days} дн.`,pid);
     } else {
       const snap={type:_gDrag.type,id:_gDrag.id,fields:{deadline:_gDrag.origDead}};
       if(_gDrag.type==='proj'&&_gDrag.origStart)snap.fields.start=_gDrag.origStart;
+      if(_gDrag.type==='stage'&&_gDrag.obj.startDate)snap.fields.startDate=_gDrag.obj.startDate;
       _gUndo.push(snap);
       if(_gUndo.length>10)_gUndo.shift();
       if(_gDrag.type==='stage'){
         if(!obj.deadlineHistory)obj.deadlineHistory=[];
         obj.deadlineHistory.push({from:_gDrag.origDead,to:nd,by:D.currentUser?.name||'',at:new Date().toISOString()});
+        if(obj.startDate)obj.startDate=new Date(new Date(obj.startDate).getTime()+ms).toISOString().slice(0,10);
         obj.deadline=nd;
         addLog(`📅 Этап «${obj.name}» → ${fdate(nd,true)}`,obj.pid);
       } else {
@@ -3564,9 +3630,9 @@ function gUndoDrag(){
   if(!_gUndo.length)return;
   const snap=_gUndo.pop();
   if(snap.type==='cascade'){
-    snap.snaps.forEach(({id,deadline})=>{
+    snap.snaps.forEach(({id,deadline,startDate})=>{
       const s=D.stages.find(s=>s.id===id);
-      if(s)s.deadline=deadline;
+      if(s){s.deadline=deadline;if(startDate!==undefined)s.startDate=startDate;}
     });
     addLog(`↩ Отменён каскадный перенос`,null);
   } else {

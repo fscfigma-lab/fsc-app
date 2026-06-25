@@ -3275,6 +3275,13 @@ function rGantt(){
     fHTML+=`<span style="width:1px;height:16px;background:var(--b2);margin:0 2px;flex-shrink:0"></span>`;
     fHTML+=`<button class="g-fchip ${gStageFilter==='has'?'gfa':''}" onclick="gSetStageF('has')" title="Только проекты с этапами">📋 С этапами</button>`;
     fHTML+=`<button class="g-fchip ${gStageFilter==='no'?'gfa':''}" onclick="gSetStageF('no')" title="Проекты без этапов — нужно заполнить">⬜ Без этапов</button>`;
+    if(isAdmin()){
+      const hasDemo=D.stages.some(s=>s._demo);
+      fHTML+=`<span style="width:1px;height:16px;background:var(--b2);margin:0 2px;flex-shrink:0"></span>`;
+      fHTML+=hasDemo
+        ?`<button class="g-fchip" onclick="removeDemoRooms()" style="color:var(--red)" title="Удалить демо этапы">🗑 Демо</button>`
+        :`<button class="g-fchip" onclick="insertDemoRooms()" title="Добавить демо этапы с разбивкой по помещениям">🏠 Демо</button>`;
+    }
     fb.innerHTML=fHTML;
   }
 
@@ -3528,6 +3535,65 @@ function gSetStageF(f){gStageFilter=gStageFilter===f?'':f;rGantt();}
 function gExpandAll(){visibleProjects().forEach(p=>gExpanded.add(p.id));rGantt();}
 function gCollapseAll(){gExpanded.clear();rGantt();}
 function gToggleCascade(){_gCascade=!_gCascade;rGantt();toast(_gCascade?'🔗 Каскад включён — следующие этапы сдвигаются вместе':'Каскад выключен','ok');}
+
+function insertDemoRooms(){
+  // Выбираем проект — первый без этапов, иначе первый видимый
+  const projs=visibleProjects();
+  if(!projs.length){toast('Нет проектов','err');return;}
+  const target=projs.find(p=>!D.stages.some(s=>s.pid===p.id))||projs[0];
+
+  // Удаляем старые демо-этапы этого проекта если они есть
+  D.stages=D.stages.filter(s=>s.pid!==target.id||!s._demo);
+
+  function dt(offsetDays){
+    const d=new Date();d.setDate(d.getDate()+offsetDays);
+    return d.toISOString().slice(0,10);
+  }
+
+  // Три помещения с реальными фазами (как в MS Project Jumeirah 128)
+  const demoData=[
+    {room:'-101/-102 Hall',color:'#D4A853',stages:[
+      {icon:'📐',name:'Замеры',          startDate:dt(0), deadline:dt(2)},
+      {icon:'🏭',name:'Изготовление',    startDate:dt(3), deadline:dt(17)},
+      {icon:'🔨',name:'Монтаж',          startDate:dt(18),deadline:dt(30)},
+      {icon:'✨',name:'Полировка',       startDate:dt(31),deadline:dt(38)},
+    ]},
+    {room:'-104 SPA & Lounge',stages:[
+      {icon:'📐',name:'Замеры',          startDate:dt(0), deadline:dt(3)},
+      {icon:'📝',name:'Проектирование',  startDate:dt(4), deadline:dt(10)},
+      {icon:'🏭',name:'Изготовление',    startDate:dt(11),deadline:dt(23)},
+      {icon:'🔨',name:'Монтаж',          startDate:dt(24),deadline:dt(35)},
+      {icon:'✨',name:'Полировка',       startDate:dt(36),deadline:dt(44)},
+    ]},
+    {room:'-116 Garage',stages:[
+      {icon:'📐',name:'Замеры',          startDate:dt(5), deadline:dt(7)},
+      {icon:'🏭',name:'Изготовление',    startDate:dt(8), deadline:dt(19)},
+      {icon:'🔨',name:'Монтаж',          startDate:dt(20),deadline:dt(28)},
+    ]},
+  ];
+
+  let order=D.stages.filter(s=>s.pid===target.id).reduce((m,s)=>Math.max(m,s.order||0),0);
+  demoData.forEach(({room,stages})=>{
+    stages.forEach(s=>{
+      order++;
+      D.stages.push({id:uid(),pid:target.id,name:s.name,icon:s.icon,
+        startDate:s.startDate,deadline:s.deadline,room,done:false,order,_demo:true});
+    });
+  });
+
+  addLog(`🏠 Демо этапы по помещениям добавлены в «${target.name}»`,target.id);
+  save();
+  gExpanded.add(target.id);
+  rGantt();
+  toast(`🏠 Демо в «${target.name}» — раскрой проект чтобы увидеть помещения`,'ok');
+}
+
+function removeDemoRooms(){
+  const changed=D.stages.filter(s=>s._demo).map(s=>s.pid);
+  D.stages=D.stages.filter(s=>!s._demo);
+  if(!changed.length){toast('Нет демо данных','err');return;}
+  save();rGantt();toast('🗑 Демо этапы удалены','ok');
+}
 
 function gBarDown(e,type,id){
   if(e.button!==0)return;

@@ -291,7 +291,7 @@ body{background:var(--bg)}
   padding:1px 5px;border-radius:3px;pointer-events:none}
 .g-bar{position:absolute;height:26px;border-radius:6px;border:1px solid var(--b2);
   display:flex;align-items:center;padding:0 10px;font-size:11px;overflow:hidden;
-  cursor:grab;transition:all .2s;white-space:nowrap;font-weight:500}
+  cursor:grab;transition:opacity .15s,box-shadow .15s,filter .15s;white-space:nowrap;font-weight:500}
 .g-bar:hover{z-index:10;overflow:visible;min-width:max-content;box-shadow:var(--shadow-md);filter:brightness(1.15)}
 .g-bar:hover::after{content:'⠿⠿';position:absolute;right:5px;top:50%;transform:translateY(-50%);font-size:10px;opacity:.5;pointer-events:none}
 .g-bar.on-track{background:rgba(201,149,42,0.10);border-color:var(--acc-bd);color:var(--acc)}
@@ -375,7 +375,7 @@ body{background:var(--bg)}
 /* Stage bar */
 .g-sbar{position:absolute;height:12px;border-radius:3px;border:1px solid;
   display:flex;align-items:center;padding:0 4px;font-size:9px;font-weight:600;
-  white-space:nowrap;overflow:hidden;cursor:grab;transition:all .15s}
+  white-space:nowrap;overflow:hidden;cursor:grab;transition:opacity .15s,box-shadow .15s,filter .15s}
 .g-sbar:not(.sdone):hover{z-index:10;overflow:visible;box-shadow:0 2px 8px rgba(0,0,0,0.15);filter:brightness(1.2);height:16px;top:-2px}
 .g-sbar.sdone{background:var(--grn-bg);border-color:var(--grn-bd);color:var(--grn)}
 .g-sbar.sod{background:var(--red-bg);border-color:var(--red-bd);color:var(--red)}
@@ -3787,7 +3787,7 @@ function rGantt(){
           const pillLbl=s.done?'✓ выполнен':'⚠ просрочен';
           const barOrPill=isPast
             ?`<div class="g-sbar ${pillCls}" style="left:0%;width:auto;padding:0 8px;cursor:${s.done?'default':'pointer'};min-width:fit-content" ${!s.done?`onclick="openStageModal('${p.id}','${s.id}')"`:''}>${pillLbl} · ${fdate(s.deadline,true)}</div>`
-            :`<div class="g-sbar ${sBarCls}" style="left:${sStart.toFixed(1)}%;width:${sW.toFixed(1)}%;${!s.done?'cursor:grab':''}" ${!s.done?`onmousedown="gBarDown(event,'stage','${s.id}')"`:''}  title="${s.name}${s.startDate?'&#10;Начало: '+fdate(s.startDate,true):''}&#10;Дедлайн: ${fdate(s.deadline,true)}&#10;${s.done?'✓ Выполнен':(dlLabel(s.deadline,false)||'В работе')}${!s.done?'&#10;Перетащи чтобы изменить срок':''}">${sW>8?sLabel+s.name.slice(0,20):sLabel}</div>`;
+            :`<div class="g-sbar ${sBarCls}" data-sid="${s.id}" data-ol="${sStart.toFixed(2)}" data-ow="${sW.toFixed(2)}" data-has-start="${s.startDate?'1':'0'}" style="left:${sStart.toFixed(1)}%;width:${sW.toFixed(1)}%;${!s.done?'cursor:grab':''}" ${!s.done?`onmousedown="gBarDown(event,'stage','${s.id}')"`:''}  title="${s.name}${s.startDate?'&#10;Начало: '+fdate(s.startDate,true):''}&#10;Дедлайн: ${fdate(s.deadline,true)}&#10;${s.done?'✓ Выполнен':(dlLabel(s.deadline,false)||'В работе')}${!s.done?'&#10;Перетащи чтобы изменить срок':''}">${sW>8?sLabel+s.name.slice(0,20):sLabel}</div>`;
           html+=`<div class="g-subrow${inRoom?' in-room':''}">
             <div class="g-rlabel" onclick="toggleStage('${s.id}',event)" title="${s.done?'Нажми чтобы отменить выполнение':'Отметить этап выполненным'}">
               <div class="g-sn">${s.done?'✓ ':''}${s.icon||'📋'} ${s.name}</div>
@@ -3967,23 +3967,69 @@ function gBarDown(e,type,id){
   const rtl=e.currentTarget.closest('.g-rtl');
   if(!rtl)return;
   const rect=rtl.getBoundingClientRect();
-  _gDrag={type,id,obj,bar:e.currentTarget,
+  const bar=e.currentTarget;
+  // hasStart: stage с startDate или project с start — оба конца двигаются вместе (translate)
+  // без hasStart — только правый конец (deadline), ширина меняется
+  const hasStart=type==='stage'?!!obj.startDate:!!obj.start;
+  const origLeft=parseFloat(bar.dataset.ol||bar.style.left)||0;
+  const origWidth=parseFloat(bar.dataset.ow||bar.style.width)||0;
+  bar.style.transition='none';
+  bar.style.willChange='left,width';
+  _gDrag={type,id,obj,bar,
     startX:e.clientX,cw:rect.width,
-    origDead:type==='stage'?obj.deadline:obj.deadline,
-    origStart:type==='proj'?obj.start:null,moved:false};
-  document.addEventListener('mousemove',_gMove);
+    origDead:obj.deadline,
+    origStart:type==='proj'?obj.start:(obj.startDate||null),
+    origLeft,origWidth,hasStart,
+    moved:false};
+  document.addEventListener('mousemove',_gMove,{passive:true});
   document.addEventListener('mouseup',_gUp);
   document.body.style.userSelect='none';
+}
+
+function _applyBarShift(barEl,pctShift,hasStart){
+  const ol=parseFloat(barEl.dataset.ol||barEl.style.left)||0;
+  const ow=parseFloat(barEl.dataset.ow||barEl.style.width)||0;
+  if(hasStart){
+    // оба конца двигаются → translate
+    barEl.style.left=(ol+pctShift).toFixed(2)+'%';
+  } else {
+    // только deadline → ширина меняется
+    barEl.style.width=Math.max(0.5,ow+pctShift).toFixed(2)+'%';
+  }
 }
 
 function _gMove(e){
   if(!_gDrag)return;
   const dx=e.clientX-_gDrag.startX;
-  if(Math.abs(dx)<4)return;
+  if(Math.abs(dx)<2)return;
   _gDrag.moved=true;
-  _gDrag.bar.style.opacity='0.65';
-  _gDrag.bar.style.cursor='grabbing';
+  const pctShift=dx/_gDrag.cw*100;
   const days=Math.round(dx/_gDrag.cw*_gVP.total);
+
+  // Сдвигаем перетаскиваемый бар
+  _gDrag.bar.style.opacity='0.8';
+  _gDrag.bar.style.cursor='grabbing';
+  _applyBarShift(_gDrag.bar,pctShift,_gDrag.hasStart);
+
+  // Каскадный предпросмотр — двигаем все последующие этапы визуально
+  if(_gDrag.type==='stage'&&_gCascade){
+    const pid=_gDrag.obj.pid;
+    const room=_gDrag.obj.room;
+    const origDead=_gDrag.origDead;
+    D.stages.forEach(s=>{
+      if(s.id===_gDrag.id||s.done||!s.deadline)return;
+      if(s.pid!==pid)return;
+      if(room&&s.room!==room)return;
+      if(s.deadline<origDead)return;
+      const barEl=document.querySelector(`.g-sbar[data-sid="${s.id}"]`);
+      if(!barEl)return;
+      barEl.style.transition='none';
+      barEl.style.opacity='0.5';
+      _applyBarShift(barEl,pctShift,barEl.dataset.hasStart==='1');
+    });
+  }
+
+  // Тултип с датой
   const nd=new Date(new Date(_gDrag.origDead).getTime()+days*86400000).toISOString().slice(0,10);
   let tip=document.getElementById('g-dtip');
   if(!tip){
@@ -3995,6 +4041,20 @@ function _gMove(e){
   tip.style.left=(e.clientX-tip.offsetWidth/2)+'px';
   tip.style.top=(e.clientY-44)+'px';
   tip.style.display='block';
+}
+
+function _gCleanupDragBars(){
+  // Восстанавливаем transition и opacity всех затронутых баров
+  if(_gDrag){
+    _gDrag.bar.style.transition='';
+    _gDrag.bar.style.opacity='';
+    _gDrag.bar.style.cursor='';
+    _gDrag.bar.style.willChange='';
+  }
+  document.querySelectorAll('.g-sbar[data-sid]').forEach(el=>{
+    el.style.transition='';
+    el.style.opacity='';
+  });
 }
 
 function _gUp(e){
@@ -4045,10 +4105,12 @@ function _gUp(e){
         addLog(`📅 ${obj.name}: сроки сдвинуты ${days>0?'+':''}${days} дн.`,obj.id);
       }
     }
+    _gCleanupDragBars();
     save();rGantt();
     _gShowUndoBtn();
+  } else {
+    _gCleanupDragBars();
   }
-  _gDrag.bar.style.opacity='';_gDrag.bar.style.cursor='grab';
   document.removeEventListener('mousemove',_gMove);
   document.removeEventListener('mouseup',_gUp);
   document.body.style.userSelect='';

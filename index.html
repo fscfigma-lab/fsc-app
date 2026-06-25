@@ -3084,7 +3084,8 @@ let gGroupByMgr=false;
 let gMgrFilter='';
 let _gVP={total:1,pStartMs:0};
 let _gDrag=null;
-let _gUndo=[]; // стек отмен [{type,id,fields:{field:oldVal}}]
+let _gUndo=[]; // стек отмен [{type,id,fields:{field:oldVal}}] или {type:'cascade',snaps:[]}
+let _gCascade=false;
 
 function gSetZoom(z){
   gZoom=z;gOff=0;
@@ -3134,6 +3135,7 @@ function rGantt(){
     fHTML+=`<button class="g-fchip ${gGroupByMgr?'gfg':''}" onclick="gToggleGroup()" title="Группировать по менеджеру">👤 По РП</button>`;
     fHTML+=`<button class="g-fchip gfn" onclick="gExpandAll()" title="Раскрыть все этапы">⊞ Все этапы</button>`;
     fHTML+=`<button class="g-fchip gfn" onclick="gCollapseAll()" title="Свернуть все">⊟ Свернуть</button>`;
+    fHTML+=`<button class="g-fchip ${_gCascade?'gfg':''}" onclick="gToggleCascade()" title="Каскадный сдвиг: следующие этапы двигаются вместе">🔗 Каскад</button>`;
     fb.innerHTML=fHTML;
   }
 
@@ -3318,6 +3320,7 @@ function gToggleGroup(){gGroupByMgr=!gGroupByMgr;rGantt();}
 function gSetMgrF(m){gMgrFilter=m;rGantt();}
 function gExpandAll(){visibleProjects().forEach(p=>gExpanded.add(p.id));rGantt();}
 function gCollapseAll(){gExpanded.clear();rGantt();}
+function gToggleCascade(){_gCascade=!_gCascade;rGantt();toast(_gCascade?'🔗 Каскад включён — следующие этапы сдвигаются вместе':'Каскад выключен','ok');}
 
 function gBarDown(e,type,id){
   if(e.button!==0)return;
@@ -3365,19 +3368,29 @@ function _gUp(e){
     const obj=_gDrag.obj;
     const ms=days*86400000;
     const nd=new Date(new Date(_gDrag.origDead).getTime()+ms).toISOString().slice(0,10);
-    // Сохраняем в стек для отмены
-    const snap={type:_gDrag.type,id:_gDrag.id,fields:{deadline:_gDrag.origDead}};
-    if(_gDrag.type==='proj'&&_gDrag.origStart)snap.fields.start=_gDrag.origStart;
-    _gUndo.push(snap);
-    if(_gUndo.length>10)_gUndo.shift();
-    // Применяем
-    if(_gDrag.type==='stage'){
-      obj.deadline=nd;
-      addLog(`📅 Этап «${obj.name}» → ${fdate(nd,true)}`,obj.pid);
+    // Сохраняем в стек для отмены и применяем
+    if(_gDrag.type==='stage'&&_gCascade){
+      // Каскад: сдвигаем все последующие этапы того же проекта
+      const pid=obj.pid;
+      const affected=D.stages.filter(s=>s.pid===pid&&!s.done&&s.deadline&&s.deadline>=_gDrag.origDead);
+      const cascSnap={type:'cascade',snaps:affected.map(s=>({id:s.id,deadline:s.deadline}))};
+      _gUndo.push(cascSnap);
+      if(_gUndo.length>10)_gUndo.shift();
+      affected.forEach(s=>{s.deadline=new Date(new Date(s.deadline).getTime()+ms).toISOString().slice(0,10);});
+      addLog(`📅 Каскад: этап «${obj.name}» и ${affected.length-1} след. → ${days>0?'+':''}${days} дн.`,pid);
     } else {
-      if(_gDrag.origStart)obj.start=new Date(new Date(_gDrag.origStart).getTime()+ms).toISOString().slice(0,10);
-      obj.deadline=nd;
-      addLog(`📅 ${obj.name}: сроки сдвинуты ${days>0?'+':''}${days} дн.`,obj.id);
+      const snap={type:_gDrag.type,id:_gDrag.id,fields:{deadline:_gDrag.origDead}};
+      if(_gDrag.type==='proj'&&_gDrag.origStart)snap.fields.start=_gDrag.origStart;
+      _gUndo.push(snap);
+      if(_gUndo.length>10)_gUndo.shift();
+      if(_gDrag.type==='stage'){
+        obj.deadline=nd;
+        addLog(`📅 Этап «${obj.name}» → ${fdate(nd,true)}`,obj.pid);
+      } else {
+        if(_gDrag.origStart)obj.start=new Date(new Date(_gDrag.origStart).getTime()+ms).toISOString().slice(0,10);
+        obj.deadline=nd;
+        addLog(`📅 ${obj.name}: сроки сдвинуты ${days>0?'+':''}${days} дн.`,obj.id);
+      }
     }
     save();rGantt();
     _gShowUndoBtn();
@@ -3393,12 +3406,20 @@ function _gUp(e){
 function gUndoDrag(){
   if(!_gUndo.length)return;
   const snap=_gUndo.pop();
-  const obj=snap.type==='stage'
-    ?D.stages.find(s=>s.id===snap.id)
-    :D.projects.find(p=>p.id===snap.id);
-  if(!obj)return;
-  Object.assign(obj,snap.fields);
-  addLog(`↩ Отменено изменение сроков`,snap.type==='proj'?snap.id:obj.pid);
+  if(snap.type==='cascade'){
+    snap.snaps.forEach(({id,deadline})=>{
+      const s=D.stages.find(s=>s.id===id);
+      if(s)s.deadline=deadline;
+    });
+    addLog(`↩ Отменён каскадный перенос`,null);
+  } else {
+    const obj=snap.type==='stage'
+      ?D.stages.find(s=>s.id===snap.id)
+      :D.projects.find(p=>p.id===snap.id);
+    if(!obj)return;
+    Object.assign(obj,snap.fields);
+    addLog(`↩ Отменено изменение сроков`,snap.type==='proj'?snap.id:obj.pid);
+  }
   save();rGantt();
   if(!_gUndo.length){const b=document.getElementById('g-undo-btn');if(b)b.remove();}
 }

@@ -142,17 +142,3 @@ jobs:
 
             console.log(`Готово. Критических: ${criticalOverdue.length}`);
 
-      - name: Отправить push из очереди (утром)
-        if: ${{ github.event_name != 'schedule' || github.event.schedule == '0 5 * * *' }}
-        uses: actions/github-script@v7
-        env:
-          GH_TOKEN: ${{ github.token }}
-        with:
-          script: |
-            await github.rest.actions.createWorkflowDispatch({
-              owner: 'fscfigma-lab',
-              repo: 'fsc-app',
-              workflow_id: 'web-push.yml',
-              ref: 'main'
-            });
-            console.log('web-push.yml запущен');

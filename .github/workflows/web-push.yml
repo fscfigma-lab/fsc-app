@@ -95,3 +95,130 @@ jobs:
 
             console.log(`Итого: отправлено ${sent}, ошибок ${failed}`);
             if (failed > 0 && sent === 0) core.setFailed(`Все отправки провалились: ${failed} ошибок`);
+
+      - name: Ежедневные уведомления (Telegram + очередь)
+        uses: actions/github-script@v7
+        env:
+          SUPA_URL: 'https://yhsedgaimfgbcqbjltkv.supabase.co'
+          SUPA_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inloc2VkZ2FpbWZnYmNxYmpsdGt2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMjQxOTMsImV4cCI6MjA5NjYwMDE5M30.aThP2KxMEmw0DHf0PPIMF82SiqSLBRbA9Q-HuHENxIE'
+        with:
+          script: |
+            const SUPA_URL = process.env.SUPA_URL;
+            const SUPA_KEY = process.env.SUPA_KEY;
+            const headers = { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${SUPA_KEY}` };
+
+            const now = new Date();
+            const utcHour = now.getUTCHours();
+            const today = now.toISOString().slice(0, 10);
+            const isMorning = utcHour === 6;   // 09:00 МСК
+            const isEvening = utcHour === 15;  // 18:00 МСК
+            if (!isMorning && !isEvening) { console.log(`Не время (${utcHour}:xx UTC) — пропуск`); return; }
+
+            // Проверяем — уже отправляли сегодня этот слот?
+            const stRes = await fetch(`${SUPA_URL}/rest/v1/app_data?id=eq.notify_state&select=data`, { headers });
+            const stRows = await stRes.json();
+            const state = stRows?.[0]?.data || {};
+            const slotKey = isMorning ? 'last_morning' : 'last_evening';
+            if (state[slotKey] === today) {
+              console.log(`${slotKey} уже отправлялось сегодня (${today}) — пропуск`);
+              return;
+            }
+
+            // Загружаем данные
+            const res = await fetch(`${SUPA_URL}/rest/v1/app_data?id=eq.main&select=data`, { headers });
+            const rows = await res.json();
+            if (!rows?.length) { console.log('Нет данных'); return; }
+            const D = rows[0].data;
+
+            const BOT_TOKEN = D.tgBotToken;
+            const TG_ADMIN = D.tgAdminId;
+
+            async function tgSend(chatId, text) {
+              if (!BOT_TOKEN || !chatId) return;
+              const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' })
+              });
+              const j = await r.json();
+              console.log(`TG → ${chatId}: ${j.ok ? '✅' : '❌ ' + j.description}`);
+            }
+
+            const fmt = d => d ? d.slice(5).replace('-', '/') : '?';
+            const daysDiff = d => Math.floor((new Date(today) - new Date(d)) / 86400000);
+            const tasks = D.tasks || [];
+            const projects = D.projects || [];
+            const stages = D.stages || [];
+            const getProjName = pid => projects.find(p => p.id === pid)?.name || '—';
+            const messages = [];
+
+            // Высокий приоритет просрочен (утро + вечер)
+            const highOverdue = tasks.filter(t =>
+              !t.done && (t.prio === 'high' || t.prio === 'critical') && t.dead && t.dead <= today
+            );
+            for (const t of highOverdue) {
+              const days = daysDiff(t.dead);
+              const proj = getProjName(t.pid);
+              if (days >= 2) {
+                await tgSend(TG_ADMIN,
+                  `🔴 <b>Высокий приоритет, просрочено ${days} дн.</b>\n«${t.name||t.title}»\nПроект: ${proj}\nИсполнитель: ${t.who||'не назначен'}\nДедлайн: ${fmt(t.dead)}`
+                );
+              }
+            }
+
+            // Только утром — очередь push
+            if (isMorning) {
+              const overdueAll = tasks.filter(t => !t.done && t.dead && t.dead < today);
+              const todayAll = tasks.filter(t => !t.done && t.dead === today);
+              const overdueStages = stages.filter(s => !s.done && s.deadline && s.deadline < today);
+              const todayStages = stages.filter(s => !s.done && s.deadline === today);
+
+              if (overdueAll.length > 0) {
+                const lines = overdueAll.slice(0,5).map(t=>`• ${t.name||t.title} (${t.who||'—'}) [${fmt(t.dead)}]`);
+                if (overdueAll.length>5) lines.push(`...и ещё ${overdueAll.length-5}`);
+                messages.push({title:`⚠️ Просрочено задач: ${overdueAll.length}`, body:lines.join('\n'), tag:'warning', ts:Date.now()});
+              }
+              if (todayAll.length > 0) {
+                const lines = todayAll.slice(0,5).map(t=>`• ${t.name||t.title} (${t.who||'—'})`);
+                messages.push({title:`📅 Дедлайн сегодня: ${todayAll.length} задач`, body:lines.join('\n'), tag:'today', ts:Date.now()});
+              }
+              if (overdueStages.length > 0) {
+                const lines = overdueStages.slice(0,5).map(s=>`• ${s.name} — ${getProjName(s.pid)} [${fmt(s.deadline)}]`);
+                if (overdueStages.length>5) lines.push(`...и ещё ${overdueStages.length-5}`);
+                messages.push({title:`🏗 Просрочено этапов: ${overdueStages.length}`, body:lines.join('\n'), tag:'warning', ts:Date.now()});
+              }
+              if (todayStages.length > 0) {
+                const lines = todayStages.slice(0,5).map(s=>`• ${s.name} — ${getProjName(s.pid)}`);
+                messages.push({title:`📌 Срок этапа сегодня: ${todayStages.length}`, body:lines.join('\n'), tag:'today', ts:Date.now()});
+              }
+
+              // Пятница — еженедельный отчёт
+              if (now.getUTCDay() === 5) {
+                const active = projects.filter(p=>p.status==='active').length;
+                const overdue = projects.filter(p=>p.status==='overdue').length;
+                const done = projects.filter(p=>p.status==='done').length;
+                const avgPct = projects.length ? Math.round(projects.reduce((s,p)=>s+(p.pct||0),0)/projects.length) : 0;
+                messages.push({title:'📊 Итоги недели FSC', body:`Активных: ${active} | Просрочено: ${overdue} | Завершено: ${done}\nСредний прогресс: ${avgPct}%\nОткрытых задач: ${tasks.filter(t=>!t.done).length}`, tag:'weekly', ts:Date.now()});
+              }
+
+              if (messages.length > 0) {
+                const qRes = await fetch(`${SUPA_URL}/rest/v1/app_data?id=eq.push_queue&select=data`, { headers });
+                const qRows = await qRes.json();
+                const queue = [...(qRows?.[0]?.data || []), ...messages];
+                await fetch(`${SUPA_URL}/rest/v1/app_data`, {
+                  method: 'POST',
+                  headers: { ...headers, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
+                  body: JSON.stringify({ id: 'push_queue', data: queue })
+                });
+                console.log(`Добавлено ${messages.length} уведомлений в очередь`);
+              }
+            }
+
+            // Сохраняем отметку — этот слот отправлен
+            state[slotKey] = today;
+            await fetch(`${SUPA_URL}/rest/v1/app_data`, {
+              method: 'POST',
+              headers: { ...headers, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
+              body: JSON.stringify({ id: 'notify_state', data: state })
+            });
+            console.log(`✅ ${slotKey} = ${today} сохранено`);

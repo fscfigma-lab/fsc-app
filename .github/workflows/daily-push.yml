@@ -1,144 +1,15 @@
-name: 🔔 Ежедневные уведомления
+name: 🔔 Ежедневные уведомления (резерв)
 
 on:
-  schedule:
-    - cron: '0 6 * * *'    # 09:00 МСК — утро
-    - cron: '0 15 * * *'   # 18:00 МСК — вечер (только критические)
   workflow_dispatch:
 
+# Этот файл оставлен для ручного запуска при необходимости.
+# Основная логика уведомлений перенесена в web-push.yml —
+# он запускается каждые 30 минут и сам проверяет время (09:00 и 18:00 МСК).
+
 jobs:
-  notify:
+  trigger:
     runs-on: ubuntu-latest
     steps:
-      - name: Проверить дедлайны и отправить уведомления
-        uses: actions/github-script@v7
-        env:
-          SUPA_URL: 'https://yhsedgaimfgbcqbjltkv.supabase.co'
-          SUPA_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inloc2VkZ2FpbWZnYmNxYmpsdGt2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMjQxOTMsImV4cCI6MjA5NjYwMDE5M30.aThP2KxMEmw0DHf0PPIMF82SiqSLBRbA9Q-HuHENxIE'
-        with:
-          script: |
-            const SUPA_URL = process.env.SUPA_URL;
-            const SUPA_KEY = process.env.SUPA_KEY;
-            const headers = { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${SUPA_KEY}` };
-
-            const res = await fetch(`${SUPA_URL}/rest/v1/app_data?id=eq.main&select=data`, { headers });
-            const rows = await res.json();
-            if (!rows?.length) { console.log('Нет данных'); return; }
-            const D = rows[0].data;
-
-            const BOT_TOKEN = D.tgBotToken;
-            const TG_ADMIN = D.tgAdminId;
-            const TG_TECHDIR = D.tgTechDirId;
-
-            const utcHour = new Date().getUTCHours();
-            const isEvening = utcHour >= 14; // 15:00 UTC = 18:00 МСК
-
-            // Telegram helper
-            async function tgSend(chatId, text) {
-              if (!BOT_TOKEN || !chatId) return;
-              const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' })
-              });
-              const j = await r.json();
-              console.log(`TG → ${chatId}: ${j.ok ? '✅' : '❌ ' + j.description}`);
-            }
-
-            const today = new Date().toISOString().slice(0, 10);
-            const fmt = d => d ? d.slice(5).replace('-', '/') : '?';
-            const daysDiff = d => Math.floor((new Date(today) - new Date(d)) / 86400000);
-
-            const tasks = D.tasks || [];
-            const projects = D.projects || [];
-            const stages = D.stages || [];
-            const team = D.team || [];
-            const getProjName = pid => projects.find(p => p.id === pid)?.name || '—';
-            const getTeamMember = name => team.find(m => m.name === name);
-
-            const messages = []; // для push_queue
-
-            // ── Критические задачи (утро + вечер) ────────────────────────────
-            const criticalOverdue = tasks.filter(t =>
-              !t.done && (t.prio === 'high' || t.prio === 'critical') && t.dead && t.dead <= today
-            );
-
-            for (const t of criticalOverdue) {
-              const days = daysDiff(t.dead);
-              const proj = getProjName(t.pid);
-              const msg = `🚨 <b>КРИТИЧЕСКАЯ задача просрочена на ${days} дн.</b>\n«${t.title||t.name}»\nПроект: ${proj}\nИсполнитель: ${t.who||'не назначен'}\nДедлайн: ${fmt(t.dead)}`;
-
-              // Уведомление исполнителю
-              const member = getTeamMember(t.who);
-              if (member?.tgId) await tgSend(member.tgId, msg);
-
-              // Эскалация через 2 дня — только админ
-              if (days >= 2) {
-                await tgSend(TG_ADMIN, `⚠️ <b>Эскалация (${days} дн.)</b>\n` + msg.replace('🚨 ', ''));
-              }
-            }
-
-            // ── Только утром: остальные задачи и этапы ───────────────────────
-            if (!isEvening) {
-              // Высокий приоритет: эскалация админу через 3 дня
-              const highOverdue = tasks.filter(t =>
-                !t.done && t.prio === 'high' && t.dead && t.dead < today && daysDiff(t.dead) >= 3
-              );
-              for (const t of highOverdue) {
-                const days = daysDiff(t.dead);
-                const proj = getProjName(t.pid);
-                await tgSend(TG_ADMIN,
-                  `🔴 <b>Высокий приоритет, просрочено ${days} дн.</b>\n«${t.title||t.name}»\nПроект: ${proj}\nИсполнитель: ${t.who||'не назначен'}\nДедлайн: ${fmt(t.dead)}`
-                );
-              }
-
-              // Обычные просроченные → push_queue
-              const overdueAll = tasks.filter(t => !t.done && t.dead && t.dead < today);
-              const todayAll = tasks.filter(t => !t.done && t.dead === today);
-              const overdueStages = stages.filter(s => !s.done && s.deadline && s.deadline < today);
-              const todayStages = stages.filter(s => !s.done && s.deadline === today);
-
-              if (overdueAll.length > 0) {
-                const lines = overdueAll.slice(0,5).map(t=>`• ${t.title||t.name} (${t.who||'—'}) [${fmt(t.dead)}]`);
-                if (overdueAll.length>5) lines.push(`...и ещё ${overdueAll.length-5}`);
-                messages.push({title:`⚠️ Просрочено задач: ${overdueAll.length}`, body:lines.join('\n'), tag:'warning', ts:Date.now()});
-              }
-              if (todayAll.length > 0) {
-                const lines = todayAll.slice(0,5).map(t=>`• ${t.title||t.name} (${t.who||'—'})`);
-                messages.push({title:`📅 Дедлайн сегодня: ${todayAll.length} задач`, body:lines.join('\n'), tag:'today', ts:Date.now()});
-              }
-              if (overdueStages.length > 0) {
-                const lines = overdueStages.slice(0,5).map(s=>`• ${s.name} — ${getProjName(s.pid)} [${fmt(s.deadline)}]`);
-                if (overdueStages.length>5) lines.push(`...и ещё ${overdueStages.length-5}`);
-                messages.push({title:`🏗 Просрочено этапов: ${overdueStages.length}`, body:lines.join('\n'), tag:'warning', ts:Date.now()});
-              }
-              if (todayStages.length > 0) {
-                const lines = todayStages.slice(0,5).map(s=>`• ${s.name} — ${getProjName(s.pid)}`);
-                messages.push({title:`📌 Срок этапа сегодня: ${todayStages.length}`, body:lines.join('\n'), tag:'today', ts:Date.now()});
-              }
-
-              // Пятница — еженедельный отчёт
-              if (new Date().getDay() === 5) {
-                const active = projects.filter(p=>p.status==='active').length;
-                const overdue = projects.filter(p=>p.status==='overdue').length;
-                const done = projects.filter(p=>p.status==='done').length;
-                const avgPct = projects.length ? Math.round(projects.reduce((s,p)=>s+(p.pct||0),0)/projects.length) : 0;
-                messages.push({title:'📊 Итоги недели FSC', body:`Активных: ${active} | Просрочено: ${overdue} | Завершено: ${done}\nСредний прогресс: ${avgPct}%\nОткрытых задач: ${tasks.filter(t=>!t.done).length}`, tag:'weekly', ts:Date.now()});
-              }
-
-              // Добавляем в push_queue
-              if (messages.length > 0) {
-                const qRes = await fetch(`${SUPA_URL}/rest/v1/app_data?id=eq.push_queue&select=data`, { headers });
-                const qRows = await qRes.json();
-                const queue = [...(qRows?.[0]?.data || []), ...messages];
-                await fetch(`${SUPA_URL}/rest/v1/app_data`, {
-                  method: 'POST',
-                  headers: { ...headers, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
-                  body: JSON.stringify({ id: 'push_queue', data: queue })
-                });
-                console.log(`Добавлено ${messages.length} уведомлений в очередь`);
-              }
-            }
-
-            console.log(`Готово. Критических: ${criticalOverdue.length}`);
-
+      - name: Запустить web-push вручную
+        run: echo "Для ручного запуска уведомлений используй workflow_dispatch на web-push.yml"

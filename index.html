@@ -6117,7 +6117,7 @@ function buildVoiceContext(){
     open_project: openProj ? {id:openProj.id, name:openProj.name} : null,
     projects: vp.map(p=>({id:p.id,name:p.name,manager:p.manager,deadline:p.deadline,pct:p.pct||0,status:p.status,risk:calcRisk(p.id)})),
     tasks: vt.map(t=>({id:t.id,name:t.name,pid:t.pid,dead:t.dead,who:t.who,prio:t.prio})),
-    stages: vs.map(s=>({id:s.id,pid:s.pid,name:s.name,deadline:s.deadline,done:s.done})),
+    stages: vs.map(s=>({id:s.id,pid:s.pid,name:s.name,room:s.room||null,deadline:s.deadline,done:s.done})),
     team: D.team.map(u=>u.name)
   };
 }
@@ -6153,8 +6153,11 @@ ${JSON.stringify(ctx)}
 Создать задачу:
 {"action":"create_task","name":"...","deadline":"YYYY-MM-DD или null","project_id":"id или null","who":"имя из team или null","prio":"high/medium/normal"}
 
-Отметить этап выполненным/нет:
+Отметить этап выполненным/нет (по stage_id — найди по name+room+project в данных):
 {"action":"mark_stage","stage_id":"...","done":true/false}
+
+Перенести дедлайн этапа:
+{"action":"update_stage_deadline","stage_id":"...","deadline":"YYYY-MM-DD"}
 
 Обновить прогресс проекта:
 {"action":"update_pct","project_id":"...","pct":число}
@@ -6179,6 +6182,8 @@ ${JSON.stringify(ctx)}
 5. Ищи проекты и этапы по смыслу, не только по точному названию (Жуковка = Жуковка SJ, Барвиха = Барвиха Хиллс)
 6. Имена: Серёжа/Семенов = Семенов Михаил, Никита/Масленников = Масленников Никита, Таня/Татьяна/Леденева = Леденева Татьяна, Виктория/Журавлева = Журавлева Виктория
 7. Даты: "на пятницу" = ближайшая пятница от ${ctx.today}, "через неделю" = +7 дней, "завтра" = +1 день
+8. Помещения: "монтаж в SPA" = ищи stage с name="Монтаж" и room содержащим "SPA" (или "спа"). Если room не назван — бери единственный подходящий этап. Если несколько без уточнения помещения — уточни.
+9. Фраза "завершён", "готов", "сделан" → mark_stage done:true. "Отменить", "не выполнен", "снять отметку" → done:false. "Перенести на [дата]" → update_stage_deadline.
 8. Уточняй ТОЛЬКО если без этого буквально невозможно выполнить команду (нет имени, нет действия)
 9. Отвечай ТОЛЬКО JSON, без пояснений`;
 
@@ -6266,6 +6271,19 @@ function executeVoiceAction(cmd, original){
       p.deadline = cmd.deadline;
       save(); render(curPage);
       const msg = `📅 Дедлайн "${p.name}" перенесён на ${fdate(cmd.deadline)}`;
+      toast(msg, 'ok');
+      speak(msg);
+      break;
+    }
+
+    case 'update_stage_deadline': {
+      const s = D.stages.find(x=>x.id===cmd.stage_id);
+      if(!s){ toast('Этап не найден','err'); break; }
+      s.deadline = cmd.deadline;
+      save(); render(curPage);
+      const proj = D.projects.find(p=>p.id===s.pid);
+      const room = s.room ? ` (${s.room})` : '';
+      const msg = `📅 Этап "${s.name}"${room} перенесён на ${fdate(cmd.deadline)}${proj?' — '+proj.name:''}`;
       toast(msg, 'ok');
       speak(msg);
       break;

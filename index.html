@@ -2033,7 +2033,8 @@ function cleanOldBackups(){
 }
 
 function exportJSON(){
-  const cloudD=Object.assign({},D); delete cloudD.currentUser;
+  const cloudD=Object.assign({},D);
+  ['currentUser','anthropicKey','tgBotToken','tgAdminId','tgTechDirId','githubPat','ntfyTopic','gcalClientId'].forEach(k=>delete cloudD[k]);
   const blob=new Blob([JSON.stringify(cloudD,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');

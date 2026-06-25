@@ -300,6 +300,11 @@ body{background:var(--bg)}
 .g-baseline{position:absolute;height:4px;bottom:6px;border-radius:2px;
   background:rgba(150,150,150,.35);border:1px solid rgba(150,150,150,.4);
   pointer-events:none;z-index:1}
+/* Клиентский дедлайн — полупрозрачная серая полоса позади основного бара */
+.g-cbar{position:absolute;height:26px;border-radius:6px;
+  background:rgba(120,120,120,.13);border:1px dashed rgba(120,120,120,.35);
+  pointer-events:none;z-index:1}
+.g-cbar-warn{border-color:rgba(220,80,60,.5);background:rgba(220,80,60,.07)}
 /* Milestone — ромбик на дедлайне */
 .g-milestone{position:absolute;top:50%;transform:translate(-50%,-50%) rotate(45deg);
   width:10px;height:10px;border:2px solid currentColor;z-index:6;pointer-events:none}
@@ -1529,7 +1534,11 @@ body{background:var(--bg)}
       <div class="fg"><label class="fl">Руководитель проекта</label><select class="fi" id="p-mgr"></select></div>
       <div class="fg-row">
         <div><label class="fl">Дата договора</label><input type="date" class="fi" id="p-start"></div>
-        <div><label class="fl">Дедлайн сдачи *</label><input type="date" class="fi" id="p-dead"></div>
+        <div><label class="fl">Дедлайн внутренний *</label><input type="date" class="fi" id="p-dead"></div>
+      </div>
+      <div class="fg">
+        <label class="fl" title="Срок, обещанный клиенту — серая полоса на Ганте">📅 Дедлайн клиентский <span style="color:var(--t3);font-size:11px">(необяз.)</span></label>
+        <input type="date" class="fi" id="p-client-dead">
       </div>
       <div class="fg"><label class="fl">Сумма договора (₽)</label><input type="number" class="fi" id="p-budget" placeholder="0"></div>
       <div class="fg">
@@ -3223,7 +3232,8 @@ function rGantt(){
           ${gridLines()}
           ${todayLine}
           ${(p.bl_start||p.bl_deadline)?`<div class="g-baseline" style="left:${(pos(p.bl_start)||0).toFixed(1)}%;width:${Math.max(1,(pos(p.bl_deadline)||100)-(pos(p.bl_start)||0)).toFixed(1)}%" title="Базовая линия: ${fdate(p.bl_start,true)} → ${fdate(p.bl_deadline,true)}"></div>`:''}
-          ${ep>0&&sp<100?`<div class="g-bar ${cls}" style="left:${sp.toFixed(1)}%;width:${w.toFixed(1)}%;cursor:grab" onmousedown="gBarDown(event,'proj','${p.id}')" title="${p.name}&#10;${fdate(p.start,true)} → ${fdate(p.deadline,true)}&#10;Прогресс: ${pct}%&#10;Перетащи чтобы сдвинуть сроки">
+          ${(()=>{if(!p.clientDeadline)return '';const cs=pos(p.start||p.deadline)||0,ce=pos(p.clientDeadline);if(ce===null)return '';const cw=Math.max(1,ce-cs);const warn=p.deadline&&p.clientDeadline&&(new Date(p.clientDeadline)-new Date(p.deadline))/86400000<=7;return `<div class="g-cbar${warn?' g-cbar-warn':''}" style="left:${cs.toFixed(1)}%;width:${cw.toFixed(1)}%;top:calc(50% - 13px)" title="Клиентский дедлайн: ${fdate(p.clientDeadline,true)}${warn?' ⚠️ До клиентского менее 7 дней!':''}"></div>`;})()}
+          ${ep>0&&sp<100?`<div class="g-bar ${cls}" style="left:${sp.toFixed(1)}%;width:${w.toFixed(1)}%;cursor:grab;position:relative;z-index:2" onmousedown="gBarDown(event,'proj','${p.id}')" title="${p.name}&#10;${fdate(p.start,true)} → ${fdate(p.deadline,true)}&#10;Прогресс: ${pct}%&#10;Перетащи чтобы сдвинуть сроки">
             <div class="g-pf" style="width:${pct}%"></div>
             ${w>8?`<span style="position:relative;z-index:1;padding-left:5px;font-size:10px;font-weight:700">${pct}%</span>`:''}
             ${w>22?`<span style="position:relative;z-index:1;padding-left:6px;font-size:10px;opacity:.85">${p.name}</span>`:''}
@@ -4072,14 +4082,14 @@ function openProjectModal(pid){
     if(p){
       $('p-name').value=p.name;$('p-client').value=p.client||'';
       $('p-mgr').value=p.manager||'';$('p-start').value=p.start||TODAY();
-      $('p-dead').value=p.deadline||'';$('p-budget').value=p.budget||'';
+      $('p-dead').value=p.deadline||'';$('p-client-dead').value=p.clientDeadline||'';$('p-budget').value=p.budget||'';
       $('p-pct').value=p.pct||0;$('p-pct-lbl').textContent=(p.pct||0)+'%';
       $('p-plita').value=p.plita||'';$('p-mozaika').value=p.mozaika||'';
       $('p-spec').value=p.spec||'';$('p-complexity').value=p.complexity||1;
     }
   }else{
     $('p-name').value='';$('p-client').value='';$('p-mgr').value='';
-    $('p-start').value=TODAY();$('p-dead').value='';$('p-budget').value='';
+    $('p-start').value=TODAY();$('p-dead').value='';$('p-client-dead').value='';$('p-budget').value='';
     $('p-pct').value=0;$('p-pct-lbl').textContent='0%';
     $('p-plita').value='';$('p-mozaika').value='';$('p-spec').value='';$('p-complexity').value=1;
   }
@@ -4100,6 +4110,7 @@ function saveProject(withPlan){
     client:$('p-client').value.trim()||null,
     manager:$('p-mgr').value||null,
     start:$('p-start').value||TODAY(),deadline:dead,
+    clientDeadline:$('p-client-dead').value||null,
     status:pedit?(D.projects.find(x=>x.id===pedit)?.status||'active'):'active',
     budget:parseInt($('p-budget').value)||null,
     pct:parseInt($('p-pct').value)||0,

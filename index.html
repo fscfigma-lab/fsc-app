@@ -5083,8 +5083,8 @@ async function syncFromSheets(silent){
       if(ex){
         const oldPct=ex.pct||0;
         const oldPlan=ex.weekPlan||'';
-        const oldMgr=ex.mgr||'';
-        if(mgr)ex.mgr=mgr;
+        const oldMgr=ex.manager||'';
+        if(mgr)ex.manager=mgr;
         if(designer)ex.designer=designer;
         if(pct!==null){
           ex.pct=pct;

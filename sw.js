@@ -1,4 +1,4 @@
-const CACHE = 'fsc-v42';
+const CACHE = 'fsc-v43';
 const BASE = '/fsc-app';
 
 self.addEventListener('install', e => {

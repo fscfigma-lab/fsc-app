@@ -421,13 +421,13 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     <div class="rpc" onclick="startRole('rp')">
       <div class="rpc-icon">👷</div>
       <div class="rpc-title">Руководитель<br>проекта (РП)</div>
-      <div class="rpc-names">Журавлева · Семенов · Масленников<br>Илюхин · Грачев · Фомин · Левшов</div>
+      <div class="rpc-names">Иванова · Петров · Сидоров<br>Смирнов · Козлов · Новиков · Морозов</div>
       <div class="rpc-btn">Начать →</div>
     </div>
     <div class="rpc" onclick="startRole('mgmt')">
       <div class="rpc-icon">👔</div>
       <div class="rpc-title">Руководство</div>
-      <div class="rpc-names">Алексеев · Леденева · Нарыжный</div>
+      <div class="rpc-names">Иванов · Петрова · Сидоренко</div>
       <div class="rpc-btn">Начать →</div>
     </div>
   </div>
@@ -465,13 +465,13 @@ const mock_login=`
     <div class="ms-lsub">Выбери своё имя</div>
     <div class="ms-nlist">
       <div class="ms-ni2 sel">
-        <div class="ms-ni2-av">ЖА</div>Журавлева Алина
+        <div class="ms-ni2-av">ИА</div>Иванова Алина
       </div>
       <div class="ms-ni2">
-        <div class="ms-ni2-av">СМ</div>Семенов Михаил
+        <div class="ms-ni2-av">ПМ</div>Петров Михаил
       </div>
       <div class="ms-ni2">
-        <div class="ms-ni2-av">МА</div>Масленников Алексей
+        <div class="ms-ni2-av">СА</div>Сидоров Алексей
       </div>
     </div>
     <div class="ms-lsub" style="margin-top:4px">Введи PIN-код</div>
@@ -496,7 +496,7 @@ const mock_dashboard=`
 <div class="ms">
   <div class="ms-top"><span class="ms-logo">FSC</span><span class="ms-icons">🔔 ⚙️</span></div>
   <div class="ms-body">
-    <div class="ms-greeting">Добрый день, Журавлева 👋</div>
+    <div class="ms-greeting">Добрый день, Иванова 👋</div>
     <div class="ms-stats">
       <div class="ms-stat r"><div class="ms-stat-n" data-count="2">0</div><div class="ms-stat-l">Просрочено</div></div>
       <div class="ms-stat a"><div class="ms-stat-n" data-count="5">0</div><div class="ms-stat-l">На сегодня</div></div>
@@ -534,7 +534,7 @@ const mock_projects=`
     <div class="ms-h" style="margin-bottom:10px">Мои проекты</div>
     <div class="ms-pc">
       <div class="ms-pn">Минская 2 — услуги</div>
-      <div class="ms-pm"><span class="ms-pcl">ИП Федоров</span><span class="ms-badge a">активный</span></div>
+      <div class="ms-pm"><span class="ms-pcl">ИП Иванов</span><span class="ms-badge a">активный</span></div>
       <div class="ms-prog"><div class="ms-pf" data-w="65" style="width:0%"></div></div>
       <div style="font-size:.6rem;color:var(--t3);margin-top:3px">65% · дедлайн 3 окт 2026</div>
     </div>
@@ -713,12 +713,12 @@ const mock_mgmt_dashboard=`
     <div class="ms-h">Срочные задачи по всем проектам</div>
     <div class="ms-task" style="animation-delay:.05s">
       <div class="ms-tck" style="border-color:#B91C1C"></div>
-      <div class="ms-ttx">Витязь: согласовать документы · <span style="color:var(--t3)">Грачев</span></div>
+      <div class="ms-ttx">Витязь: согласовать документы · <span style="color:var(--t3)">Козлов</span></div>
       <div class="ms-tb crit">Критично</div>
     </div>
     <div class="ms-task" style="animation-delay:.1s">
       <div class="ms-tck" style="border-color:#EA580C"></div>
-      <div class="ms-ttx">Минская: проверить монтаж · <span style="color:var(--t3)">Журавлева</span></div>
+      <div class="ms-ttx">Минская: проверить монтаж · <span style="color:var(--t3)">Иванова</span></div>
       <div class="ms-tb high">Срочно</div>
     </div>
   </div>
@@ -737,19 +737,19 @@ const mock_mgmt_projects=`
   <div class="ms-top"><span class="ms-logo">FSC</span><span class="ms-icons">+ 🔍</span></div>
   <div class="ms-body">
     <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">
-      <span style="padding:3px 9px;background:var(--amber-bg);color:var(--amber);border-radius:10px;font-size:.62rem;border:1px solid var(--amber-bd);font-weight:600">Журавлева</span>
-      <span style="padding:3px 9px;background:var(--s3);color:var(--t3);border-radius:10px;font-size:.62rem">Грачев</span>
-      <span style="padding:3px 9px;background:var(--s3);color:var(--t3);border-radius:10px;font-size:.62rem">Илюхин</span>
-      <span style="padding:3px 9px;background:var(--s3);color:var(--t3);border-radius:10px;font-size:.62rem">Семенов</span>
+      <span style="padding:3px 9px;background:var(--amber-bg);color:var(--amber);border-radius:10px;font-size:.62rem;border:1px solid var(--amber-bd);font-weight:600">Иванова</span>
+      <span style="padding:3px 9px;background:var(--s3);color:var(--t3);border-radius:10px;font-size:.62rem">Козлов</span>
+      <span style="padding:3px 9px;background:var(--s3);color:var(--t3);border-radius:10px;font-size:.62rem">Смирнов</span>
+      <span style="padding:3px 9px;background:var(--s3);color:var(--t3);border-radius:10px;font-size:.62rem">Петров</span>
     </div>
     <div class="ms-pc">
       <div class="ms-pn">Минская 2 — услуги</div>
-      <div class="ms-pm"><span class="ms-pcl">Журавлева · ИП Федоров</span><span class="ms-badge a">активный</span></div>
+      <div class="ms-pm"><span class="ms-pcl">Иванова · ИП Иванов</span><span class="ms-badge a">активный</span></div>
       <div class="ms-prog"><div class="ms-pf" data-w="65" style="width:0%"></div></div>
     </div>
     <div class="ms-pc red">
       <div class="ms-pn">Витязь СПА</div>
-      <div class="ms-pm"><span class="ms-pcl">Журавлева · ООО Витязь</span><span class="ms-badge r">просрочен</span></div>
+      <div class="ms-pm"><span class="ms-pcl">Иванова · ООО Витязь</span><span class="ms-badge r">просрочен</span></div>
       <div class="ms-prog"><div class="ms-pf red" data-w="30" style="width:0%"></div></div>
     </div>
   </div>
@@ -776,7 +776,7 @@ const mock_gantt_mgmt=`
       <div class="ms-ghl"></div>
       <div class="ms-ghs"><span>Апр</span><span>Май</span><span>Июн</span><span>Авг</span><span>Окт</span></div>
     </div>
-    <div style="font-size:.58rem;color:var(--t3);padding:2px 0 4px 80px;font-weight:600;border-bottom:1px solid var(--border);margin-bottom:4px">👤 Журавлева (2 проекта)</div>
+    <div style="font-size:.58rem;color:var(--t3);padding:2px 0 4px 80px;font-weight:600;border-bottom:1px solid var(--border);margin-bottom:4px">👤 Иванова (2 проекта)</div>
     <div class="ms-grow">
       <div class="ms-gn">Минская 2</div>
       <div class="ms-gtrack" style="position:relative">
@@ -791,7 +791,7 @@ const mock_gantt_mgmt=`
         <div class="ms-gbar r" style="left:0%;width:28%" data-w="28" data-l="0">Витязь ⚠</div>
       </div>
     </div>
-    <div style="font-size:.58rem;color:var(--t3);padding:4px 0 4px 80px;font-weight:600;border-bottom:1px solid var(--border);margin-bottom:4px">👤 Грачев (1 проект)</div>
+    <div style="font-size:.58rem;color:var(--t3);padding:4px 0 4px 80px;font-weight:600;border-bottom:1px solid var(--border);margin-bottom:4px">👤 Козлов (1 проект)</div>
     <div class="ms-grow">
       <div class="ms-gn">Сетуньский</div>
       <div class="ms-gtrack">
@@ -821,10 +821,10 @@ const mock_risks=`
     </div>
     <div class="ms-risk">
       <div class="ms-rh"><div>Проект</div><div>Менеджер</div><div>Риск</div></div>
-      <div class="ms-rr"><div>Витязь СПА</div><div style="color:var(--t3)">Журавлева</div><div><span class="ms-risk-badge crit">Критичный</span></div></div>
-      <div class="ms-rr"><div>Кристал К</div><div style="color:var(--t3)">Семенов</div><div><span class="ms-risk-badge crit">Критичный</span></div></div>
-      <div class="ms-rr"><div>Минская 2</div><div style="color:var(--t3)">Журавлева</div><div><span class="ms-risk-badge high">Высокий</span></div></div>
-      <div class="ms-rr"><div>Сетуньский</div><div style="color:var(--t3)">Грачев</div><div><span class="ms-risk-badge ok">Норма</span></div></div>
+      <div class="ms-rr"><div>Витязь СПА</div><div style="color:var(--t3)">Иванова</div><div><span class="ms-risk-badge crit">Критичный</span></div></div>
+      <div class="ms-rr"><div>Кристал К</div><div style="color:var(--t3)">Петров</div><div><span class="ms-risk-badge crit">Критичный</span></div></div>
+      <div class="ms-rr"><div>Минская 2</div><div style="color:var(--t3)">Иванова</div><div><span class="ms-risk-badge high">Высокий</span></div></div>
+      <div class="ms-rr"><div>Сетуньский</div><div style="color:var(--t3)">Козлов</div><div><span class="ms-risk-badge ok">Норма</span></div></div>
     </div>
   </div>
   <hs class="hs" style="top:50px;right:10px">

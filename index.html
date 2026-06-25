@@ -1222,6 +1222,7 @@ body{background:var(--bg)}
         <div class="ph-actions">
           <button class="btn btn-s" onclick="showMorningBrief(true)">📋 Сводка</button>
           <button class="btn btn-s" id="tg-notif-btn" onclick="testNotifNow()" title="Отправить сводку по задачам в Telegram">📨</button>
+          <button class="btn btn-s" id="dash-cfg-btn" onclick="openDashConfig()" title="Настроить блоки дашборда" style="display:none">⚙️ Вид</button>
           <button class="btn btn-p" onclick="openTaskModal()">+ Задача</button>
         </div>
       </div>
@@ -1230,6 +1231,7 @@ body{background:var(--bg)}
           <span class="banner-icon">⚠️</span>
           <div class="banner-text"><strong id="od-txt">0 задач просрочено</strong> — требуют немедленного внимания</div>
         </div>
+        <div id="db-stat">
         <div class="stats">
           <div class="sc" onclick="setTF('overdue');nav('tasks')"><div class="sc-label">Просрочено</div><div class="sc-val r" id="st-od">0</div><div class="sc-hint">задач</div></div>
           <div class="sc" onclick="setTF('today');nav('tasks')"><div class="sc-label">Сегодня</div><div class="sc-val y" id="st-td">0</div><div class="sc-hint">задач</div></div>
@@ -1237,17 +1239,24 @@ body{background:var(--bg)}
           <div class="sc" onclick="nav('projects')"><div class="sc-label">Проектов</div><div class="sc-val g" id="st-pr">0</div><div class="sc-hint">активных</div></div>
           <div class="sc g"><div class="sc-label">Выполнено</div><div class="sc-val g" id="st-done">0</div><div class="sc-hint">за 7 дней</div></div>
         </div>
+        </div>
 
+        <div id="db-risk">
         <div class="sec-title">🚦 Риски по проектам</div>
         <div class="risk-row" id="d-risks"></div>
+        </div>
 
+        <div id="db-urgent">
         <div class="sec-title">📌 Требуют внимания сегодня</div>
         <div id="d-urgent-filters" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
         <div id="d-urgent"></div>
+        </div>
 
+        <div id="db-upcoming">
         <div class="divider"></div>
         <div class="sec-title">⏰ Ближайшие дедлайны проектов</div>
         <div id="d-upcoming"></div>
+        </div>
 
         <!-- Блок для руководства: срез по менеджерам -->
         <div id="mgmt-section" style="display:none">
@@ -1258,9 +1267,11 @@ body{background:var(--bg)}
         <!-- РП: быстрое обновление этапов -->
         <div id="rpm-section" style="display:none"></div>
 
+        <div id="db-activity">
         <div class="divider"></div>
         <div class="sec-title">🕐 Последние изменения</div>
         <div id="d-activity"></div>
+        </div>
       </div>
     </div>
 
@@ -2446,6 +2457,9 @@ function applyPermissions(){
   if(pAct)pAct.style.display=canCreateProject()?'':'none';
   const teamBtn=document.querySelector('#p-team .ph-actions');
   if(teamBtn)teamBtn.style.display=canManageTeam()?'':'none';
+  // Скрыть «Команда» в навигации для роли manager
+  const teamNav=document.querySelector('.ni[data-page="team"]');
+  if(teamNav)teamNav.style.display=isManager()?'none':'';
   // Кнопка бэкапов — только admin
   const bkBtn=$('backup-btn');
   if(bkBtn)bkBtn.style.display=isAdmin()?'flex':'none';
@@ -2457,6 +2471,9 @@ function applyPermissions(){
   // Кнопка Google Calendar — всем у кого настроен Client ID
   const gcBtn=$('gcal-btn');
   if(gcBtn)gcBtn.style.display=D.googleClientId?'flex':'none';
+  // Кнопка настройки дашборда — только management
+  const dcBtn=$('dash-cfg-btn');
+  if(dcBtn)dcBtn.style.display=isManagement()?'inline-flex':'none';
 }
 
 /* ═══════════════════════════════════════
@@ -2642,6 +2659,50 @@ function rDash(){
       </div>`;
     }).join(''):`<div style="color:var(--t3);font-size:13px;padding:8px 0">Пока нет активности</div>`;
   }
+
+  // Применяем dashLayout для management
+  if(isManagement()){
+    const layout=D.currentUser?.dashLayout;
+    if(layout&&layout.length){
+      const ALL_BLOCKS=['stat-summary','risk-overview','urgent-tasks','upcoming-deadlines','manager-load','activity-log'];
+      const blockEl={
+        'stat-summary':'db-stat','risk-overview':'db-risk','urgent-tasks':'db-urgent',
+        'upcoming-deadlines':'db-upcoming','manager-load':'mgmt-section','activity-log':'db-activity'
+      };
+      ALL_BLOCKS.forEach(b=>{
+        const el=$(blockEl[b]);
+        if(el)el.style.display=layout.includes(b)?'':'none';
+      });
+    }
+  }
+}
+
+const _DASH_BLOCKS=[
+  {id:'stat-summary',label:'📊 Сводка (просрочено / сегодня / неделя)'},
+  {id:'risk-overview',label:'🚦 Риски по проектам'},
+  {id:'urgent-tasks',label:'📌 Срочные задачи'},
+  {id:'upcoming-deadlines',label:'⏰ Ближайшие дедлайны проектов'},
+  {id:'manager-load',label:'👥 Срез по менеджерам'},
+  {id:'activity-log',label:'🕐 Лента изменений'},
+];
+function openDashConfig(){
+  if(D.currentUser&&!D.currentUser.dashLayout)D.currentUser.dashLayout=_DASH_BLOCKS.map(b=>b.id);
+  const layout=D.currentUser?.dashLayout||_DASH_BLOCKS.map(b=>b.id);
+  $('dash-cfg-blocks').innerHTML=_DASH_BLOCKS.map(b=>`
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px">
+      <input type="checkbox" id="dcb-${b.id}" ${layout.includes(b.id)?'checked':''} style="width:16px;height:16px;accent-color:var(--acc)">
+      ${b.label}
+    </label>`).join('');
+  openM('m-dash-cfg');
+}
+function saveDashConfig(){
+  const layout=_DASH_BLOCKS.map(b=>b.id).filter(id=>document.getElementById('dcb-'+id)?.checked);
+  if(!D.currentUser)return;
+  D.currentUser.dashLayout=layout;
+  localStorage.setItem('fsc4_user',JSON.stringify(D.currentUser));
+  closeM('m-dash-cfg');
+  rDash();
+  toast('Вид дашборда сохранён','ok');
 }
 
 function _timeAgo(iso){
@@ -5673,6 +5734,21 @@ function speak(text){
   </div>
   <div class="notif-foot">
     <button class="notif-clear-btn" onclick="clearLog()">Очистить ленту</button>
+  </div>
+</div>
+
+<!-- Модал: настройка блоков дашборда -->
+<div class="moverlay" id="m-dash-cfg" onclick="if(event.target===this)closeM('m-dash-cfg')">
+  <div class="modal" style="max-width:360px">
+    <div class="mhead"><span class="mtitle">⚙️ Настройка дашборда</span><button class="mcls" onclick="closeM('m-dash-cfg')">✕</button></div>
+    <div class="mbody">
+      <p style="font-size:13px;color:var(--t2);margin:0 0 14px">Выбери блоки для отображения:</p>
+      <div id="dash-cfg-blocks" style="display:flex;flex-direction:column;gap:10px"></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-s" onclick="closeM('m-dash-cfg')">Отмена</button>
+      <button class="btn btn-p" onclick="saveDashConfig()">Сохранить</button>
+    </div>
   </div>
 </div>
 </body>

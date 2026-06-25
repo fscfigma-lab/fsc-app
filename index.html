@@ -5050,7 +5050,7 @@ async function syncFromSheets(silent){
   if(!url){if(!silent)toast('Настройте ссылку в настройках ⚙️','err');return;}
   const sheetMatch=url.match(/\/d\/([a-zA-Z0-9_-]+)/);
   const gidMatch=url.match(/[?&#]gid=(\d+)/);
-  if(!sheetMatch){toast('Не могу распознать ID таблицы','err');return;}
+  if(!sheetMatch){if(!silent)toast('Не могу распознать ID таблицы','err');return;}
   const sheetId=sheetMatch[1],gid=gidMatch?gidMatch[1]:'0';
   const csvUrl=`https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
   if(!silent)toast('🔄 Загружаем таблицу…','ok');
@@ -5059,7 +5059,7 @@ async function syncFromSheets(silent){
     if(!resp.ok)throw new Error('HTTP '+resp.status);
     const text=await resp.text();
     const rows=_parseCSV(text);
-    if(rows.length<2){toast('Таблица пустая или нет данных','err');return;}
+    if(rows.length<2){if(!silent)toast('Таблица пустая или нет данных','err');return;}
     // Columns (0-indexed): 1=Проект, 2=РП, 3=Проектировщик, 4=%, 5=Адрес, 6=Контакт, 24=Начало, 25=Дедлайн, 26=План на неделю
     let added=0,updated=0;
     const pushLines=[];
@@ -5109,7 +5109,7 @@ async function syncFromSheets(silent){
         else if(mgr&&mgr!==oldMgr)
           pushLines.push(`👤 ${ex.name}: РП → ${mgr}`);
       }else{
-        D.projects.push({id:uid(),name,mgr:mgr||'',designer:designer||'',
+        D.projects.push({id:uid(),name,manager:mgr||'',designer:designer||'',
           client:contact||'',address:address||'',
           start:start||TODAY(),deadline:deadline||addDays(TODAY(),90),
           pct:pct||0,status:'active',weekPlan:weekPlan||'',

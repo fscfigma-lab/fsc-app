@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FSC App — Интерактивная инструкция</title>
+<style>
+:root{
+  --bg:#111;--s1:#1a1a1a;--s2:#222;--s3:#2c2c2c;--s4:#363636;
+  --border:#333;--border2:#444;
+  --amber:#C9952A;--amber2:#E8B44A;--amber-bg:rgba(201,149,42,.12);--amber-bd:rgba(201,149,42,.3);
+  --red:#B91C1C;--red-bg:rgba(185,28,28,.2);--red-bd:rgba(185,28,28,.4);
+  --green:#166534;--green-bg:rgba(22,101,52,.2);--green-bd:rgba(22,101,52,.4);
+  --blue-bg:rgba(29,78,216,.25);--blue-bd:rgba(29,78,216,.4);
+  --t1:#f0ede8;--t2:#c0bab2;--t3:#888078;
+  --r:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--t1)}
+
+/* ── ROLE PICKER ───────────────────────────────────── */
+#rp{
+  position:fixed;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  background:var(--bg);z-index:200;
+  transition:opacity .5s,transform .5s;
+}
+#rp.out{opacity:0;transform:scale(.96);pointer-events:none}
+.rp-glow{
+  position:absolute;top:0;left:50%;transform:translateX(-50%);
+  width:600px;height:300px;
+  background:radial-gradient(ellipse at top,rgba(201,149,42,.15) 0%,transparent 70%);
+  pointer-events:none;
+}
+.rp-logo{font-size:3.5rem;font-weight:900;color:var(--amber);letter-spacing:-3px;margin-bottom:4px}
+.rp-sub{color:var(--t3);font-size:.9rem;margin-bottom:8px}
+.rp-badge{
+  display:inline-block;background:var(--amber-bg);border:1px solid var(--amber-bd);
+  color:var(--amber);border-radius:20px;padding:3px 14px;font-size:.75rem;
+  font-weight:600;margin-bottom:48px;
+}
+.rp-prompt{color:var(--t2);font-size:1rem;margin-bottom:24px}
+.rp-cards{display:flex;gap:20px;flex-wrap:wrap;justify-content:center}
+.rpc{
+  background:var(--s2);border:1.5px solid var(--border);border-radius:var(--r);
+  padding:28px 28px 22px;width:240px;cursor:pointer;
+  transition:border-color .25s,transform .25s,background .25s;
+  display:flex;flex-direction:column;align-items:center;text-align:center;
+}
+.rpc:hover{border-color:var(--amber);background:var(--s3);transform:translateY(-4px)}
+.rpc-icon{font-size:2.8rem;margin-bottom:14px}
+.rpc-title{font-weight:800;font-size:1.05rem;color:var(--t1);line-height:1.3;margin-bottom:8px}
+.rpc-names{font-size:.72rem;color:var(--t3);line-height:1.6;margin-bottom:18px}
+.rpc-btn{
+  display:inline-block;background:var(--amber);color:#000;
+  font-weight:700;font-size:.82rem;padding:7px 18px;border-radius:8px;
+  transition:background .2s;
+}
+.rpc:hover .rpc-btn{background:var(--amber2)}
+
+/* ── MAIN APP ──────────────────────────────────────── */
+#main{
+  position:fixed;inset:0;display:flex;flex-direction:column;
+  opacity:0;pointer-events:none;transition:opacity .5s;
+}
+#main.on{opacity:1;pointer-events:all}
+
+/* Progress bar */
+#pb{height:3px;background:var(--s3);flex-shrink:0}
+#pbf{height:100%;background:var(--amber);transition:width .45s ease}
+
+/* Header */
+#hdr{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:11px 28px;border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.hd-left{display:flex;align-items:center;gap:10px}
+.hd-logo{font-weight:900;font-size:1.2rem;color:var(--amber)}
+.hd-pipe{color:var(--border);font-size:1.1rem}
+.hd-title{font-size:.85rem;color:var(--t3)}
+#hd-dots{display:flex;gap:7px}
+.hd-dot{
+  width:8px;height:8px;border-radius:50%;background:var(--border);
+  cursor:pointer;transition:background .2s,transform .2s;
+}
+.hd-dot.done{background:var(--amber);opacity:.5}
+.hd-dot.cur{background:var(--amber);transform:scale(1.35)}
+.hd-back{
+  background:none;border:1px solid var(--border);color:var(--t3);
+  padding:5px 12px;border-radius:7px;font-size:.78rem;cursor:pointer;
+  transition:border-color .2s,color .2s;
+}
+.hd-back:hover{border-color:var(--amber);color:var(--amber)}
+
+/* Stage */
+#stage{flex:1;position:relative;overflow:hidden}
+
+/* Chapters */
+.chapter{
+  position:absolute;inset:0;display:flex;
+  opacity:0;pointer-events:none;
+  transition:opacity .35s,transform .35s;
+  transform:translateX(50px);
+}
+.chapter.active{opacity:1;pointer-events:all;transform:translateX(0)}
+.chapter.prev{opacity:0;transform:translateX(-50px)}
+.chapter.fullscreen{display:block}
+
+/* Left text panel */
+.ch-l{
+  width:42%;min-width:300px;
+  padding:36px 36px 28px 44px;
+  display:flex;flex-direction:column;justify-content:center;
+  overflow-y:auto;
+}
+.ch-role{
+  display:inline-flex;align-items:center;gap:6px;
+  background:var(--amber-bg);border:1px solid var(--amber-bd);
+  color:var(--amber);border-radius:20px;padding:3px 12px;
+  font-size:.72rem;font-weight:600;margin-bottom:16px;
+}
+.ch-num{font-size:.7rem;color:var(--amber);font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px}
+.ch-title{font-size:2rem;font-weight:800;line-height:1.15;color:var(--t1);margin-bottom:12px}
+.ch-sub{color:var(--t2);font-size:.93rem;line-height:1.65;margin-bottom:22px}
+.ch-pts{list-style:none;margin-bottom:20px}
+.ch-pts li{
+  padding:10px 0;border-bottom:1px solid var(--border);
+  display:flex;gap:12px;align-items:flex-start;
+  font-size:.87rem;color:var(--t2);line-height:1.5;
+}
+.ch-pts li:last-child{border-bottom:none}
+.ch-pts .pi{color:var(--amber);flex-shrink:0;margin-top:1px;font-size:.95rem}
+.ch-tip{
+  background:var(--amber-bg);border-left:3px solid var(--amber);
+  border-radius:0 8px 8px 0;padding:12px 15px;
+  font-size:.83rem;color:var(--t2);line-height:1.55;
+}
+.ch-tip b{color:var(--amber)}
+
+/* Right mock panel */
+.ch-r{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  padding:24px;background:var(--s1);border-left:1px solid var(--border);
+  position:relative;overflow:hidden;
+}
+.ch-r::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse at center,rgba(201,149,42,.06) 0%,transparent 70%);
+  pointer-events:none;
+}
+
+/* Mock screen */
+.ms{
+  width:100%;max-width:440px;background:var(--s2);
+  border-radius:14px;border:1px solid var(--border2);
+  overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.6);
+  position:relative;
+}
+.ms-top{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:9px 14px;background:var(--s3);border-bottom:1px solid var(--border);
+}
+.ms-logo{font-weight:900;font-size:.9rem;color:var(--amber)}
+.ms-icons{color:var(--t3);font-size:.95rem;display:flex;gap:8px}
+.ms-body{padding:14px}
+.ms-greeting{font-size:.75rem;color:var(--t3);margin-bottom:12px}
+
+/* Stat cards */
+.ms-stats{display:flex;gap:8px;margin-bottom:14px}
+.ms-stat{
+  flex:1;border-radius:8px;padding:10px 8px;text-align:center;
+  animation:popIn .4s ease backwards;
+}
+.ms-stat.r{background:var(--red-bg);border:1px solid var(--red-bd)}
+.ms-stat.a{background:var(--amber-bg);border:1px solid var(--amber-bd)}
+.ms-stat.g{background:var(--green-bg);border:1px solid var(--green-bd)}
+.ms-stat-n{font-size:1.5rem;font-weight:800}
+.ms-stat.r .ms-stat-n{color:#f87171}
+.ms-stat.a .ms-stat-n{color:var(--amber)}
+.ms-stat.g .ms-stat-n{color:#4ade80}
+.ms-stat-l{font-size:.6rem;color:var(--t3);margin-top:2px}
+.ms-stat:nth-child(1){animation-delay:.1s}
+.ms-stat:nth-child(2){animation-delay:.2s}
+.ms-stat:nth-child(3){animation-delay:.3s}
+
+/* Feed */
+.ms-h{font-size:.65rem;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid var(--border)}
+.ms-fi{
+  display:flex;gap:8px;align-items:flex-start;padding:7px 0;
+  border-bottom:1px solid rgba(255,255,255,.04);
+  animation:slideUp .3s ease backwards;
+}
+.ms-fi:last-child{border-bottom:none}
+.ms-fd{width:6px;height:6px;border-radius:50%;background:var(--amber);flex-shrink:0;margin-top:4px}
+.ms-ft{font-size:.7rem;color:var(--t2);line-height:1.4}
+.ms-fm{font-size:.63rem;color:var(--t3)}
+.ms-fi:nth-child(2){animation-delay:.1s}
+.ms-fi:nth-child(3){animation-delay:.2s}
+.ms-fi:nth-child(4){animation-delay:.3s}
+
+/* Bottom nav */
+.ms-nav{display:flex;border-top:1px solid var(--border)}
+.ms-ni{
+  flex:1;display:flex;flex-direction:column;align-items:center;
+  padding:8px 4px;font-size:.56rem;color:var(--t3);gap:3px;
+}
+.ms-ni.on{color:var(--amber)}
+.ms-ni-i{font-size:1.05rem}
+
+/* Project cards */
+.ms-pc{
+  background:var(--s3);border-radius:8px;padding:11px 12px;margin-bottom:8px;
+  border-left:3px solid var(--amber);
+  animation:slideUp .3s ease backwards;
+}
+.ms-pc.red{border-left-color:var(--red)}
+.ms-pc.green{border-left-color:#166534}
+.ms-pc:nth-child(2){animation-delay:.1s}
+.ms-pc:nth-child(3){animation-delay:.2s}
+.ms-pn{font-size:.78rem;font-weight:600;color:var(--t1);margin-bottom:5px}
+.ms-pm{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.ms-pcl{font-size:.65rem;color:var(--t3)}
+.ms-badge{font-size:.6rem;padding:2px 7px;border-radius:10px;font-weight:600}
+.ms-badge.a{background:var(--amber-bg);color:var(--amber)}
+.ms-badge.r{background:var(--red-bg);color:#f87171}
+.ms-badge.g{background:var(--green-bg);color:#4ade80}
+.ms-prog{height:4px;background:var(--border);border-radius:2px}
+.ms-pf{height:100%;border-radius:2px;background:var(--amber);width:0;transition:width 1.1s ease}
+.ms-pf.red{background:var(--red)}
+.ms-pf.green{background:#166534}
+
+/* Gantt */
+.ms-glegend{display:flex;gap:10px;flex-wrap:wrap;padding:8px 14px;background:var(--s1);border-bottom:1px solid var(--border)}
+.ms-gli{display:flex;align-items:center;gap:5px;font-size:.6rem;color:var(--t3)}
+.ms-gld{width:9px;height:9px;border-radius:2px}
+.ms-gbody{padding:10px 12px}
+.ms-ghdr{display:flex;align-items:center;margin-bottom:8px}
+.ms-ghl{width:80px;flex-shrink:0;font-size:.6rem;color:var(--t3)}
+.ms-ghs{flex:1;display:flex;justify-content:space-between;font-size:.58rem;color:var(--t3)}
+.ms-grow{display:flex;align-items:center;margin-bottom:5px}
+.ms-gn{width:80px;flex-shrink:0;font-size:.66rem;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ms-gn.sub{font-size:.6rem;color:var(--t3);padding-left:10px}
+.ms-gtrack{flex:1;height:16px;background:var(--s1);border-radius:3px;position:relative}
+.ms-gtrack.sub-t{height:12px;margin:2px 0}
+.ms-gbar{
+  position:absolute;height:100%;border-radius:3px;
+  animation:barGrow .9s ease backwards;
+  display:flex;align-items:center;padding:0 5px;
+  font-size:.56rem;font-weight:600;overflow:hidden;white-space:nowrap;
+}
+.ms-gbar.a{background:rgba(201,149,42,.65);color:#fff}
+.ms-gbar.r{background:rgba(185,28,28,.65);color:#fff}
+.ms-gbar.g{background:rgba(22,101,52,.65);color:#fff}
+.ms-gbar.pill{
+  background:var(--green-bg);color:#4ade80;
+  border:1px solid var(--green-bd);font-size:.55rem;
+  left:0!important;width:auto!important;padding:0 7px;min-width:fit-content;
+}
+.ms-gbar.pill.r2{background:var(--red-bg);color:#f87171;border-color:var(--red-bd)}
+.ms-gtoday{position:absolute;top:-18px;bottom:-4px;width:2px;background:#ef4444;z-index:5}
+.ms-gtoday::before{content:'Сегодня';position:absolute;top:0;left:3px;font-size:.55rem;color:#ef4444;white-space:nowrap}
+.ms-gtoday::after{content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid #ef4444}
+
+/* Tasks */
+.ms-task{
+  display:flex;align-items:center;gap:9px;
+  padding:9px 11px;background:var(--s3);border-radius:8px;margin-bottom:6px;
+  animation:slideUp .3s ease backwards;
+}
+.ms-task:nth-child(2){animation-delay:.08s}
+.ms-task:nth-child(3){animation-delay:.16s}
+.ms-task:nth-child(4){animation-delay:.24s}
+.ms-task:nth-child(5){animation-delay:.32s}
+.ms-tck{width:15px;height:15px;border-radius:50%;border:2px solid var(--border);flex-shrink:0}
+.ms-ttx{flex:1;font-size:.72rem;color:var(--t2)}
+.ms-tb{font-size:.58rem;padding:2px 7px;border-radius:10px;font-weight:700;white-space:nowrap}
+.ms-tb.crit{background:var(--red-bg);color:#f87171}
+.ms-tb.high{background:rgba(234,88,12,.25);color:#fb923c}
+.ms-tb.med{background:var(--amber-bg);color:var(--amber)}
+.ms-tb.norm{background:var(--blue-bg);color:#60a5fa}
+.ms-tb.fast{background:var(--green-bg);color:#4ade80}
+
+/* Login mock */
+.ms-login{padding:22px;display:flex;flex-direction:column;align-items:center;gap:14px}
+.ms-llogo{font-size:2rem;font-weight:900;color:var(--amber);letter-spacing:-2px}
+.ms-lsub{font-size:.72rem;color:var(--t3)}
+.ms-nlist{width:100%;display:flex;flex-direction:column;gap:4px}
+.ms-ni2{
+  padding:7px 11px;border-radius:6px;background:var(--s3);
+  font-size:.72rem;color:var(--t2);display:flex;align-items:center;gap:8px;
+}
+.ms-ni2.sel{background:var(--amber-bg);color:var(--amber);border-left:2px solid var(--amber)}
+.ms-ni2-av{
+  width:22px;height:22px;border-radius:50%;background:var(--amber-bg);
+  color:var(--amber);font-size:.6rem;font-weight:700;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.ms-ni2.sel .ms-ni2-av{background:var(--amber);color:#000}
+.ms-pin{display:flex;gap:10px;margin-top:4px}
+.ms-pd{
+  width:13px;height:13px;border-radius:50%;
+  border:2px solid var(--border);background:transparent;
+  transition:background .2s,border-color .2s;
+}
+.ms-pd.on{background:var(--amber);border-color:var(--amber)}
+
+/* Notif mock */
+.ms-notif{
+  display:flex;gap:11px;align-items:flex-start;
+  padding:11px 12px;background:var(--s3);border-radius:8px;margin-bottom:8px;
+  animation:slideUp .3s ease backwards;
+}
+.ms-notif:nth-child(2){animation-delay:.1s}
+.ms-notif:nth-child(3){animation-delay:.2s}
+.ms-ni-ic{font-size:1.4rem;flex-shrink:0;line-height:1}
+.ms-ni-tx .ms-ni-hd{font-size:.74rem;font-weight:600;color:var(--t1);margin-bottom:2px}
+.ms-ni-tx .ms-ni-sd{font-size:.66rem;color:var(--t3);line-height:1.4}
+
+/* Risk table */
+.ms-risk{border-radius:8px;overflow:hidden;border:1px solid var(--border)}
+.ms-rh{display:flex;background:var(--s4);padding:6px 10px;border-bottom:1px solid var(--border)}
+.ms-rh div{flex:1;font-size:.62rem;color:var(--t3);font-weight:600}
+.ms-rr{display:flex;padding:8px 10px;border-bottom:1px solid var(--border);align-items:center;animation:slideUp .3s ease backwards}
+.ms-rr:last-child{border-bottom:none}
+.ms-rr:nth-child(3){animation-delay:.1s}
+.ms-rr:nth-child(4){animation-delay:.2s}
+.ms-rr:nth-child(5){animation-delay:.3s}
+.ms-rr div{flex:1;font-size:.68rem;color:var(--t2)}
+.ms-risk-badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:.6rem;font-weight:600}
+.ms-risk-badge.crit{background:var(--red-bg);color:#f87171}
+.ms-risk-badge.high{background:rgba(234,88,12,.2);color:#fb923c}
+.ms-risk-badge.ok{background:var(--green-bg);color:#4ade80}
+
+/* Hotspots */
+.hs{position:absolute;z-index:20;cursor:pointer}
+.hs-dot{
+  width:22px;height:22px;border-radius:50%;background:var(--amber);
+  display:flex;align-items:center;justify-content:center;
+  font-size:.7rem;font-weight:700;color:#000;
+  animation:pulse 2s infinite;box-shadow:0 0 0 0 rgba(201,149,42,.5);
+}
+.hs-tt{
+  position:absolute;left:28px;top:-6px;
+  background:var(--s1);border:1px solid var(--amber);border-radius:9px;
+  padding:10px 14px;width:190px;font-size:.76rem;line-height:1.5;color:var(--t2);
+  opacity:0;pointer-events:none;transform:translateX(-6px);
+  transition:opacity .2s,transform .2s;z-index:30;
+  box-shadow:0 8px 28px rgba(0,0,0,.5);
+}
+.hs-tt b{color:var(--t1);display:block;margin-bottom:3px}
+.hs.open .hs-tt{opacity:1;transform:translateX(0)}
+.hs.open .hs-dot{background:var(--amber2);animation:none}
+
+/* Finish */
+.ch-finish{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;text-align:center;padding:40px;
+}
+.fin-icon{font-size:4.5rem;margin-bottom:20px;animation:bounceIn .6s ease backwards}
+.fin-t{font-size:2.4rem;font-weight:800;color:var(--t1);margin-bottom:12px}
+.fin-s{color:var(--t2);font-size:1rem;line-height:1.65;margin-bottom:36px;max-width:520px}
+.fin-btns{display:flex;gap:14px;flex-wrap:wrap;justify-content:center}
+.fin-btn{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:13px 26px;border-radius:10px;font-weight:700;font-size:.93rem;
+  text-decoration:none;cursor:pointer;transition:transform .2s,background .2s;
+  border:none;
+}
+.fin-btn.primary{background:var(--amber);color:#000}
+.fin-btn.primary:hover{background:var(--amber2);transform:translateY(-2px)}
+.fin-btn.sec{background:var(--s3);color:var(--t1);border:1px solid var(--border)}
+.fin-btn.sec:hover{border-color:var(--amber);color:var(--amber);transform:translateY(-2px)}
+
+/* Nav footer */
+#navf{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:13px 40px;border-top:1px solid var(--border);flex-shrink:0;
+}
+.nb{
+  display:flex;align-items:center;gap:8px;
+  background:none;border:1.5px solid var(--border);color:var(--t2);
+  padding:9px 20px;border-radius:8px;cursor:pointer;font-size:.87rem;
+  transition:border-color .2s,color .2s;
+}
+.nb:hover{border-color:var(--amber);color:var(--t1)}
+.nb:disabled{opacity:.3;cursor:not-allowed}
+.nb.pri{background:var(--amber);color:#000;border-color:var(--amber);font-weight:700}
+.nb.pri:hover{background:var(--amber2);border-color:var(--amber2)}
+#ch-info{font-size:.8rem;color:var(--t3)}
+
+/* Animations */
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(201,149,42,.5)}60%{box-shadow:0 0 0 9px rgba(201,149,42,0)}}
+@keyframes popIn{from{opacity:0;transform:scale(.75)}to{opacity:1;transform:scale(1)}}
+@keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes barGrow{from{opacity:0;transform:scaleX(0);transform-origin:left}to{opacity:1;transform:scaleX(1)}}
+@keyframes bounceIn{0%{transform:scale(0)}70%{transform:scale(1.1)}100%{transform:scale(1)}}
+@keyframes fall{0%{transform:translateY(-10px) rotate(0deg);opacity:1}100%{transform:translateY(105vh) rotate(720deg);opacity:0}}
+
+.confetti{position:fixed;top:0;width:9px;height:9px;border-radius:2px;animation:fall 3s ease-in forwards;z-index:999;pointer-events:none}
+
+@media(max-width:680px){
+  .chapter{flex-direction:column}
+  .ch-l{width:100%;min-width:0;padding:20px 20px 14px;justify-content:flex-start}
+  .ch-title{font-size:1.5rem}
+  .ch-r{border-left:none;border-top:1px solid var(--border);padding:16px}
+  #navf{padding:10px 16px}
+  .rpc{width:100%;max-width:340px}
+}
+</style>
+</head>
+<body>
+
+<!-- ══ ROLE PICKER ══════════════════════════════════════════ -->
+<div id="rp">
+  <div class="rp-glow"></div>
+  <div class="rp-logo">FSC</div>
+  <div class="rp-sub">Система управления дизайн-проектами</div>
+  <div class="rp-badge">✦ Интерактивная инструкция</div>
+  <p class="rp-prompt">Выбери свою роль, чтобы начать</p>
+  <div class="rp-cards">
+    <div class="rpc" onclick="startRole('rp')">
+      <div class="rpc-icon">👷</div>
+      <div class="rpc-title">Руководитель<br>проекта (РП)</div>
+      <div class="rpc-names">Журавлева · Семенов · Масленников<br>Илюхин · Грачев · Фомин · Левшов</div>
+      <div class="rpc-btn">Начать →</div>
+    </div>
+    <div class="rpc" onclick="startRole('mgmt')">
+      <div class="rpc-icon">👔</div>
+      <div class="rpc-title">Руководство</div>
+      <div class="rpc-names">Алексеев · Леденева · Нарыжный</div>
+      <div class="rpc-btn">Начать →</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MAIN ═════════════════════════════════════════════════ -->
+<div id="main">
+  <div id="pb"><div id="pbf" style="width:0%"></div></div>
+  <header id="hdr">
+    <div class="hd-left">
+      <span class="hd-logo">FSC</span>
+      <span class="hd-pipe">|</span>
+      <span class="hd-title">Интерактивная инструкция</span>
+    </div>
+    <div id="hd-dots"></div>
+    <button class="hd-back" onclick="goHome()">← Выбрать роль</button>
+  </header>
+  <div id="stage"></div>
+  <nav id="navf">
+    <button class="nb" id="btn-prev" onclick="prev()">← Назад</button>
+    <div id="ch-info"></div>
+    <button class="nb pri" id="btn-next" onclick="next()">Далее →</button>
+  </nav>
+</div>
+
+<script>
+// ── DATA ─────────────────────────────────────────────────────────────────
+const ROLES={rp:'Руководитель проекта',mgmt:'Руководство'};
+
+const mock_login=`
+<div class="ms">
+  <div class="ms-top"><span class="ms-logo">FSC</span><span class="ms-icons">🌙</span></div>
+  <div class="ms-login">
+    <div class="ms-llogo">FSC</div>
+    <div class="ms-lsub">Выбери своё имя</div>
+    <div class="ms-nlist">
+      <div class="ms-ni2 sel">
+        <div class="ms-ni2-av">ЖА</div>Журавлева Алина
+      </div>
+      <div class="ms-ni2">
+        <div class="ms-ni2-av">СМ</div>Семенов Михаил
+      </div>
+      <div class="ms-ni2">
+        <div class="ms-ni2-av">МА</div>Масленников Алексей
+      </div>
+    </div>
+    <div class="ms-lsub" style="margin-top:4px">Введи PIN-код</div>
+    <div class="ms-pin">
+      <div class="ms-pd on"></div>
+      <div class="ms-pd on"></div>
+      <div class="ms-pd on"></div>
+      <div class="ms-pd"></div>
+    </div>
+  </div>
+  <hs class="hs" style="top:52px;left:16px">
+    <div class="hs-dot">1</div>
+    <div class="hs-tt"><b>Выбор имени</b>Найди своё имя в списке и нажми на него</div>
+  </hs>
+  <hs class="hs" style="bottom:36px;left:50%;transform:translateX(-50%)">
+    <div class="hs-dot">2</div>
+    <div class="hs-tt"><b>PIN-код</b>Персональный 4-значный код. Не передавай коллегам — у каждого свой</div>
+  </hs>
+</div>`;
+
+const mock_dashboard=`
+<div class="ms">
+  <div class="ms-top"><span class="ms-logo">FSC</span><span class="ms-icons">🔔 ⚙️</span></div>
+  <div class="ms-body">
+    <div class="ms-greeting">Добрый день, Журавлева 👋</div>
+    <div class="ms-stats">
+      <div class="ms-stat r"><div class="ms-stat-n" data-count="2">0</div><div class="ms-stat-l">Просрочено</div></div>
+      <div class="ms-stat a"><div class="ms-stat-n" data-count="5">0</div><div class="ms-stat-l">На сегодня</div></div>
+      <div class="ms-stat g"><div class="ms-stat-n" data-count="12">0</div><div class="ms-stat-l">Активных</div></div>
+    </div>
+    <div class="ms-h">Лента изменений</div>
+    <div class="ms-fi"><div class="ms-fd"></div><div><div class="ms-ft">Монтаж: задача обновлена</div><div class="ms-fm">10 мин назад</div></div></div>
+    <div class="ms-fi"><div class="ms-fd"></div><div><div class="ms-ft">Кристал: этап «Установка» выполнен</div><div class="ms-fm">1 час назад</div></div></div>
+    <div class="ms-fi"><div class="ms-fd"></div><div><div class="ms-ft">Витязь: дедлайн изменён</div><div class="ms-fm">2 часа назад</div></div></div>
+  </div>
+  <div class="ms-nav">
+    <div class="ms-ni on"><div class="ms-ni-i">🏠</div>Главная</div>
+    <div class="ms-ni"><div class="ms-ni-i">📁</div>Проекты</div>
+    <div class="ms-ni"><div class="ms-ni-i">📊</div>Гант</div>
+    <div class="ms-ni"><div class="ms-ni-i">✅</div>Задачи</div>
+  </div>
+  <hs class="hs" style="top:58px;left:10px">
+    <div class="hs-dot">1</div>
+    <div class="hs-tt"><b>Просрочено</b>Задачи с прошедшим дедлайном — разбери первым делом</div>
+  </hs>
+  <hs class="hs" style="top:58px;right:10px">
+    <div class="hs-dot">2</div>
+    <div class="hs-tt" style="left:auto;right:28px;transform:translateX(6px)"><b>На сегодня</b>Задачи с дедлайном сегодня — план на день</div>
+  </hs>
+  <hs class="hs" style="bottom:88px;right:10px">
+    <div class="hs-dot">3</div>
+    <div class="hs-tt" style="left:auto;right:28px"><b>Лента изменений</b>Показывает всё что случилось. Нажми на запись — откроется задача</div>
+  </hs>
+</div>`;
+
+const mock_projects=`
+<div class="ms">
+  <div class="ms-top"><span class="ms-logo">FSC</span><span class="ms-icons">🔔 +</span></div>
+  <div class="ms-body">
+    <div class="ms-h" style="margin-bottom:10px">Мои проекты</div>
+    <div class="ms-pc">
+      <div class="ms-pn">Минская 2 — услуги</div>
+      <div class="ms-pm"><span class="ms-pcl">ИП Федоров</span><span class="ms-badge a">активный</span></div>
+      <div class="ms-prog"><div class="ms-pf" data-w="65" style="width:0%"></div></div>
+      <div style="font-size:.6rem;color:var(--t3);margin-top:3px">65% · дедлайн 3 окт 2026</div>
+    </div>
+    <div class="ms-pc red">
+      <div class="ms-pn">Витязь СПА</div>
+      <div class="ms-pm"><span class="ms-pcl">ООО Витязь</span><span class="ms-badge r">просрочен</span></div>
+      <div class="ms-prog"><div class="ms-pf red" data-w="30" style="width:0%"></div></div>
+      <div style="font-size:.6rem;color:var(--t3);margin-top:3px">30% · дедлайн 14 апр 2026</div>
+    </div>
+    <div class="ms-pc green">
+      <div class="ms-pn">Кристал Истра</div>
+      <div class="ms-pm"><span class="ms-pcl">ООО Кристал</span><span class="ms-badge g">выполнен</span></div>
+      <div class="ms-prog"><div class="ms-pf green" data-w="100" style="width:0%"></div></div>
+      <div style="font-size:.6rem;color:var(--t3);margin-top:3px">100% · сдан 5 мар 2026</div>
+    </div>
+  </div>
+  <hs class="hs" style="top:56px;right:10px">
+    <div class="hs-dot">1</div>
+    <div class="hs-tt" style="left:auto;right:28px"><b>Полоса прогресса</b>Обновляется автоматически из Google Sheets каждые 10 мин</div>
+  </hs>
+  <hs class="hs" style="top:114px;left:10px">
+    <div class="hs-dot">2</div>
+    <div class="hs-tt"><b>Красная граница</b>Проект просрочен — нужно принять меры</div>
+  </hs>
+</div>`;
+
+const mock_gantt=`
+<div class="ms">
+  <div class="ms-glegend">
+    <div class="ms-gli"><div class="ms-gld" style="background:rgba(201,149,42,.65)"></div>В работе</div>
+    <div class="ms-gli"><div class="ms-gld" style="background:rgba(185,28,28,.65)"></div>Просрочен</div>
+    <div class="ms-gli"><div class="ms-gld" style="background:rgba(22,101,52,.65)"></div>Выполнен</div>
+    <div class="ms-gli"><div style="width:2px;height:9px;background:#ef4444"></div>Сегодня</div>
+  </div>
+  <div class="ms-gbody">
+    <div class="ms-ghdr">
+      <div class="ms-ghl"></div>
+      <div class="ms-ghs"><span>Апр</span><span>Май</span><span>Июн</span><span>Авг</span><span>Окт</span></div>
+    </div>
+    <div class="ms-grow">
+      <div class="ms-gn">▸ Минская 2</div>
+      <div class="ms-gtrack" style="position:relative">
+        <div class="ms-gtoday" style="left:38%"></div>
+        <div class="ms-gbar a" style="left:5%;width:88%" data-w="88" data-l="5">Минская 2</div>
+      </div>
+    </div>
+    <div class="ms-grow">
+      <div class="ms-gn sub">Монтаж</div>
+      <div class="ms-gtrack sub-t">
+        <div class="ms-gbar g pill">✓ выполнен · 23 дек</div>
+      </div>
+    </div>
+    <div class="ms-grow">
+      <div class="ms-gn sub">Финальная</div>
+      <div class="ms-gtrack sub-t">
+        <div class="ms-gbar a" style="left:38%;width:30%" data-w="30" data-l="38">Финальная</div>
+      </div>
+    </div>
+    <div class="ms-grow">
+      <div class="ms-gn sub">Сдача</div>
+      <div class="ms-gtrack sub-t">
+        <div class="ms-gbar a" style="left:68%;width:20%" data-w="20" data-l="68">Сдача</div>
+      </div>
+    </div>
+    <div class="ms-grow">
+      <div class="ms-gn">Витязь СПА</div>
+      <div class="ms-gtrack">
+        <div class="ms-gbar r" style="left:0%;width:28%" data-w="28" data-l="0">Витязь</div>
+      </div>
+    </div>
+    <div class="ms-grow">
+      <div class="ms-gn">Кристал</div>
+      <div class="ms-gtrack">
+        <div class="ms-gbar g" style="left:0%;width:35%" data-w="35" data-l="0">Кристал ✓</div>
+      </div>
+    </div>
+  </div>
+  <hs class="hs" style="top:50px;left:34%">
+    <div class="hs-dot">1</div>
+    <div class="hs-tt"><b>Линия «Сегодня»</b>Красная вертикальная черта — текущая дата. Всё что слева — прошлое</div>
+  </hs>
+  <hs class="hs" style="top:92px;right:10px">
+    <div class="hs-dot">2</div>
+    <div class="hs-tt" style="left:auto;right:28px"><b>Бар этапа</b>Потяни мышью → перенесёшь дедлайн. Ctrl+Z для отмены</div>
+  </hs>
+  <hs class="hs" style="top:132px;left:10px">
+    <div class="hs-dot">3</div>
+    <div class="hs-tt"><b>Зелёная пилюля</b>Этап уже выполнен — отображается компактно чтобы не мешать</div>
+  </hs>
+</div>`;
+
+const mock_tasks=`
+<div class="ms">
+  <div class="ms-top"><span class="ms-logo">FSC</span><span class="ms-icons">🔔 +</span></div>
+  <div class="ms-body">
+    <div class="ms-h">Задачи</div>
+    <div class="ms-task">
+      <div class="ms-tck" style="border-color:#B91C1C"></div>
+      <div class="ms-ttx">Монтаж: проверить задержку поставки</div>
+      <div class="ms-tb crit">Критично</div>
+    </div>
+    <div class="ms-task">
+      <div class="ms-tck" style="border-color:#EA580C"></div>
+      <div class="ms-ttx">Витязь: согласовать чертежи</div>
+      <div class="ms-tb high">Срочно</div>
+    </div>
+    <div class="ms-task">
+      <div class="ms-tck"></div>
+      <div class="ms-ttx">⚡ Минская: сделать фото</div>
+      <div class="ms-tb fast">⚡ Быстрая</div>
+    </div>
+    <div class="ms-task">
+      <div class="ms-tck" style="border-color:#C9952A"></div>
+      <div class="ms-ttx">Кристал: подготовить отчёт ⚠️×2</div>
+      <div class="ms-tb med">Важно</div>
+    </div>
+    <div class="ms-task">
+      <div class="ms-tck"></div>
+      <div class="ms-ttx">Заказ материала: уточнить срок</div>
+      <div class="ms-tb norm">Обычная</div>
+    </div>
+  </div>
+  <hs class="hs" style="top:44px;right:10px">
+    <div class="hs-dot">1</div>
+    <div class="hs-tt" style="left:auto;right:28px"><b>Критично</b>Блокирует проект. Отложить нельзя — нужно решить прямо сейчас</div>
+  </hs>
+  <hs class="hs" style="top:112px;left:10px">
+    <div class="hs-dot">2</div>
+    <div class="hs-tt"><b>⚡ Быстрая</b>Автоматически определяется системой. Займёт меньше 2 часов</div>
+  </hs>
+  <hs class="hs" style="top:152px;right:10px">
+    <div class="hs-dot">3</div>
+    <div class="hs-tt" style="left:auto;right:28px"><b>Бейдж ⚠️×2</b>Дедлайн переносился 2 раза. История видна в карточке задачи</div>
+  </hs>
+</div>`;
+
+const mock_notifications=`
+<div class="ms">
+  <div class="ms-top"><span class="ms-logo">FSC</span><span class="ms-icons">🔔</span></div>
+  <div class="ms-body">
+    <div class="ms-h">Уведомления</div>
+    <div class="ms-notif">
+      <div class="ms-ni-ic">⏰</div>
+      <div class="ms-ni-tx">
+        <div class="ms-ni-hd">Ежедневно в 09:00</div>
+        <div class="ms-ni-sd">Утренний Telegram: просрочки, задачи на сегодня, критичные объекты</div>
+      </div>
+    </div>
+    <div class="ms-notif">
+      <div class="ms-ni-ic">📌</div>
+      <div class="ms-ni-tx">
+        <div class="ms-ni-hd">При назначении задачи</div>
+        <div class="ms-ni-sd">Личное сообщение в Telegram когда тебе назначили задачу</div>
+      </div>
+    </div>
+    <div class="ms-notif">
+      <div class="ms-ni-ic">🔔</div>
+      <div class="ms-ni-tx">
+        <div class="ms-ni-hd">Push в браузере</div>
+        <div class="ms-ni-sd">При изменении статуса или дедлайна. Разреши уведомления при первом входе</div>
+      </div>
+    </div>
+  </div>
+</div>`;
+
+const mock_mgmt_dashboard=`
+<div class="ms">
+  <div class="ms-top"><span class="ms-logo">FSC</span><span class="ms-icons">⚙️ 🔔</span></div>
+  <div class="ms-body">
+    <div class="ms-greeting">Алексеев Сергей, обзор компании</div>
+    <div class="ms-stats">
+      <div class="ms-stat r"><div class="ms-stat-n" data-count="4">0</div><div class="ms-stat-l">Просрочено</div></div>
+      <div class="ms-stat a"><div class="ms-stat-n" data-count="18">0</div><div class="ms-stat-l">Активных</div></div>
+      <div class="ms-stat g"><div class="ms-stat-n" data-count="7">0</div><div class="ms-stat-l">РП в работе</div></div>
+    </div>
+    <div class="ms-h">Срочные задачи по всем проектам</div>
+    <div class="ms-task" style="animation-delay:.05s">
+      <div class="ms-tck" style="border-color:#B91C1C"></div>
+      <div class="ms-ttx">Витязь: согласовать документы · <span style="color:var(--t3)">Грачев</span></div>
+      <div class="ms-tb crit">Критично</div>
+    </div>
+    <div class="ms-task" style="animation-delay:.1s">
+      <div class="ms-tck" style="border-color:#EA580C"></div>
+      <div class="ms-ttx">Минская: проверить монтаж · <span style="color:var(--t3)">Журавлева</span></div>
+      <div class="ms-tb high">Срочно</div>
+    </div>
+  </div>
+  <hs class="hs" style="top:56px;right:10px">
+    <div class="hs-dot">1</div>
+    <div class="hs-tt" style="left:auto;right:28px"><b>⚙️ Вид</b>Настрой какие блоки показывать. Скрой ненужное — оставь только важное</div>
+  </hs>
+  <hs class="hs" style="bottom:44px;left:10px">
+    <div class="hs-dot">2</div>
+    <div class="hs-tt"><b>Имя РП</b>В срочных задачах виден ответственный менеджер — сразу понятно к кому обратиться</div>
+  </hs>
+</div>`;
+
+const mock_mgmt_projects=`
+<div class="ms">
+  <div class="ms-top"><span class="ms-logo">FSC</span><span class="ms-icons">+ 🔍</span></div>
+  <div class="ms-body">
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">
+      <span style="padding:3px 9px;background:var(--amber-bg);color:var(--amber);border-radius:10px;font-size:.62rem;border:1px solid var(--amber-bd);font-weight:600">Журавлева</span>
+      <span style="padding:3px 9px;background:var(--s3);color:var(--t3);border-radius:10px;font-size:.62rem">Грачев</span>
+      <span style="padding:3px 9px;background:var(--s3);color:var(--t3);border-radius:10px;font-size:.62rem">Илюхин</span>
+      <span style="padding:3px 9px;background:var(--s3);color:var(--t3);border-radius:10px;font-size:.62rem">Семенов</span>
+    </div>
+    <div class="ms-pc">
+      <div class="ms-pn">Минская 2 — услуги</div>
+      <div class="ms-pm"><span class="ms-pcl">Журавлева · ИП Федоров</span><span class="ms-badge a">активный</span></div>
+      <div class="ms-prog"><div class="ms-pf" data-w="65" style="width:0%"></div></div>
+    </div>
+    <div class="ms-pc red">
+      <div class="ms-pn">Витязь СПА</div>
+      <div class="ms-pm"><span class="ms-pcl">Журавлева · ООО Витязь</span><span class="ms-badge r">просрочен</span></div>
+      <div class="ms-prog"><div class="ms-pf red" data-w="30" style="width:0%"></div></div>
+    </div>
+  </div>
+  <hs class="hs" style="top:44px;left:10px">
+    <div class="hs-dot">1</div>
+    <div class="hs-tt"><b>Фильтр по РП</b>Нажми имя менеджера — увидишь только его проекты</div>
+  </hs>
+  <hs class="hs" style="top:96px;left:10px">
+    <div class="hs-dot">2</div>
+    <div class="hs-tt"><b>Имя РП в карточке</b>Сразу видно кто ведёт проект — не нужно заходить внутрь</div>
+  </hs>
+</div>`;
+
+const mock_gantt_mgmt=`
+<div class="ms">
+  <div class="ms-glegend">
+    <div class="ms-gli"><div class="ms-gld" style="background:rgba(201,149,42,.65)"></div>В работе</div>
+    <div class="ms-gli"><div class="ms-gld" style="background:rgba(185,28,28,.65)"></div>Просрочен</div>
+    <div class="ms-gli"><div style="width:2px;height:9px;background:#ef4444"></div>Сегодня</div>
+    <div class="ms-gli"><div style="border-left:2px dashed rgba(120,120,120,.6);height:9px"></div>Клиент.</div>
+  </div>
+  <div class="ms-gbody">
+    <div class="ms-ghdr">
+      <div class="ms-ghl"></div>
+      <div class="ms-ghs"><span>Апр</span><span>Май</span><span>Июн</span><span>Авг</span><span>Окт</span></div>
+    </div>
+    <div style="font-size:.58rem;color:var(--t3);padding:2px 0 4px 80px;font-weight:600;border-bottom:1px solid var(--border);margin-bottom:4px">👤 Журавлева (2 проекта)</div>
+    <div class="ms-grow">
+      <div class="ms-gn">Минская 2</div>
+      <div class="ms-gtrack" style="position:relative">
+        <div class="ms-gtoday" style="left:38%"></div>
+        <div style="position:absolute;top:0;bottom:0;left:72%;width:0;border-left:2px dashed rgba(120,120,120,.55);z-index:3"></div>
+        <div class="ms-gbar a" style="left:5%;width:86%" data-w="86" data-l="5">Минская 2</div>
+      </div>
+    </div>
+    <div class="ms-grow">
+      <div class="ms-gn">Витязь СПА</div>
+      <div class="ms-gtrack">
+        <div class="ms-gbar r" style="left:0%;width:28%" data-w="28" data-l="0">Витязь ⚠</div>
+      </div>
+    </div>
+    <div style="font-size:.58rem;color:var(--t3);padding:4px 0 4px 80px;font-weight:600;border-bottom:1px solid var(--border);margin-bottom:4px">👤 Грачев (1 проект)</div>
+    <div class="ms-grow">
+      <div class="ms-gn">Сетуньский</div>
+      <div class="ms-gtrack">
+        <div class="ms-gbar a" style="left:20%;width:55%" data-w="55" data-l="20">Сетуньский</div>
+      </div>
+    </div>
+  </div>
+  <hs class="hs" style="top:40px;right:10px">
+    <div class="hs-dot">1</div>
+    <div class="hs-tt" style="left:auto;right:28px"><b>Группировка по РП</b>Кнопка «👤 По РП» — видишь нагрузку каждого менеджера отдельно</div>
+  </hs>
+  <hs class="hs" style="top:95px;right:52px">
+    <div class="hs-dot">2</div>
+    <div class="hs-tt" style="left:auto;right:28px"><b>Пунктир «КД»</b>Клиентский дедлайн — когда нужно сдать заказчику. Может отличаться от внутреннего</div>
+  </hs>
+</div>`;
+
+const mock_risks=`
+<div class="ms">
+  <div class="ms-top"><span class="ms-logo">FSC</span><span class="ms-icons">🚦</span></div>
+  <div class="ms-body">
+    <div class="ms-h">Аналитика рисков</div>
+    <div class="ms-stats" style="margin-bottom:12px">
+      <div class="ms-stat r"><div class="ms-stat-n" data-count="2">0</div><div class="ms-stat-l">Критично</div></div>
+      <div class="ms-stat a"><div class="ms-stat-n" data-count="3">0</div><div class="ms-stat-l">Внимание</div></div>
+      <div class="ms-stat g"><div class="ms-stat-n" data-count="13">0</div><div class="ms-stat-l">OK</div></div>
+    </div>
+    <div class="ms-risk">
+      <div class="ms-rh"><div>Проект</div><div>Менеджер</div><div>Риск</div></div>
+      <div class="ms-rr"><div>Витязь СПА</div><div style="color:var(--t3)">Журавлева</div><div><span class="ms-risk-badge crit">Критичный</span></div></div>
+      <div class="ms-rr"><div>Кристал К</div><div style="color:var(--t3)">Семенов</div><div><span class="ms-risk-badge crit">Критичный</span></div></div>
+      <div class="ms-rr"><div>Минская 2</div><div style="color:var(--t3)">Журавлева</div><div><span class="ms-risk-badge high">Высокий</span></div></div>
+      <div class="ms-rr"><div>Сетуньский</div><div style="color:var(--t3)">Грачев</div><div><span class="ms-risk-badge ok">Норма</span></div></div>
+    </div>
+  </div>
+  <hs class="hs" style="top:50px;right:10px">
+    <div class="hs-dot">1</div>
+    <div class="hs-tt" style="left:auto;right:28px"><b>Критичный риск</b>Есть просроченные этапы или дедлайн проекта прошёл</div>
+  </hs>
+  <hs class="hs" style="bottom:36px;left:10px">
+    <div class="hs-dot">2</div>
+    <div class="hs-tt"><b>Нажми на проект</b>Откроется карточка с деталями: какие этапы просрочены, история дедлайнов</div>
+  </hs>
+</div>`;
+
+// ── CHAPTERS DATA ──────────────────────────────────────────────────────────
+const CHAPTERS={
+rp:[
+  {title:'Добро пожаловать!',num:'Старт',
+   sub:'FSC App — система управления дизайн-проектами компании. Давай разберёмся как всё работает. Займёт <b style="color:var(--amber)">5 минут</b>.',
+   points:[
+     {i:'📱',t:'Работает в браузере на телефоне и компьютере. Можно добавить на главный экран как приложение'},
+     {i:'☁️',t:'Все данные в облаке — синхронизация между устройствами в реальном времени'},
+     {i:'🔒',t:'Ты видишь только свои проекты и задачи. Данные других менеджеров скрыты'},
+     {i:'📊',t:'Прогресс по проектам обновляется автоматически из Google Sheets каждые 10 мин'},
+   ],
+   tip:'<b>Твоя роль — Руководитель проекта.</b> У тебя есть свои проекты, задачи и доступ к Ганту. Руководство видит всё, ты — только своё.',
+   mock:mock_login},
+  {title:'Вход в приложение',num:'01',
+   sub:'Авторизация занимает 10 секунд. Один раз вошёл на устройстве — следующий раз откроется сразу.',
+   points:[
+     {i:'1️⃣',t:'Открой браузер → перейди по адресу приложения'},
+     {i:'2️⃣',t:'Выбери своё имя из списка'},
+     {i:'3️⃣',t:'Введи 4-значный PIN-код'},
+     {i:'📲',t:'На телефоне: нажми «Добавить на главный экран» — появится иконка приложения'},
+   ],
+   tip:'<b>PIN-код личный.</b> Не передавай коллегам. Если забыл — обратись к Ульяне (администратор).',
+   mock:mock_login},
+  {title:'Дашборд',num:'02',
+   sub:'Первый экран после входа. Открывай каждое утро — за 5 секунд поймёшь что срочно и что на сегодня.',
+   points:[
+     {i:'🔴',t:'<b>Просрочено</b> — задачи с прошедшим дедлайном. Разбирай первым делом'},
+     {i:'🟡',t:'<b>На сегодня</b> — задачи с дедлайном сегодня. Планируй день отсюда'},
+     {i:'🟢',t:'<b>Активных</b> — общее количество задач в работе'},
+     {i:'🕐',t:'<b>Лента изменений</b> — что менялось пока тебя не было. Нажми → откроется задача'},
+   ],
+   tip:'<b>Красный счётчик = действуй сейчас.</b> Не жди конца дня — просрочка растёт.',
+   mock:mock_dashboard},
+  {title:'Мои проекты',num:'03',
+   sub:'Все твои объекты в одном месте. Нажми на проект — откроется детальная карточка с этапами и задачами.',
+   points:[
+     {i:'📋',t:'Карточка проекта: этапы, задачи, прогресс, внутренний и клиентский дедлайн'},
+     {i:'✅',t:'Отметь этап выполненным прямо в карточке — нажми на галочку'},
+     {i:'🔴',t:'Красная граница слева = проект просрочен или в зоне риска'},
+     {i:'📅',t:'История переносов дедлайна — внизу карточки, если дедлайн менялся'},
+   ],
+   tip:'<b>Внутренний дедлайн ≠ клиентский.</b> Внутренний — твой срок, клиентский — срок сдачи заказчику. Следи за обоими.',
+   mock:mock_projects},
+  {title:'Диаграмма Ганта',num:'04',
+   sub:'Главный инструмент контроля сроков. Видишь все проекты на временной шкале — сразу понятно что опережает, что горит.',
+   points:[
+     {i:'🟡',t:'Янтарный бар — проект в работе, сроки OK'},
+     {i:'🔴',t:'Красный бар — просрочен или критический риск'},
+     {i:'✅',t:'Зелёные пилюли — этапы уже выполнены (компактный вид)'},
+     {i:'✋',t:'Потяни бар этапа мышью → перенесёшь дедлайн. <b>Ctrl+Z</b> — отмена'},
+     {i:'🔗',t:'Кнопка «Каскад» — при перетаскивании сдвигаются все следующие этапы'},
+   ],
+   tip:'<b>Нажми ▸</b> рядом с проектом чтобы раскрыть этапы. Прошлые этапы показаны компактно, будущие — полными барами.',
+   mock:mock_gantt},
+  {title:'Задачи',num:'05',
+   sub:'Все задачи по твоим проектам. Сортируются по приоритету: самое важное — наверху.',
+   points:[
+     {i:'🔴',t:'<b>Критично</b> — блокирует проект. Отложить нельзя'},
+     {i:'🟠',t:'<b>Срочно</b> — нужно сделать сегодня'},
+     {i:'🟡',t:'<b>Важно</b> — на этой неделе, планируй заранее'},
+     {i:'⚡',t:'<b>Быстрая</b> — система автоматически пометит задачи которые займут ≤2 часов'},
+     {i:'⚠️',t:'Бейдж <b>⚠️×N</b> = дедлайн переносился N раз. История видна в карточке задачи'},
+   ],
+   tip:'<b>Нажми на кружок</b> слева от задачи — отметишь выполненной. Нажми на название — откроется карточка с деталями и фото.',
+   mock:mock_tasks},
+  {title:'Уведомления',num:'06',
+   sub:'Система держит тебя в курсе даже когда приложение закрыто — через Telegram и браузер.',
+   points:[
+     {i:'⏰',t:'<b>09:00 ежедневно</b> в Telegram — просрочки, задачи на сегодня, что горит'},
+     {i:'📌',t:'<b>При назначении</b> — личное сообщение в Telegram когда тебе дали задачу'},
+     {i:'🔔',t:'<b>Push в браузере</b> — разреши уведомления при первом входе'},
+   ],
+   tip:'<b>Telegram ID</b> должен быть указан в настройках команды. Если не получаешь сообщения — обратись к Ульяне.',
+   mock:mock_notifications},
+  {finish:true,title:'Ты готов!',
+   sub:'Теперь ты знаешь всё самое важное. Открывай приложение каждое утро — и ни один дедлайн не пройдёт мимо.',
+   link:'https://fscfigma-lab.github.io/fsc-app/'},
+],
+
+mgmt:[
+  {title:'Добро пожаловать!',num:'Старт',
+   sub:'FSC App — система управления дизайн-проектами компании. Давай разберёмся как всё работает. Займёт <b style="color:var(--amber)">5 минут</b>.',
+   points:[
+     {i:'👁️',t:'Ты видишь ВСЕ проекты всех менеджеров — полная картина компании'},
+     {i:'📊',t:'Дашборд обновляется в реальном времени — данные актуальны всегда'},
+     {i:'⚙️',t:'Можешь создавать, редактировать и удалять проекты'},
+     {i:'📲',t:'Работает в браузере. Можно добавить на главный экран как приложение'},
+   ],
+   tip:'<b>Твоя роль — Руководство.</b> В отличие от РП, ты видишь все проекты компании и можешь управлять составом команды.',
+   mock:mock_login},
+  {title:'Вход в приложение',num:'01',
+   sub:'Авторизация занимает 10 секунд.',
+   points:[
+     {i:'1️⃣',t:'Открой браузер → перейди по адресу приложения'},
+     {i:'2️⃣',t:'Выбери своё имя из списка'},
+     {i:'3️⃣',t:'Введи 4-значный PIN-код'},
+     {i:'📲',t:'На телефоне: нажми «Добавить на главный экран»'},
+   ],
+   tip:'<b>PIN-код личный.</b> Если забыл — обратись к Ульяне (администратор).',
+   mock:mock_login},
+  {title:'Дашборд руководства',num:'02',
+   sub:'Полная картина компании на одном экране. Настрой блоки под себя — скрой лишнее, оставь важное.',
+   points:[
+     {i:'🚦',t:'<b>Аналитика рисков</b> — проекты в красной и жёлтой зоне'},
+     {i:'📌',t:'<b>Срочные задачи</b> — критичные задачи по всем объектам, с именем РП'},
+     {i:'👥',t:'<b>Срез по менеджерам</b> — нагрузка и просрочки по каждому РП'},
+     {i:'⚙️',t:'Кнопка <b>⚙️ Вид</b> — скрой ненужные блоки, сохрани настройку'},
+   ],
+   tip:'<b>Лента изменений</b> показывает последние 30 действий по всем проектам — видно что менялось и кем.',
+   mock:mock_mgmt_dashboard},
+  {title:'Все проекты',num:'03',
+   sub:'Полный список проектов всей компании с фильтрами по менеджеру и статусу.',
+   points:[
+     {i:'👤',t:'<b>Фильтр по РП</b> — нажми имя менеджера, увидишь только его проекты'},
+     {i:'🔍',t:'Фильтры по статусу: Все / Активные / Просроченные / Приостановлен / Выполнены'},
+     {i:'+',t:'Кнопка <b>+</b> — создать новый проект. Укажи менеджера, клиента, даты'},
+     {i:'🗑️',t:'Удалить проект можно из карточки. Только руководство и администратор'},
+   ],
+   tip:'<b>История дедлайнов</b> доступна в карточке любого проекта — кто, когда и на сколько переносил срок.',
+   mock:mock_mgmt_projects},
+  {title:'Гант — полная картина',num:'04',
+   sub:'Все проекты компании на одной временной шкале. Группировка по менеджерам даёт мгновенный срез нагрузки.',
+   points:[
+     {i:'👤',t:'<b>По РП</b> — группировка по менеджеру с итогами по каждому'},
+     {i:'╎',t:'<b>Пунктир КД</b> — клиентский дедлайн, когда нужно сдать заказчику'},
+     {i:'🔴',t:'Красная граница у строки = критический риск, нужно разобраться'},
+     {i:'📅',t:'Масштаб: Недели / Месяцы / Кварталы. Переключай под задачу'},
+   ],
+   tip:'Потяни бар этапа → перенесёшь дедлайн. <b>Ctrl+Z</b> — отмена. Изменение сохраняется в истории.',
+   mock:mock_gantt_mgmt},
+  {title:'Аналитика рисков',num:'05',
+   sub:'Быстрый срез по состоянию всех проектов — сразу видно где пожар и кто ведёт проблемный объект.',
+   points:[
+     {i:'🔴',t:'<b>Критичный</b> — просрочены этапы или дедлайн проекта прошёл'},
+     {i:'🟡',t:'<b>Высокий</b> — дедлайн через ≤14 дней, есть незакрытые этапы'},
+     {i:'🟢',t:'<b>Норма</b> — всё в порядке, сроки соблюдаются'},
+     {i:'👥',t:'Блок «Срез по РП» на дашборде — нагрузка по каждому менеджеру'},
+   ],
+   tip:'При просмотре рисков сразу виден менеджер. Кликни на проект — откроется карточка с историей дедлайнов.',
+   mock:mock_risks},
+  {title:'Уведомления',num:'06',
+   sub:'Система держит руководство в курсе через Telegram и браузер.',
+   points:[
+     {i:'⏰',t:'<b>09:00</b> — утренний Telegram: просрочки, критичные объекты, задачи на сегодня'},
+     {i:'🌆',t:'<b>18:00</b> — вечерний Telegram: критичные задачи дня'},
+     {i:'📅',t:'<b>Пятница 17:00</b> — еженедельный отчёт по всем проектам'},
+     {i:'🔔',t:'<b>Колокол в шапке</b> — уведомления в реальном времени прямо в приложении'},
+   ],
+   tip:'<b>Telegram ID</b> должен быть указан в профиле команды. Настраивает Ульяна.',
+   mock:mock_notifications},
+  {finish:true,title:'Отлично!',
+   sub:'Теперь у тебя полная картина. Открывай дашборд каждое утро — за 30 секунд получишь срез по всей компании.',
+   link:'https://fscfigma-lab.github.io/fsc-app/'},
+]};
+
+// ── STATE & LOGIC ──────────────────────────────────────────────────────────
+let role='rp',idx=0;
+const $=id=>document.getElementById(id);
+
+function startRole(r){
+  role=r;idx=0;
+  $('rp').classList.add('out');
+  setTimeout(()=>{
+    $('main').classList.add('on');
+    renderDots();
+    renderChapter(0);
+  },500);
+}
+
+function goHome(){
+  $('main').classList.remove('on');
+  setTimeout(()=>$('rp').classList.remove('out'),100);
+}
+
+function renderDots(){
+  const chs=CHAPTERS[role];
+  $('hd-dots').innerHTML=chs.map((_,i)=>`<div class="hd-dot" onclick="goTo(${i})" title="Шаг ${i+1}"></div>`).join('');
+}
+
+function updateDots(){
+  document.querySelectorAll('.hd-dot').forEach((d,i)=>{
+    d.className='hd-dot'+(i<idx?' done':i===idx?' cur':'');
+  });
+}
+
+function setProgress(){
+  const chs=CHAPTERS[role];
+  $('pbf').style.width=((idx/(chs.length-1))*100)+'%';
+}
+
+function chapterHTML(ch,i){
+  if(ch.finish)return`<div class="chapter${i===idx?' active':''}" id="ch-${i}">
+    <div class="ch-finish">
+      <div class="fin-icon">🎉</div>
+      <div class="fin-t">${ch.title}</div>
+      <div class="fin-s">${ch.sub}</div>
+      <div class="fin-btns">
+        <a class="fin-btn primary" href="${ch.link}" target="_blank">Открыть приложение →</a>
+        <button class="fin-btn sec" onclick="goTo(0)">↩ Начать заново</button>
+      </div>
+    </div>
+  </div>`;
+
+  const pts=ch.points?`<ul class="ch-pts">${ch.points.map(p=>`<li><span class="pi">${p.i}</span><span>${p.t}</span></li>`).join('')}</ul>`:'';
+  const tip=ch.tip?`<div class="ch-tip">${ch.tip}</div>`:'';
+
+  return`<div class="chapter${i===idx?' active':''}" id="ch-${i}">
+    <div class="ch-l">
+      <div class="ch-role">👤 ${ROLES[role]}</div>
+      <div class="ch-num">Шаг ${ch.num}</div>
+      <div class="ch-title">${ch.title}</div>
+      <div class="ch-sub">${ch.sub}</div>
+      ${pts}${tip}
+    </div>
+    <div class="ch-r">${ch.mock||''}</div>
+  </div>`;
+}
+
+function renderChapter(newIdx){
+  const chs=CHAPTERS[role];
+  const stage=$('stage');
+
+  // Mark old as prev
+  const old=stage.querySelector('.chapter.active');
+  if(old)old.classList.replace('active','prev');
+
+  // Remove very old prevs after transition
+  setTimeout(()=>{
+    stage.querySelectorAll('.chapter.prev').forEach(e=>e.remove());
+  },400);
+
+  const ch=chs[newIdx];
+  const div=document.createElement('div');
+  div.innerHTML=chapterHTML(ch,newIdx);
+  stage.appendChild(div.firstChild);
+
+  // Activate after paint
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    const el=stage.querySelector(`#ch-${newIdx}`);
+    if(el)el.classList.add('active');
+    bindHotspots(el);
+    animateOnEntry(el);
+  }));
+
+  updateDots();
+  setProgress();
+  updateNav(newIdx);
+  $('ch-info').textContent=`${newIdx+1} из ${chs.length}`;
+
+  if(ch.finish)setTimeout(confetti,300);
+}
+
+function animateOnEntry(el){
+  if(!el)return;
+  // Wait for chapter CSS transition to finish
+  setTimeout(()=>{
+    // Animate progress bar fills (ms-pf elements with data-w)
+    el.querySelectorAll('.ms-pf[data-w]').forEach(b=>{
+      b.style.width='0%';
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{
+        b.style.width=b.dataset.w+'%';
+      }));
+    });
+    // Count up numbers
+    el.querySelectorAll('[data-count]').forEach(n=>{
+      const target=parseInt(n.dataset.count);
+      let c=0;const step=Math.ceil(target/12);
+      const t=setInterval(()=>{c=Math.min(c+step,target);n.textContent=c;if(c>=target)clearInterval(t);},55);
+    });
+  }, 380);
+}
+
+function bindHotspots(el){
+  if(!el)return;
+  el.querySelectorAll('.hs').forEach(h=>{
+    h.addEventListener('click',e=>{
+      e.stopPropagation();
+      const wasOpen=h.classList.contains('open');
+      el.querySelectorAll('.hs.open').forEach(x=>x.classList.remove('open'));
+      if(!wasOpen)h.classList.add('open');
+    });
+  });
+  el.addEventListener('click',()=>el.querySelectorAll('.hs.open').forEach(x=>x.classList.remove('open')));
+}
+
+function updateNav(i){
+  const chs=CHAPTERS[role];
+  $('btn-prev').disabled=i===0;
+  const btn=$('btn-next');
+  if(i===chs.length-1){btn.textContent='↩ Начать заново';btn.onclick=()=>goTo(0);}
+  else{btn.textContent='Далее →';btn.onclick=next;}
+}
+
+function goTo(i){idx=i;renderChapter(i)}
+function next(){if(idx<CHAPTERS[role].length-1)goTo(idx+1)}
+function prev(){if(idx>0)goTo(idx-1)}
+
+// Keyboard nav
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key==='Enter')next();
+  if(e.key==='ArrowLeft')prev();
+});
+
+// Confetti
+function confetti(){
+  const colors=['#C9952A','#E8B44A','#f0ede8','#4ade80','#60a5fa','#f87171'];
+  for(let i=0;i<60;i++){
+    const p=document.createElement('div');
+    p.className='confetti';
+    p.style.left=Math.random()*100+'vw';
+    p.style.background=colors[Math.floor(Math.random()*colors.length)];
+    p.style.animationDelay=Math.random()*2+'s';
+    p.style.animationDuration=(2+Math.random()*2)+'s';
+    p.style.transform=`rotate(${Math.random()*360}deg)`;
+    document.body.appendChild(p);
+    setTimeout(()=>p.remove(),4000);
+  }
+}
+</script>
+</body>
+</html>

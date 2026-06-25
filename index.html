@@ -2931,6 +2931,19 @@ function showProjectDetail(pid){
       <button class="btn btn-p" style="font-size:12px" onclick="openTaskModal('',pid)">+ Задача</button>
     </div>
     ${tasks.length?tasks.map(t=>tiHTML(t,false)).join(''):'<div style="color:var(--t3);font-size:13px;padding:10px 0">Нет задач</div>'}
+    ${(()=>{
+      const hist=[];
+      tasks.forEach(t=>(t.deadlineHistory||[]).forEach(h=>hist.push({...h,label:`задача «${t.name}»`})));
+      D.stages.filter(s=>s.pid===pid).forEach(s=>(s.deadlineHistory||[]).forEach(h=>hist.push({...h,label:`этап «${s.name}»`})));
+      if(!hist.length)return '';
+      hist.sort((a,b)=>b.at.localeCompare(a.at));
+      const rows=hist.slice(0,5).map(h=>`<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--b1);font-size:12px">
+        <span style="color:var(--t3);white-space:nowrap;min-width:80px">${h.at.slice(0,10)}</span>
+        <span style="flex:1;color:var(--t1)">${h.label}: <span style="color:var(--red)">${fdate(h.from,true)}</span> → <span style="color:var(--grn)">${fdate(h.to,true)}</span></span>
+        <span style="color:var(--t3)">${h.by}</span>
+      </div>`).join('');
+      return`<div class="divider"></div><div class="sec-title">📅 История переносов дедлайнов</div>${rows}${hist.length>5?`<div style="font-size:11px;color:var(--t3);padding:4px 0">...и ещё ${hist.length-5}</div>`:''}`;
+    })()}
     <div class="back-btn-bottom" onclick="closeDetail()">← Все проекты</div>`;
 }
 
@@ -3117,7 +3130,13 @@ function saveStageModal(){
   if(!deadline){toast('Укажи дедлайн','err');return;}
   if(_stageEditId){
     const s=D.stages.find(x=>x.id===_stageEditId);
-    if(s){s.name=name;s.deadline=deadline;s.icon=icon;s.photos=_sPhotos.length?[..._sPhotos]:undefined;}
+    if(s){
+      if(s.deadline&&deadline&&s.deadline!==deadline){
+        if(!s.deadlineHistory)s.deadlineHistory=[];
+        s.deadlineHistory.push({from:s.deadline,to:deadline,by:D.currentUser?.name||'',at:new Date().toISOString()});
+      }
+      s.name=name;s.deadline=deadline;s.icon=icon;s.photos=_sPhotos.length?[..._sPhotos]:undefined;
+    }
   } else {
     const maxOrder=D.stages.filter(s=>s.pid===_stagePid).reduce((m,s)=>Math.max(m,s.order||0),0);
     D.stages.push({id:uid(),pid:_stagePid,name,icon,deadline,done:false,order:maxOrder+1,photos:_sPhotos.length?[..._sPhotos]:undefined});
@@ -3448,7 +3467,12 @@ function _gUp(e){
       const cascSnap={type:'cascade',snaps:affected.map(s=>({id:s.id,deadline:s.deadline}))};
       _gUndo.push(cascSnap);
       if(_gUndo.length>10)_gUndo.shift();
-      affected.forEach(s=>{s.deadline=new Date(new Date(s.deadline).getTime()+ms).toISOString().slice(0,10);});
+      affected.forEach(s=>{
+        const oldD=s.deadline;
+        s.deadline=new Date(new Date(s.deadline).getTime()+ms).toISOString().slice(0,10);
+        if(!s.deadlineHistory)s.deadlineHistory=[];
+        s.deadlineHistory.push({from:oldD,to:s.deadline,by:D.currentUser?.name||'',at:new Date().toISOString()});
+      });
       addLog(`📅 Каскад: этап «${obj.name}» и ${affected.length-1} след. → ${days>0?'+':''}${days} дн.`,pid);
     } else {
       const snap={type:_gDrag.type,id:_gDrag.id,fields:{deadline:_gDrag.origDead}};
@@ -3456,6 +3480,8 @@ function _gUp(e){
       _gUndo.push(snap);
       if(_gUndo.length>10)_gUndo.shift();
       if(_gDrag.type==='stage'){
+        if(!obj.deadlineHistory)obj.deadlineHistory=[];
+        obj.deadlineHistory.push({from:_gDrag.origDead,to:nd,by:D.currentUser?.name||'',at:new Date().toISOString()});
         obj.deadline=nd;
         addLog(`📅 Этап «${obj.name}» → ${fdate(nd,true)}`,obj.pid);
       } else {
@@ -4028,10 +4054,12 @@ function tiHTML(task,showProj){
     task.tags.map(t=>`<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:var(--acc-bg);color:var(--acc);border:1px solid var(--acc-bd)">${t}</span>`).join('')
   }</div>`:'';
   const notesPreview=task.notes&&!task.done?`<div style="font-size:11px;color:var(--t3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">📝 ${task.notes}</div>`:'';
+  const dlShiftBadge=(task.deadlineHistory?.length>=2&&(task.prio==='high'||task.prio==='critical')&&!task.done)
+    ?`<span title="${task.deadlineHistory.length} переносов дедлайна" style="font-size:9px;font-weight:700;background:#FEE2E2;color:#B91C1C;padding:2px 5px;border-radius:6px;cursor:default">⚠️×${task.deadlineHistory.length}</span>`:'';
   return`<div class="ti ${task.done?'dn':''} ${ds==='overdue'&&!task.done?'od':''}" style="${urgStyle}" onclick="openTaskModal('${task.id}')">
     <div class="tchk ${task.done?'ck':''}" onclick="toggleTask('${task.id}',event)"></div>
     <div class="tbody">
-      <div class="ttitle">${task.fast&&!task.done?'<span style="font-size:10px;font-weight:700;background:#FEF9C3;color:#854D0E;padding:2px 6px;border-radius:6px;letter-spacing:.4px">⚡ Быстрая</span> ':''}${task.name} ${urgBadge}${extraIcons?`<span style="font-size:11px;opacity:.6">${extraIcons}</span>`:''}</div>
+      <div class="ttitle">${task.fast&&!task.done?'<span style="font-size:10px;font-weight:700;background:#FEF9C3;color:#854D0E;padding:2px 6px;border-radius:6px;letter-spacing:.4px">⚡ Быстрая</span> ':''}${task.name} ${urgBadge}${dlShiftBadge}${extraIcons?`<span style="font-size:11px;opacity:.6">${extraIcons}</span>`:''}</div>
       ${notesPreview}
       ${mobProj}
       ${taskTags}
@@ -4320,7 +4348,11 @@ function saveTask(){
     remind:remind||undefined,
     fast:existing?existing.fast:_isFastTask(name),
     createdAt:existing?.createdAt||new Date().toISOString(),
-    closedAt:existing?.closedAt};
+    closedAt:existing?.closedAt,
+    deadlineHistory:existing?.deadlineHistory||([])};
+  if(existing&&existing.dead&&t.dead&&existing.dead!==t.dead){
+    t.deadlineHistory.push({from:existing.dead,to:t.dead,by:D.currentUser?.name||'',at:new Date().toISOString()});
+  }
   const isNew=!tedit;
   if(tedit){const idx=D.tasks.findIndex(x=>x.id===tedit);if(idx>=0){t.done=D.tasks[idx].done;D.tasks[idx]=t}}
   else D.tasks.push(t);

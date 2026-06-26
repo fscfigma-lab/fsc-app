@@ -1252,6 +1252,7 @@ body{background:var(--bg)}
         <div class="ph-actions">
           <button class="btn btn-s" onclick="showMorningBrief(true)">📋 Сводка</button>
           <button class="btn btn-s" id="tg-notif-btn" onclick="testNotifNow()" title="Отправить сводку по задачам в Telegram">📨</button>
+          <button class="btn btn-s" id="push-quick-btn" onclick="quickSubscribePush()" title="Подписаться на push-уведомления" style="display:none">🔔</button>
           <button class="btn btn-s" id="dash-cfg-btn" onclick="openDashConfig()" title="Настроить блоки дашборда" style="display:none">⚙️ Вид</button>
           <button class="btn btn-p" onclick="openTaskModal()">+ Задача</button>
         </div>
@@ -2762,6 +2763,8 @@ function rDash(){
       });
     }
   }
+  // Показываем кнопку 🔔 если пользователь ещё не подписан на push
+  _updatePushQuickBtn();
 }
 
 const _DASH_BLOCKS=[
@@ -3184,7 +3187,11 @@ function toggleStage(id,event){
   const proj=D.projects.find(p=>p.id===s.pid);
   if(s.done){
     addLog(`${s.icon} Этап «${s.name}» выполнен${proj?' в «'+proj.name+'»':''}`,s.pid);
-    sendPush(`${s.icon} Этап выполнен`,`«${s.name}»${proj?' — '+proj.name:''}${currentUser?' · '+currentUser.name:''}`,'white_check_mark,construction',true);
+    sendPush(`${s.icon} Этап выполнен`,`«${s.name}»${proj?' — '+proj.name:''}${D.currentUser?' · '+D.currentUser.name:''}`,'white_check_mark,construction',true);
+  }else{
+    addLog(`↩️ Этап «${s.name}» переоткрыт${proj?' в «'+proj.name+'»':''}`,s.pid);
+    sendTgNow(`↩️ Этап переоткрыт`,`«${s.name}»${proj?'\n📁 '+proj.name:''}${D.currentUser?'\n👤 '+D.currentUser.name:''}`);
+    sendNtfy(`↩️ Этап переоткрыт: ${s.name}`,proj?.name||'');
   }
   save();if(curProjDetail)showProjectDetail(curProjDetail);else render(curPage);
   toast(s.done?`✅ ${s.name}`:`↩️ ${s.name}`,'ok');
@@ -5687,9 +5694,24 @@ async function sendTgNow(title, body){
   }
 }
 
+// ntfy.sh — бесплатный push без регистрации (iOS/Android)
+async function sendNtfy(title, message){
+  const topic=D.ntfyTopic;
+  if(!topic){console.warn('[ntfy] ntfyTopic не задан');return;}
+  try{
+    const r=await fetch('https://ntfy.sh/',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({topic,title,message:message||'',priority:3,tags:['fsc']})
+    });
+    if(!r.ok)console.error('[ntfy] ошибка:',r.status,await r.text());
+    else console.log('[ntfy] ✅ →',topic);
+  }catch(e){console.error('[ntfy] fetch failed:',e.message);}
+}
+
 async function sendPush(title,body,tag,tg=false){
-  // Telegram — только если явно запрошено (tg=true)
-  if(tg) sendTgNow(title,body);
+  // Telegram + ntfy — только если явно запрошено (tg=true)
+  if(tg){sendTgNow(title,body);sendNtfy(title,body);}
   // В очередь для web push
   try{
     const {data,error:qErr}=await sb.from('app_data').select('data').eq('id','push_queue').maybeSingle();
@@ -5792,6 +5814,28 @@ async function showSettingsModal(){
       </div>
     </div>
 
+    <div class="sec-title" style="margin-top:16px">🤖 Telegram-бот и GitHub</div>
+    <div style="font-size:12px;color:var(--t2);margin-bottom:10px;line-height:1.5">
+      Токены хранятся только в Supabase, никогда в коде. Поля ниже позволяют обновить их прямо из приложения.
+    </div>
+    <div class="fg"><label class="fl">Bot Token</label>
+      <input type="password" class="fi" id="s-tg-token" value="${D.tgBotToken||''}" placeholder="123456:ABC-…" style="font-family:monospace;font-size:12px">
+    </div>
+    <div class="fg" style="margin-top:8px"><label class="fl">Admin Chat ID (твой)</label>
+      <input type="text" class="fi" id="s-tg-admin" value="${D.tgAdminId||''}" placeholder="12345678" style="font-family:monospace;font-size:12px">
+    </div>
+    <div class="fg" style="margin-top:8px"><label class="fl">TechDir Chat ID (техдиректор)</label>
+      <input type="text" class="fi" id="s-tg-techdir" value="${D.tgTechDirId||''}" placeholder="87654321" style="font-family:monospace;font-size:12px">
+    </div>
+    <div class="fg" style="margin-top:8px"><label class="fl">GitHub PAT (для Web Push)</label>
+      <input type="password" class="fi" id="s-github-pat" value="${D.githubPat||''}" placeholder="ghp_…" style="font-family:monospace;font-size:12px">
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <button class="btn btn-p" style="font-size:12px" onclick="saveTgSettings()">💾 Сохранить</button>
+      <button class="btn btn-s" style="font-size:12px" onclick="testTgConnection()">⚡ Тест бота</button>
+      <span style="font-size:11px;color:var(--t3);align-self:center">Тест отправит ping в Admin Chat ID</span>
+    </div>
+
     <div class="sec-title" style="margin-top:16px">🔔 Push-уведомления от FSC App</div>
     <div style="font-size:12px;color:var(--t2);margin-bottom:10px;line-height:1.5">
       Уведомления приходят прямо из FSC App — никаких сторонних приложений.<br>
@@ -5863,6 +5907,64 @@ async function showSettingsModal(){
   openM('m-settings');
   // Проверяем реальный статус Web Push подписки
   _checkPushStatus();
+}
+
+// Сохранить токены TG / GitHub из настроек прямо в D и Supabase
+async function saveTgSettings(){
+  const token=($('s-tg-token')?.value||'').trim();
+  const adminId=($('s-tg-admin')?.value||'').trim();
+  const techDirId=($('s-tg-techdir')?.value||'').trim();
+  const githubPat=($('s-github-pat')?.value||'').trim();
+  if(token)D.tgBotToken=token;
+  if(adminId)D.tgAdminId=adminId;
+  if(techDirId)D.tgTechDirId=techDirId;
+  if(githubPat)D.githubPat=githubPat;
+  try{
+    const {data}=await sb.from('app_data').select('data').eq('id','main').maybeSingle();
+    const cur=data?.data||{};
+    if(token)cur.tgBotToken=token;
+    if(adminId)cur.tgAdminId=adminId;
+    if(techDirId)cur.tgTechDirId=techDirId;
+    if(githubPat)cur.githubPat=githubPat;
+    const {error}=await sb.from('app_data').upsert({id:'main',data:cur,updated_at:new Date().toISOString()});
+    if(error)throw error;
+    toast('✅ Токены сохранены в Supabase','ok');
+  }catch(e){toast('❌ Ошибка: '+e.message,'err');console.error('saveTgSettings:',e);}
+}
+
+// Тест — пинг бота по введённым значениям
+async function testTgConnection(){
+  const token=($('s-tg-token')?.value||'').trim()||D.tgBotToken;
+  const adminId=($('s-tg-admin')?.value||'').trim()||D.tgAdminId;
+  if(!token){toast('Введи Bot Token','err');return;}
+  if(!adminId){toast('Введи Admin Chat ID','err');return;}
+  toast('⏳ Отправляем тест…','ok');
+  try{
+    const r=await fetch(`https://api.telegram.org/bot${token}/sendMessage`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({chat_id:adminId,text:'✅ <b>FSC App</b>: бот работает! Токен валиден.',parse_mode:'HTML'})
+    });
+    const j=await r.json();
+    if(j.ok)toast('✅ Сообщение отправлено в Telegram!','ok');
+    else toast('❌ TG: '+j.description,'err');
+  }catch(e){toast('❌ Ошибка: '+e.message,'err');}
+}
+
+// Быстрая подписка на push для менеджеров (без открытия настроек)
+async function quickSubscribePush(){
+  await subscribeWebPush();
+  _updatePushQuickBtn();
+}
+async function _updatePushQuickBtn(){
+  const btn=$('push-quick-btn');if(!btn)return;
+  const perm=Notification?.permission||'default';
+  let subscribed=false;
+  if(perm==='granted'&&'serviceWorker' in navigator){
+    const reg=await navigator.serviceWorker.getRegistration('/fsc-app/').catch(()=>null);
+    if(reg){const sub=await reg.pushManager.getSubscription().catch(()=>null);subscribed=!!sub;}
+  }
+  btn.style.display=(perm==='denied'||subscribed)?'none':'';
+  btn.title=perm==='denied'?'Уведомления заблокированы':'Подписаться на push-уведомления';
 }
 
 async function _checkPushStatus(){
@@ -5944,11 +6046,12 @@ async function syncFromSheets(silent){
       const start=_parseSheetDate(r[24]||'');
       const deadline=_parseSheetDate(r[25]||'');
       const weekPlan=(r[26]||'').trim();
-      const nameLow=name.toLowerCase();
-      const ex=D.projects.find(p=>{
-        const pn=p.name.trim().toLowerCase();
-        return pn===nameLow||nameLow.includes(pn)||pn.includes(nameLow);
-      });
+      const _norm=s=>s.trim().toLowerCase().replace(/\s+/g,' ');
+      const nameLow=_norm(name);
+      // Сначала ищем по явному sheetName (стабильная ссылка), потом по нормализованному имени
+      const ex=D.projects.find(p=>
+        (p.sheetName&&_norm(p.sheetName)===nameLow)||_norm(p.name)===nameLow
+      );
       if(ex){
         const oldPct=ex.pct||0;
         const oldPlan=ex.weekPlan||'';
@@ -5969,6 +6072,7 @@ async function syncFromSheets(silent){
         if(deadline)ex.deadline=deadline;
         if(weekPlan)ex.weekPlan=weekPlan;
         ex.sheetSync=new Date().toISOString();
+        if(!ex.sheetName)ex.sheetName=name; // фиксируем имя из таблицы для стабильного матчинга
         updated++;
         // Фиксируем значимые изменения для push
         if(pct!==null&&Math.abs(pct-oldPct)>=1)
@@ -5982,7 +6086,7 @@ async function syncFromSheets(silent){
           client:contact||'',address:address||'',
           start:start||TODAY(),deadline:deadline||addDays(TODAY(),90),
           pct:pct||0,status:'active',weekPlan:weekPlan||'',
-          sheetSync:new Date().toISOString()});
+          sheetName:name,sheetSync:new Date().toISOString()});
         added++;
         pushLines.push(`🆕 Новый проект: ${name}`);
       }

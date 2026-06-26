@@ -3058,7 +3058,7 @@ function quickPct(pid, val){
   if(p.pct>=100)p.status='done';
   else if(p.status==='done')p.status='active';
   addLog(`📊 «${p.name}»: готовность ${old}% → ${p.pct}%`,pid);
-  sendPush('📊 Прогресс обновлён',`«${p.name}»: ${old}% → ${p.pct}%${currentUser?' · '+currentUser.name:''}`,p.pct>=100?'tada,construction':'chart_increasing,construction');
+  sendPush('📊 Прогресс обновлён',`«${p.name}»: ${old}% → ${p.pct}%${D.currentUser?' · '+D.currentUser.name:''}`,p.pct>=100?'tada,construction':'chart_increasing,construction');
   save();showProjectDetail(pid);
   toast(`✅ Готовность ${p.pct}%`,'ok');
 }
@@ -3253,7 +3253,7 @@ function saveStageModal(){
     D.stages.push({id:uid(),pid:_stagePid,name,icon,deadline,startDate,room,done:false,order:maxOrder+1,photos:_sPhotos.length?[..._sPhotos]:undefined});
     addLog(`${icon} Этап «${name}» добавлен`,_stagePid);
     const proj=D.projects.find(p=>p.id===_stagePid);
-    sendPush(`${icon} Новый этап`,`«${name}»${proj?' — '+proj.name:''}${deadline?' · срок '+deadline:''}${currentUser?' · '+currentUser.name:''}`,`construction`);
+    sendPush(`${icon} Новый этап`,`«${name}»${proj?' — '+proj.name:''}${deadline?' · срок '+deadline:''}${D.currentUser?' · '+D.currentUser.name:''}`,`construction`);
   }
   save();closeM('m-stage');
   if(curProjDetail)showProjectDetail(curProjDetail);else render(curPage);
@@ -4910,14 +4910,14 @@ function saveProject(withPlan){
   if(pedit){
     if(oldPct!==null&&oldPct!==p.pct){
       addLog(`📊 «${p.name}»: готовность ${oldPct}% → ${p.pct}%`,p.id);
-      sendPush('📊 Прогресс обновлён',`«${p.name}»: ${oldPct}% → ${p.pct}%${currentUser?' · '+currentUser.name:''}`,p.pct>=100?'tada,construction':'chart_increasing,construction');
+      sendPush('📊 Прогресс обновлён',`«${p.name}»: ${oldPct}% → ${p.pct}%${D.currentUser?' · '+D.currentUser.name:''}`,p.pct>=100?'tada,construction':'chart_increasing,construction');
     } else {
       addLog(`✏️ Обновлён проект «${p.name}»`,p.id);
-      sendPush('✏️ Проект обновлён',`«${p.name}»${currentUser?' · '+currentUser.name:''}`,p.status==='done'?'tada,construction':'construction');
+      sendPush('✏️ Проект обновлён',`«${p.name}»${D.currentUser?' · '+D.currentUser.name:''}`,p.status==='done'?'tada,construction':'construction');
     }
   } else {
     addLog(`📁 Создан проект «${p.name}»`,p.id);
-    sendPush('📁 Новый проект',`«${p.name}»${p.deadline?' · дедлайн '+p.deadline:''}${currentUser?' · '+currentUser.name:''}`,`construction`);
+    sendPush('📁 Новый проект',`«${p.name}»${p.deadline?' · дедлайн '+p.deadline:''}${D.currentUser?' · '+D.currentUser.name:''}`,`construction`);
   }
 
   save();closeM('m-proj');curProjDetail=p.id;render(curPage);

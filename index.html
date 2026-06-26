@@ -349,6 +349,8 @@ body{background:var(--bg)}
   background:var(--acc-dark);color:#fff}
 .g-mgr-badge.od{background:var(--red)}
 /* Room header rows within expanded project */
+.g-penalty{border-left:3px solid #dc2626!important;background:rgba(220,38,38,.04)}
+.g-row .g-penalty-badge{display:inline-block;background:var(--red-bg);border:1px solid var(--red-bd);color:var(--red);font-size:9px;padding:1px 5px;border-radius:6px;margin-left:4px;white-space:nowrap}
 .g-room-hdr{display:flex;align-items:center;gap:6px;padding:5px 8px 5px 36px;
   background:rgba(201,149,42,0.06);border-bottom:1px solid var(--b1);
   font-size:10px;font-weight:700;color:var(--t2);cursor:pointer;
@@ -1755,7 +1757,7 @@ body{background:var(--bg)}
     </div>
     <div class="fg">
       <label class="fl">Помещение / зона</label>
-      <input type="text" class="fi" id="s-room" placeholder="-101 Hall, SPA, Гараж...">
+      <input type="text" class="fi" id="s-room" placeholder="-101 Hall, SPA, Гараж..." oninput="_refreshStagePredecessor()">
     </div>
     <div class="fg" style="display:flex;gap:8px">
       <div style="flex:1">
@@ -2943,10 +2945,9 @@ function setPF(f){pfilt=f;curProjDetail=null;rProj()}
 function setPMgr(m){pMgrFilt=m;_projMgrFilter=null;curProjDetail=null;rProj()}
 
 function stagePipelineHTML(pid,mini=false){
-  const stages=D.stages.filter(s=>s.pid===pid).sort((a,b)=>a.order-b.order);
+  const stages=D.stages.filter(s=>s.pid===pid).sort((a,b)=>(a.order||0)-(b.order||0));
   if(!stages.length)return'';
   if(mini){
-    // Compact dots row
     return`<div style="display:flex;gap:3px;align-items:center">${stages.map(s=>{
       const ds=dlStatus(s.deadline,s.done);
       const col=s.done?'var(--grn)':ds==='overdue'?'var(--red)':ds==='today'||ds==='soon'?'var(--yel)':'var(--b2)';
@@ -2954,7 +2955,7 @@ function stagePipelineHTML(pid,mini=false){
     }).join('')}</div>`;
   }
   const canEdit=canCreateProject();
-  return`<div class="pipeline">${stages.map(s=>{
+  function stageItemHTML(s){
     const ds=dlStatus(s.deadline,s.done);
     const cls=s.done?'done':ds==='overdue'?'overdue':ds==='today'||ds==='soon'?'active':'';
     return`<div class="stage-item">
@@ -2967,10 +2968,20 @@ function stagePipelineHTML(pid,mini=false){
         <button class="stage-del-btn" onclick="deleteStage('${s.id}');event.stopPropagation()" title="Удалить">✕</button>
       </div>`:''}
     </div>`;
-  }).join('')}</div>
-  ${canEdit?`<div class="add-stage-row">
-    <button class="btn btn-s" style="font-size:11px;padding:4px 12px" onclick="openStageModal('${pid}')">+ Добавить этап</button>
-  </div>`:''}`;
+  }
+  const hasRooms=stages.some(s=>s.room);
+  let html='';
+  if(hasRooms){
+    const roomOrder=[];const roomMap={};
+    stages.forEach(s=>{const r=s.room||'';if(!roomMap[r]){roomMap[r]=[];roomOrder.push(r);}roomMap[r].push(s);});
+    roomOrder.forEach(room=>{
+      if(room)html+=`<div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.6px;padding:6px 0 3px;margin-top:4px">🚪 ${room}</div>`;
+      html+=`<div class="pipeline">${roomMap[room].map(stageItemHTML).join('')}</div>`;
+    });
+  } else {
+    html=`<div class="pipeline">${stages.map(stageItemHTML).join('')}</div>`;
+  }
+  return html+(canEdit?`<div class="add-stage-row"><button class="btn btn-s" style="font-size:11px;padding:4px 12px" onclick="openStageModal('${pid}')">+ Добавить этап</button></div>`:'');
 }
 
 function openProjectDetail(pid){
@@ -3155,16 +3166,31 @@ function projectGanttHTML(pid){
 
   let html='';
 
-  // Секция этапов
+  // Секция этапов — группируем по помещению, сортируем по order внутри группы
   if(stages.length){
-    html+=`<div class="pg-section">📋 Этапы производства</div>`;
-    html+=stages.map(s=>{
-      const ds=dlStatus(s.deadline,s.done);
-      // Ищем базовую линию для этапа
-      const blStage=p&&p.bl_stages&&p.bl_stages.find(b=>b.id===s.id);
-      const blDate=blStage?blStage.deadline:null;
-      return pgRow((s.icon?s.icon+' ':'')+s.name,s.deadline,s.done,ds,dsColor(ds,s.done),blDate);
-    }).join('');
+    // пересортируем: order первичный, deadline вторичный
+    const sortedStages=D.stages.filter(s=>s.pid===pid&&s.deadline)
+      .sort((a,b)=>(a.order||0)-(b.order||0)||(a.deadline.localeCompare(b.deadline)));
+    const hasRooms=sortedStages.some(s=>s.room);
+    if(hasRooms){
+      const roomOrder=[];const roomMap={};
+      sortedStages.forEach(s=>{const r=s.room||'';if(!roomMap[r]){roomMap[r]=[];roomOrder.push(r);}roomMap[r].push(s);});
+      roomOrder.forEach(room=>{
+        html+=`<div class="pg-section">${room?'🚪 '+room:'📋 Этапы'}</div>`;
+        html+=roomMap[room].map(s=>{
+          const ds=dlStatus(s.deadline,s.done);
+          const blStage=p?.bl_stages?.find(b=>b.id===s.id);
+          return pgRow((s.icon?s.icon+' ':'')+s.name,s.deadline,s.done,ds,dsColor(ds,s.done),blStage?.deadline||null);
+        }).join('');
+      });
+    } else {
+      html+=`<div class="pg-section">📋 Этапы производства</div>`;
+      html+=sortedStages.map(s=>{
+        const ds=dlStatus(s.deadline,s.done);
+        const blStage=p?.bl_stages?.find(b=>b.id===s.id);
+        return pgRow((s.icon?s.icon+' ':'')+s.name,s.deadline,s.done,ds,dsColor(ds,s.done),blStage?.deadline||null);
+      }).join('');
+    }
   }
 
   // Секция задач (только со сроками)
@@ -3227,6 +3253,25 @@ async function addStagePhotos(inp){
 }
 function removeSPhoto(i){_sPhotos.splice(i,1);_renderSPhotos();}
 
+function _refreshStagePredecessor(){
+  const pid=_stagePid;
+  const sid=_stageEditId;
+  const room=($('s-room')?.value||'').trim();
+  const bbRow=$('s-blockedby-row'),bbSel=$('s-blockedby');
+  if(!bbRow||!bbSel||!pid)return;
+  // Если помещение задано — показываем только этапы из того же помещения
+  const sibs=D.stages.filter(x=>x.pid===pid&&x.id!==sid&&(room?x.room===room:true));
+  const cur=bbSel.value;
+  if(sibs.length){
+    bbSel.innerHTML='<option value="">— не задано —</option>'+
+      sibs.map(x=>`<option value="${x.id}"${x.id===cur?' selected':''}>${x.icon||'📋'} ${x.name}${x.room&&!room?' · '+x.room:''}${x.deadline?' ('+fdate(x.deadline,true)+')':''}</option>`).join('');
+    bbRow.style.display='';
+  }else{
+    bbSel.innerHTML='<option value="">— не задано —</option>';
+    bbRow.style.display=room?'none':''; // если выбрана комната и нет других этапов — скрываем
+  }
+}
+
 function openStageModal(pid,sid){
   _stagePid=pid;_stageEditId=sid||null;
   const s=sid?D.stages.find(x=>x.id===sid):null;
@@ -3239,14 +3284,8 @@ function openStageModal(pid,sid){
   _sPhotos=[...(s?.photos||[])];
   _renderSPhotos();
   $('s-del-btn').style.display=s?'':'none';
-  // blockedBy
-  const _sibs=D.stages.filter(x=>x.pid===pid&&x.id!==sid);
-  const _bbRow=$('s-blockedby-row'),_bbSel=$('s-blockedby');
-  if(_sibs.length&&_bbRow&&_bbSel){
-    _bbSel.innerHTML='<option value="">— не задано —</option>'+
-      _sibs.map(x=>`<option value="${x.id}"${s?.blockedBy===x.id?' selected':''}>${x.icon||'📋'} ${x.name}${x.deadline?' ('+fdate(x.deadline,true)+')':''}</option>`).join('');
-    _bbRow.style.display='';
-  }else if(_bbRow){_bbRow.style.display='none';}
+  // blockedBy — фильтруем по помещению если задано
+  _refreshStagePredecessor();
   openM('m-stage');
 }
 
@@ -3757,16 +3796,17 @@ function rGantt(){
       const msPos=pos(p.deadline);
       const pct=autoCalcPct(p.id)??p.pct??0;
       const expanded=gExpanded.has(p.id);
-      const stages=D.stages.filter(s=>s.pid===p.id&&s.deadline).sort((a,b)=>a.deadline.localeCompare(b.deadline));
+      const stages=D.stages.filter(s=>s.pid===p.id&&s.deadline).sort((a,b)=>(a.order||0)-(b.order||0)||(a.deadline.localeCompare(b.deadline)));
       const stDone=stages.filter(s=>s.done).length;
       const riskCls=r==='critical'?'risk-c':r==='high'?'risk-h':'';
       const odCls=(ds==='overdue'||p.status==='overdue')?'is-od':'';
       const stageHint=stages.length?` · ${stDone}/${stages.length} этап.`:` · <span style="color:var(--acc);opacity:.7;font-size:10px">нет этапов</span>`;
-      // Подсвечиваем просроченные этапы
+      // Просроченные и штрафные этапы (дедлайн этапа > дедлайн проекта)
       const odStages=stages.filter(s=>!s.done&&s.deadline&&s.deadline<TODAY());
-      const critPath=odStages.length>0?` · ⚠ ${odStages.length} эт. просроч.`:'';
+      const penaltyStages=p.deadline?stages.filter(s=>!s.done&&s.deadline&&s.deadline>p.deadline):[];
+      const critPath=odStages.length>0?` · ⚠ ${odStages.length} эт. просроч.`:(penaltyStages.length>0?` · 🔴 ${penaltyStages.length} эт. за дедлайн`:'');
 
-      html+=`<div class="g-row ${riskCls} ${odCls}">
+      html+=`<div class="g-row ${riskCls} ${odCls}${penaltyStages.length?' g-penalty':''}">
         <div class="g-rlabel" onclick="openProjectDetail('${p.id}')">
           <div style="display:flex;align-items:center;min-width:0">
             <span class="g-xbtn" onclick="gToggleExpand('${p.id}',event)" title="${expanded?'Свернуть этапы':'Раскрыть этапы'}">${expanded?'▾':'▸'}</span>
@@ -4214,6 +4254,15 @@ function _gUp(e){
 
       const cascCount=toShift.size-1;
       addLog(`📅 Этап «${obj.name}» → ${fdate(nd,true)}${cascCount>0?` +${cascCount} связ.`:''}`,obj.pid);
+      // Штрафной сигнал: если сдвинутые этапы вышли за дедлайн проекта
+      const proj=D.projects.find(x=>x.id===obj.pid);
+      if(proj?.deadline){
+        const crossed=[...toShift.keys()].filter(id=>{const s=D.stages.find(s=>s.id===id);return s&&s.deadline>proj.deadline;});
+        if(crossed.length){
+          toast(`🔴 ${crossed.length} эт. вышли за дедлайн проекта!`,'err');
+          addLog(`🔴 Штрафной риск: ${crossed.length} эт. за «${proj.name}»`,proj.id);
+        }
+      }
 
     } else {
       // Проект
@@ -4867,7 +4916,27 @@ function calcDriftStats(){
     });
   });
   Object.values(stats).forEach(s=>{s.tasks=s.taskIds?.size||0;delete s.taskIds;});
-  return stats;
+
+  // Сводка: какой этап-предок вызвал наибольший лавинообразный дрейф
+  const cascadeImpact={};
+  D.stages.forEach(s=>{
+    if(!s.deadlineHistory?.length)return;
+    s.deadlineHistory.filter(h=>h.auto&&h.ancestorId).forEach(h=>{
+      const d=Math.round((new Date(h.to)-new Date(h.from))/86400000);
+      if(d<=0)return;
+      if(!cascadeImpact[h.ancestorId])cascadeImpact[h.ancestorId]={days:0,stages:0};
+      cascadeImpact[h.ancestorId].days+=d;
+      cascadeImpact[h.ancestorId].stages++;
+    });
+  });
+  // Обогащаем именами
+  const hotspots=Object.entries(cascadeImpact).map(([id,v])=>{
+    const anc=D.stages.find(s=>s.id===id);
+    const proj=anc?D.projects.find(p=>p.id===anc.pid):null;
+    return{id,name:anc?.name||id,projName:proj?.name||'',manager:proj?.manager||'',...v};
+  }).sort((a,b)=>b.days-a.days).slice(0,5);
+
+  return{stats,hotspots};
 }
 
 function rTeam(){
@@ -4879,7 +4948,7 @@ function rTeam(){
   const canSeeStats=['admin','management'].includes(D.currentUser?.role_key);
   const ds=$('drift-stats');
   if(canSeeStats&&ds){
-    const dstats=calcDriftStats();
+    const {stats:dstats,hotspots:dhotspots}=calcDriftStats();
     const rows=Object.entries(dstats).map(([name,s])=>[name,{...s,total:(s.days||0)+(s.stageDays||0)}]).sort((a,b)=>b[1].total-a[1].total);
     if(rows.length){
       const totalDrift=rows.reduce((s,[,v])=>s+v.total,0);
@@ -4905,6 +4974,17 @@ function rTeam(){
               <div style="font-size:12px;font-weight:700;text-align:right;border-top:1px solid var(--b1);padding:3px 0;color:${col}">+${s.total} дн.${stagePart}</div>`;
             }).join('')}
           </div>
+          ${dhotspots?.length?`
+          <div style="margin-top:12px;border-top:1px solid var(--b1);padding-top:10px">
+            <div style="font-size:11px;font-weight:700;color:var(--red);margin-bottom:6px">🔴 Болевые точки — этапы-источники лавинного дрейфа</div>
+            ${dhotspots.map((h,i)=>`<div style="display:flex;align-items:baseline;gap:6px;padding:3px 0;font-size:11px;border-bottom:1px solid var(--b1)">
+              <span style="color:var(--t3);min-width:14px">${i+1}.</span>
+              <span style="flex:1;color:var(--t1);font-weight:600">${h.icon||'📋'} ${h.name}</span>
+              <span style="color:var(--t3)">${h.projName}</span>
+              <span style="color:var(--t3)">${h.manager?'· '+h.manager:''}</span>
+              <span style="color:var(--red);font-weight:700;min-width:55px;text-align:right">+${h.days} дн. / ${h.stages} эт.</span>
+            </div>`).join('')}
+          </div>`:''}
         </div>`;
       ds.style.display='block';
     } else {

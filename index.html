@@ -4083,16 +4083,28 @@ function _gMove(e){
   _applyBarShift(_gDrag.bar,pctShift,_gDrag.hasStart);
 
   // Каскадный предпросмотр — двигаем все последующие этапы визуально
-  if(_gDrag.type==='stage'&&_gCascade){
-    const pid=_gDrag.obj.pid;
-    const room=_gDrag.obj.room;
-    const origDead=_gDrag.origDead;
-    D.stages.forEach(s=>{
-      if(s.id===_gDrag.id||s.done||!s.deadline)return;
-      if(s.pid!==pid)return;
-      if(room&&s.room!==room)return;
-      if(s.deadline<origDead)return;
-      const barEl=document.querySelector(`.g-sbar[data-sid="${s.id}"]`);
+  if(_gDrag.type==='stage'){
+    const previewIds=new Set([_gDrag.id]);
+    // 1) _gCascade: последующие по дедлайну/помещению
+    if(_gCascade){
+      const pid=_gDrag.obj.pid,room=_gDrag.obj.room,origDead=_gDrag.origDead;
+      D.stages.forEach(s=>{
+        if(s.id===_gDrag.id||s.done||!s.deadline||s.pid!==pid)return;
+        if(room&&s.room!==room)return;
+        if(s.deadline<origDead)return;
+        previewIds.add(s.id);
+      });
+    }
+    // 2) dep-chain BFS (всегда)
+    {const q=[_gDrag.id],vis=new Set([_gDrag.id]);
+    while(q.length){const cur=q.shift();
+      D.stages.filter(s=>s.blockedBy===cur&&!s.done&&!vis.has(s.id)).forEach(s=>{
+        vis.add(s.id);previewIds.add(s.id);q.push(s.id);
+      });
+    }}
+    previewIds.forEach(sid=>{
+      if(sid===_gDrag.id)return;
+      const barEl=document.querySelector(`.g-sbar[data-sid="${sid}"]`);
       if(!barEl)return;
       barEl.style.transition='none';
       barEl.style.opacity='0.5';
@@ -4137,54 +4149,81 @@ function _gUp(e){
     const ms=days*86400000;
     const nd=new Date(new Date(_gDrag.origDead).getTime()+ms).toISOString().slice(0,10);
     // Сохраняем в стек для отмены и применяем
-    if(_gDrag.type==='stage'&&_gCascade){
-      // Каскад: если у этапа есть помещение — сдвигаем только этапы в том же помещении;
-      // иначе — все последующие этапы проекта
-      const pid=obj.pid;
-      const room=obj.room;
-      const affected=D.stages.filter(s=>{
-        if(s.pid!==pid||s.done||!s.deadline)return false;
-        if(room)return s.room===room&&s.deadline>=_gDrag.origDead;
-        return s.deadline>=_gDrag.origDead;
-      });
-      const cascSnap={type:'cascade',snaps:affected.map(s=>({id:s.id,deadline:s.deadline,startDate:s.startDate}))};
-      _gUndo.push(cascSnap);
+    if(_gDrag.type==='stage'){
+      // === Собираем всё что нужно сдвинуть ===
+      // toShift: Map<stageId, reasonString>
+      const toShift=new Map();
+      toShift.set(obj.id, D.currentUser?.name||'');
+
+      // 1) _gCascade-режим: все последующие этапы проекта (по помещению или глобально)
+      if(_gCascade){
+        const pid=obj.pid,room=obj.room,origDead=_gDrag.origDead;
+        D.stages.filter(s=>{
+          if(s.id===obj.id||s.pid!==pid||s.done||!s.deadline)return false;
+          if(room)return s.room===room&&s.deadline>=origDead;
+          return s.deadline>=origDead;
+        }).forEach(s=>{
+          if(!toShift.has(s.id))toShift.set(s.id,`Каскад${room?' ('+room+')':''}: «${obj.name}»`);
+        });
+      }
+
+      // 2) Всегда: рекурсивный BFS по цепочке blockedBy
+      {const q=[obj.id],vis=new Set([obj.id]);
+      while(q.length){
+        const cur=q.shift();
+        const curName=(D.stages.find(s=>s.id===cur)||{name:cur}).name;
+        D.stages.filter(s=>s.blockedBy===cur&&!s.done&&s.deadline&&!vis.has(s.id)).forEach(s=>{
+          vis.add(s.id);
+          if(!toShift.has(s.id))toShift.set(s.id,`Автосдвиг: «${curName}»`);
+          q.push(s.id);
+        });
+      }}
+
+      // === Снапшот для отмены ===
+      const snapList=[...toShift.keys()].map(id=>{
+        const s=D.stages.find(s=>s.id===id);
+        return s?{id:s.id,deadline:s.deadline,startDate:s.startDate}:null;
+      }).filter(Boolean);
+      if(toShift.size===1){
+        const snap={type:'stage',id:obj.id,fields:{deadline:_gDrag.origDead}};
+        if(obj.startDate)snap.fields.startDate=obj.startDate;
+        _gUndo.push(snap);
+      } else {
+        _gUndo.push({type:'cascade',snaps:snapList});
+      }
       if(_gUndo.length>10)_gUndo.shift();
-      affected.forEach(s=>{
+
+      // === Применяем сдвиги ===
+      toShift.forEach((reason,id)=>{
+        const s=D.stages.find(s=>s.id===id);
+        if(!s)return;
         const oldD=s.deadline;
-        s.deadline=new Date(new Date(s.deadline).getTime()+ms).toISOString().slice(0,10);
-        if(s.startDate)s.startDate=new Date(new Date(s.startDate).getTime()+ms).toISOString().slice(0,10);
+        const newD=new Date(new Date(s.deadline).getTime()+ms).toISOString().slice(0,10);
+        const isRoot=id===obj.id;
         if(!s.deadlineHistory)s.deadlineHistory=[];
-        s.deadlineHistory.push({from:oldD,to:s.deadline,by:D.currentUser?.name||'',at:new Date().toISOString()});
+        s.deadlineHistory.push({
+          from:oldD,to:newD,
+          by:isRoot?(D.currentUser?.name||''):reason,
+          auto:!isRoot,
+          ancestorId:isRoot?undefined:obj.id,
+          at:new Date().toISOString()
+        });
+        if(s.startDate)s.startDate=new Date(new Date(s.startDate).getTime()+ms).toISOString().slice(0,10);
+        s.deadline=newD;
       });
-      addLog(`📅 Каскад${room?' ('+room+')':''}: «${obj.name}» и ${affected.length-1} след. → ${days>0?'+':''}${days} дн.`,pid);
+
+      const cascCount=toShift.size-1;
+      addLog(`📅 Этап «${obj.name}» → ${fdate(nd,true)}${cascCount>0?` +${cascCount} связ.`:''}`,obj.pid);
+
     } else {
+      // Проект
       const snap={type:_gDrag.type,id:_gDrag.id,fields:{deadline:_gDrag.origDead}};
       if(_gDrag.type==='proj'&&_gDrag.origStart)snap.fields.start=_gDrag.origStart;
-      if(_gDrag.type==='stage'&&_gDrag.obj.startDate)snap.fields.startDate=_gDrag.obj.startDate;
       _gUndo.push(snap);
       if(_gUndo.length>10)_gUndo.shift();
-      if(_gDrag.type==='stage'){
-        if(!obj.deadlineHistory)obj.deadlineHistory=[];
-        obj.deadlineHistory.push({from:_gDrag.origDead,to:nd,by:D.currentUser?.name||'',at:new Date().toISOString()});
-        if(obj.startDate)obj.startDate=new Date(new Date(obj.startDate).getTime()+ms).toISOString().slice(0,10);
-        obj.deadline=nd;
-        addLog(`📅 Этап «${obj.name}» → ${fdate(nd,true)}`,obj.pid);
-        // сдвигаем этапы, заблокированные этим этапом, на тот же интервал
-        D.stages.filter(s=>s.blockedBy===obj.id&&!s.done&&s.deadline).forEach(s=>{
-          const oldD=s.deadline;
-          const newD=new Date(new Date(s.deadline).getTime()+ms).toISOString().slice(0,10);
-          if(!s.deadlineHistory)s.deadlineHistory=[];
-          s.deadlineHistory.push({from:oldD,to:newD,by:D.currentUser?.name||'🔗',at:new Date().toISOString()});
-          if(s.startDate)s.startDate=new Date(new Date(s.startDate).getTime()+ms).toISOString().slice(0,10);
-          s.deadline=newD;
-          addLog(`🔗 «${s.name}» сдвинут вслед за «${obj.name}»`,s.pid);
-        });
-      } else {
-        if(_gDrag.origStart)obj.start=new Date(new Date(_gDrag.origStart).getTime()+ms).toISOString().slice(0,10);
-        obj.deadline=nd;
-        addLog(`📅 ${obj.name}: сроки сдвинуты ${days>0?'+':''}${days} дн.`,obj.id);
-      }
+      if(_gDrag.origStart)obj.start=new Date(new Date(_gDrag.origStart).getTime()+ms).toISOString().slice(0,10);
+      obj.deadline=nd;
+      addLog(`📅 ${obj.name}: сроки сдвинуты ${days>0?'+':''}${days} дн.`,obj.id);
     }
     _gCleanupDragBars();
     save();rGantt();
@@ -4804,19 +4843,30 @@ function toggleTask(id,event){
 ═══════════════════════════════════════ */
 function calcDriftStats(){
   const stats={};
+  function _ens(who){
+    if(!stats[who])stats[who]={postpones:0,days:0,taskIds:new Set(),stageDays:0,stagePostpones:0};
+    return stats[who];
+  }
+  // Дрейф по задачам (кто назначен)
   D.tasks.forEach(t=>{
     if(!t.deadlineHistory?.length||!t.who)return;
     t.deadlineHistory.forEach(h=>{
       const d=Math.round((new Date(h.to)-new Date(h.from))/86400000);
-      if(d>0){
-        if(!stats[t.who])stats[t.who]={postpones:0,days:0,taskIds:new Set()};
-        stats[t.who].postpones++;
-        stats[t.who].days+=d;
-        stats[t.who].taskIds.add(t.id);
-      }
+      if(d>0){const v=_ens(t.who);v.postpones++;v.days+=d;v.taskIds.add(t.id);}
     });
   });
-  Object.values(stats).forEach(s=>{s.tasks=s.taskIds.size;delete s.taskIds;});
+  // Дрейф по этапам: только ручные переносы (auto!==true), приписываем менеджеру проекта
+  D.stages.forEach(s=>{
+    if(!s.deadlineHistory?.length)return;
+    const proj=D.projects.find(p=>p.id===s.pid);
+    const mgr=proj?.manager;
+    if(!mgr)return;
+    s.deadlineHistory.filter(h=>!h.auto).forEach(h=>{
+      const d=Math.round((new Date(h.to)-new Date(h.from))/86400000);
+      if(d>0){const v=_ens(mgr);v.stageDays+=d;v.stagePostpones++;}
+    });
+  });
+  Object.values(stats).forEach(s=>{s.tasks=s.taskIds?.size||0;delete s.taskIds;});
   return stats;
 }
 
@@ -4830,26 +4880,29 @@ function rTeam(){
   const ds=$('drift-stats');
   if(canSeeStats&&ds){
     const dstats=calcDriftStats();
-    const rows=Object.entries(dstats).sort((a,b)=>b[1].days-a[1].days);
+    const rows=Object.entries(dstats).map(([name,s])=>[name,{...s,total:(s.days||0)+(s.stageDays||0)}]).sort((a,b)=>b[1].total-a[1].total);
     if(rows.length){
-      const totalDrift=rows.reduce((s,[,v])=>s+v.days,0);
+      const totalDrift=rows.reduce((s,[,v])=>s+v.total,0);
       ds.innerHTML=`
         <div style="background:var(--s1);border:1px solid var(--b1);border-radius:12px;padding:14px 16px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
             <div style="font-size:13px;font-weight:700;color:var(--t1)">📊 Дрейф сроков</div>
             <div style="font-size:11px;color:var(--t3)">суммарно +${totalDrift} дн. по команде</div>
           </div>
-          <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 12px;align-items:center">
+          <div style="display:grid;grid-template-columns:1fr auto auto auto auto;gap:4px 10px;align-items:center">
             <div style="font-size:10px;color:var(--t3);font-weight:600">Менеджер</div>
-            <div style="font-size:10px;color:var(--t3);font-weight:600;text-align:center">Переносов</div>
+            <div style="font-size:10px;color:var(--t3);font-weight:600;text-align:center">Перен.задач</div>
+            <div style="font-size:10px;color:var(--t3);font-weight:600;text-align:center">Перен.этапов</div>
             <div style="font-size:10px;color:var(--t3);font-weight:600;text-align:center">Задач</div>
-            <div style="font-size:10px;color:var(--t3);font-weight:600;text-align:right">Дрейф</div>
+            <div style="font-size:10px;color:var(--t3);font-weight:600;text-align:right">Итого дрейф</div>
             ${rows.map(([name,s])=>{
-              const col=s.days>14?'var(--red)':s.days>7?'#EA580C':'var(--t2)';
+              const col=s.total>14?'var(--red)':s.total>7?'#EA580C':'var(--t2)';
+              const stagePart=s.stageDays?`<span style="color:var(--t3);font-weight:400"> +${s.stageDays}эт.</span>`:'';
               return`<div style="font-size:12px;color:var(--t1);padding:3px 0;border-top:1px solid var(--b1)">${name}</div>
-              <div style="font-size:12px;text-align:center;border-top:1px solid var(--b1);padding:3px 0">${s.postpones}</div>
-              <div style="font-size:12px;text-align:center;border-top:1px solid var(--b1);padding:3px 0;color:var(--t3)">${s.tasks}</div>
-              <div style="font-size:12px;font-weight:700;text-align:right;border-top:1px solid var(--b1);padding:3px 0;color:${col}">+${s.days} дн.</div>`;
+              <div style="font-size:12px;text-align:center;border-top:1px solid var(--b1);padding:3px 0">${s.postpones||0}</div>
+              <div style="font-size:12px;text-align:center;border-top:1px solid var(--b1);padding:3px 0;color:var(--t3)">${s.stagePostpones||0}</div>
+              <div style="font-size:12px;text-align:center;border-top:1px solid var(--b1);padding:3px 0;color:var(--t3)">${s.tasks||0}</div>
+              <div style="font-size:12px;font-weight:700;text-align:right;border-top:1px solid var(--b1);padding:3px 0;color:${col}">+${s.total} дн.${stagePart}</div>`;
             }).join('')}
           </div>
         </div>`;

@@ -152,17 +152,68 @@ jobs:
             const getProjName = pid => projects.find(p => p.id === pid)?.name || '—';
             const messages = [];
 
-            // Высокий приоритет просрочен (утро + вечер)
-            const highOverdue = tasks.filter(t =>
-              !t.done && (t.prio === 'high' || t.prio === 'critical') && t.dead && t.dead <= today
-            );
-            for (const t of highOverdue) {
-              const days = daysDiff(t.dead);
-              const proj = getProjName(t.pid);
-              if (days >= 2) {
-                await tgSend(TG_ADMIN,
-                  `🔴 <b>Высокий приоритет, просрочено ${days} дн.</b>\n«${t.name||t.title}»\nПроект: ${proj}\nИсполнитель: ${t.who||'не назначен'}\nДедлайн: ${fmt(t.dead)}`
-                );
+            // ── УТРЕННЯЯ СВОДКА В TELEGRAM (только 09:00) ──────────────────
+            if (isMorning) {
+              const overdueT = tasks.filter(t => !t.done && t.dead && t.dead < today)
+                .sort((a,b) => a.dead.localeCompare(b.dead));
+              const todayT  = tasks.filter(t => !t.done && t.dead === today);
+              const overdueS = stages.filter(s => !s.done && s.deadline && s.deadline < today)
+                .sort((a,b) => a.deadline.localeCompare(b.deadline));
+              const todayS  = stages.filter(s => !s.done && s.deadline === today);
+
+              const dateRu = d => { const [y,m,dd]=d.split('-'); return `${dd}.${m}`; };
+              const ago = d => { const n=daysDiff(d); return n===1?'вчера':`${n} дн. назад`; };
+
+              let lines = [];
+              const dateStr = new Date().toLocaleDateString('ru-RU',{day:'numeric',month:'long',timeZone:'Europe/Moscow'});
+              lines.push(`☀️ <b>Утренняя сводка FSC — ${dateStr}</b>\n`);
+
+              if (overdueT.length) {
+                lines.push(`🔴 <b>Просрочено задач: ${overdueT.length}</b>`);
+                overdueT.slice(0,8).forEach(t => {
+                  const hi = ['high','critical'].includes(t.prio) ? ' ⚡' : '';
+                  lines.push(`  • ${t.name||t.title}${hi}\n    ${t.who||'не назначен'} · ${dateRu(t.dead)} (${ago(t.dead)})`);
+                });
+                if (overdueT.length > 8) lines.push(`  ...и ещё ${overdueT.length-8}`);
+                lines.push('');
+              }
+
+              if (todayT.length) {
+                lines.push(`📅 <b>Срок сегодня: ${todayT.length} задач</b>`);
+                todayT.slice(0,6).forEach(t => {
+                  lines.push(`  • ${t.name||t.title} — ${t.who||'не назначен'}`);
+                });
+                if (todayT.length > 6) lines.push(`  ...и ещё ${todayT.length-6}`);
+                lines.push('');
+              }
+
+              if (overdueS.length) {
+                lines.push(`🏗 <b>Просрочено этапов: ${overdueS.length}</b>`);
+                overdueS.slice(0,5).forEach(s => {
+                  lines.push(`  • ${s.name} — ${getProjName(s.pid)} (${ago(s.deadline)})`);
+                });
+                if (overdueS.length > 5) lines.push(`  ...и ещё ${overdueS.length-5}`);
+                lines.push('');
+              }
+
+              if (todayS.length) {
+                lines.push(`📌 <b>Этапы сегодня: ${todayS.length}</b>`);
+                todayS.forEach(s => lines.push(`  • ${s.name} — ${getProjName(s.pid)}`));
+                lines.push('');
+              }
+
+              // Статистика проектов
+              const activeP  = projects.filter(p=>p.status==='active').length;
+              const overdueP = projects.filter(p=>p.status==='overdue').length;
+              lines.push(`📊 Проектов: ${activeP} активных, ${overdueP} просрочено · Задач в работе: ${tasks.filter(t=>!t.done).length}`);
+
+              if (overdueT.length || todayT.length || overdueS.length || todayS.length) {
+                const msg = lines.join('\n');
+                const targets = [D.tgAdminId, D.tgTechDirId].filter(Boolean);
+                for (const id of targets) await tgSend(id, msg);
+              } else {
+                const targets = [D.tgAdminId, D.tgTechDirId].filter(Boolean);
+                for (const id of targets) await tgSend(id, `✅ <b>Утренняя сводка FSC</b>\n\nПросроченных задач и этапов нет. Всё по плану 👍`);
               }
             }
 

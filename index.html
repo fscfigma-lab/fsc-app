@@ -267,7 +267,7 @@ body{background:var(--bg)}
 
 /* ── GANTT ── */
 .gantt-wrap{overflow-x:auto}
-.gantt{display:flex;flex-direction:column;min-width:900px}
+.gantt{display:flex;flex-direction:column;min-width:900px;position:relative}
 .g-hrow{display:flex;border-bottom:1px solid var(--b1);position:sticky;top:0;
   background:rgba(244,241,235,0.95);backdrop-filter:blur(8px);z-index:10}
 .g-lcol{width:200px;flex-shrink:0;padding:10px 12px;font-size:9px;color:var(--t3);
@@ -1650,7 +1650,13 @@ body{background:var(--bg)}
     </div>
     <div class="modal-scroll">
     <div class="fg"><label class="fl">Название *</label><input type="text" class="fi" id="t-name" placeholder="Что нужно сделать?"></div>
-    <div class="fg"><label class="fl">Проект</label><select class="fi" id="t-proj"></select></div>
+    <div class="fg"><label class="fl">Проект</label><select class="fi" id="t-proj" onchange="_refreshTaskBlockedBy()"></select></div>
+    <div class="fg" id="t-blockedby-row" style="display:none">
+      <label class="fl">🔗 Зависит от этапа</label>
+      <select class="fi" id="t-blockedby">
+        <option value="">— не задано —</option>
+      </select>
+    </div>
     <div class="fg-row">
       <div style="flex:2"><label class="fl">Дедлайн</label><input type="date" class="fi" id="t-dead"></div>
       <div style="flex:1"><label class="fl">Время</label><input type="time" class="fi" id="t-time"></div>
@@ -1768,6 +1774,12 @@ body{background:var(--bg)}
         📷 Добавить фото
         <input type="file" id="s-photo-inp" accept="image/*" multiple style="display:none" onchange="addStagePhotos(this)">
       </label>
+    </div>
+    <div class="fg" id="s-blockedby-row" style="display:none">
+      <label class="fl">🔗 Зависит от этапа</label>
+      <select class="fi" id="s-blockedby">
+        <option value="">— не задано —</option>
+      </select>
     </div>
     <div class="mfoot">
       <button class="btn btn-d" id="s-del-btn" style="display:none;margin-right:auto" onclick="deleteStageFromModal()">Удалить</button>
@@ -3227,6 +3239,14 @@ function openStageModal(pid,sid){
   _sPhotos=[...(s?.photos||[])];
   _renderSPhotos();
   $('s-del-btn').style.display=s?'':'none';
+  // blockedBy
+  const _sibs=D.stages.filter(x=>x.pid===pid&&x.id!==sid);
+  const _bbRow=$('s-blockedby-row'),_bbSel=$('s-blockedby');
+  if(_sibs.length&&_bbRow&&_bbSel){
+    _bbSel.innerHTML='<option value="">— не задано —</option>'+
+      _sibs.map(x=>`<option value="${x.id}"${s?.blockedBy===x.id?' selected':''}>${x.icon||'📋'} ${x.name}${x.deadline?' ('+fdate(x.deadline,true)+')':''}</option>`).join('');
+    _bbRow.style.display='';
+  }else if(_bbRow){_bbRow.style.display='none';}
   openM('m-stage');
 }
 
@@ -3238,6 +3258,7 @@ function saveStageModal(){
   const startDate=$('s-startdate').value||undefined;
   if(!name){toast('Введи название этапа','err');return;}
   if(!deadline){toast('Укажи дедлайн','err');return;}
+  const blockedBy=$('s-blockedby')?.value||undefined;
   if(_stageEditId){
     const s=D.stages.find(x=>x.id===_stageEditId);
     if(s){
@@ -3246,11 +3267,12 @@ function saveStageModal(){
         s.deadlineHistory.push({from:s.deadline,to:deadline,by:D.currentUser?.name||'',at:new Date().toISOString()});
       }
       s.name=name;s.deadline=deadline;s.icon=icon;s.room=room;s.startDate=startDate;
+      s.blockedBy=blockedBy;
       s.photos=_sPhotos.length?[..._sPhotos]:undefined;
     }
   } else {
     const maxOrder=D.stages.filter(s=>s.pid===_stagePid).reduce((m,s)=>Math.max(m,s.order||0),0);
-    D.stages.push({id:uid(),pid:_stagePid,name,icon,deadline,startDate,room,done:false,order:maxOrder+1,photos:_sPhotos.length?[..._sPhotos]:undefined});
+    D.stages.push({id:uid(),pid:_stagePid,name,icon,deadline,startDate,room,blockedBy,done:false,order:maxOrder+1,photos:_sPhotos.length?[..._sPhotos]:undefined});
     addLog(`${icon} Этап «${name}» добавлен`,_stagePid);
     const proj=D.projects.find(p=>p.id===_stagePid);
     sendPush(`${icon} Новый этап`,`«${name}»${proj?' — '+proj.name:''}${deadline?' · срок '+deadline:''}${D.currentUser?' · '+D.currentUser.name:''}`,`construction`);
@@ -3858,6 +3880,47 @@ function rGantt(){
   }
 
   $('gantt').innerHTML=html;
+  _drawGanttDeps();
+}
+
+function _drawGanttDeps(){
+  const container=$('gantt');
+  if(!container)return;
+  const old=document.getElementById('g-deps-svg');
+  if(old)old.remove();
+  const deps=D.stages.filter(s=>s.blockedBy&&!s.done);
+  const tdeps=D.tasks.filter(t=>t.blockedBy&&!t.done);
+  if(!deps.length&&!tdeps.length)return;
+  const NS='http://www.w3.org/2000/svg';
+  const svg=document.createElementNS(NS,'svg');
+  svg.id='g-deps-svg';
+  svg.setAttribute('xmlns',NS);
+  svg.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:20;overflow:visible';
+  const defs=document.createElementNS(NS,'defs');
+  const marker=document.createElementNS(NS,'marker');
+  marker.id='gdep-arr';marker.setAttribute('markerWidth','7');marker.setAttribute('markerHeight','7');
+  marker.setAttribute('refX','6');marker.setAttribute('refY','3.5');marker.setAttribute('orient','auto');
+  const mpoly=document.createElementNS(NS,'polygon');
+  mpoly.setAttribute('points','0 0, 7 3.5, 0 7');mpoly.setAttribute('fill','#C9952A');mpoly.setAttribute('opacity','0.85');
+  marker.appendChild(mpoly);defs.appendChild(marker);svg.appendChild(defs);
+  const cr=container.getBoundingClientRect();
+  function drawArrow(fromEl,toEl){
+    if(!fromEl||!toEl)return;
+    const fr=fromEl.getBoundingClientRect(),tr=toEl.getBoundingClientRect();
+    const x1=fr.right-cr.left,y1=fr.top+fr.height/2-cr.top;
+    const x2=tr.left-cr.left,y2=tr.top+tr.height/2-cr.top;
+    const cx=(x1+x2)/2;
+    const path=document.createElementNS(NS,'path');
+    path.setAttribute('d',`M${x1.toFixed(1)},${y1.toFixed(1)} C${cx.toFixed(1)},${y1.toFixed(1)} ${cx.toFixed(1)},${y2.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}`);
+    path.setAttribute('stroke','#C9952A');path.setAttribute('stroke-width','1.5');
+    path.setAttribute('stroke-dasharray','5 3');path.setAttribute('fill','none');
+    path.setAttribute('opacity','0.75');path.setAttribute('marker-end','url(#gdep-arr)');
+    svg.appendChild(path);
+  }
+  deps.forEach(s=>{
+    drawArrow(container.querySelector(`[data-sid="${s.blockedBy}"]`),container.querySelector(`[data-sid="${s.id}"]`));
+  });
+  container.appendChild(svg);
 }
 
 function gShift(d){gOff+=d;rGantt()}
@@ -4107,6 +4170,16 @@ function _gUp(e){
         if(obj.startDate)obj.startDate=new Date(new Date(obj.startDate).getTime()+ms).toISOString().slice(0,10);
         obj.deadline=nd;
         addLog(`📅 Этап «${obj.name}» → ${fdate(nd,true)}`,obj.pid);
+        // сдвигаем этапы, заблокированные этим этапом, на тот же интервал
+        D.stages.filter(s=>s.blockedBy===obj.id&&!s.done&&s.deadline).forEach(s=>{
+          const oldD=s.deadline;
+          const newD=new Date(new Date(s.deadline).getTime()+ms).toISOString().slice(0,10);
+          if(!s.deadlineHistory)s.deadlineHistory=[];
+          s.deadlineHistory.push({from:oldD,to:newD,by:D.currentUser?.name||'🔗',at:new Date().toISOString()});
+          if(s.startDate)s.startDate=new Date(new Date(s.startDate).getTime()+ms).toISOString().slice(0,10);
+          s.deadline=newD;
+          addLog(`🔗 «${s.name}» сдвинут вслед за «${obj.name}»`,s.pid);
+        });
       } else {
         if(_gDrag.origStart)obj.start=new Date(new Date(_gDrag.origStart).getTime()+ms).toISOString().slice(0,10);
         obj.deadline=nd;
@@ -5006,6 +5079,8 @@ function openTaskModal(tid,forceProj){
       _tTags=[...(t.tags||[])];_tPhotos=[...(t.photos||[])];_tFiles=[...(t.files||[])];
       const rd=t.remind?t.remind.split('T'):['',''];
       $('t-remind-d').value=rd[0]||'';$('t-remind-t').value=rd[1]||'';
+      _refreshTaskBlockedBy();
+      if(t.blockedBy)$('t-blockedby').value=t.blockedBy;
     }
   }else{
     $('t-name').value='';$('t-notes').value='';
@@ -5013,6 +5088,7 @@ function openTaskModal(tid,forceProj){
     $('t-proj').value=defProj;
     $('t-dead').value=TODAY();$('t-time').value='';$('t-who').value=D.currentUser?.name||'';$('t-prio').value='medium';
     _tTags=[];_tPhotos=[];_tFiles=[];$('t-remind-d').value='';$('t-remind-t').value='';
+    _refreshTaskBlockedBy();
   }
   _renderTagPre();_renderTagList();_renderPhotos();_renderTaskFiles();
   openM('m-task');
@@ -5027,6 +5103,7 @@ function saveTask(){
   const isNew=!tedit;
   const t={id:tedit||uid(),name,pid:$('t-proj').value||null,dead:$('t-dead').value||null,
     time:$('t-time').value||null,who:$('t-who').value||null,prio:$('t-prio').value,done:false,
+    blockedBy:$('t-blockedby')?.value||undefined,
     notes,
     tags:_tTags.length?[..._tTags]:undefined,
     photos:_tPhotos.length?[..._tPhotos]:undefined,
@@ -5078,6 +5155,24 @@ function saveTask(){
       const proj=t.pid?D.projects.find(p=>p.id===t.pid):null;
       sendTgToUser(member.tgId,`📌 <b>Вам назначена задача</b>\n«${t.name}»${proj?'\nПроект: '+proj.name:''}${t.dead?'\nДедлайн: '+fdate(t.dead,true):''}`);
     }
+  }
+}
+
+function _refreshTaskBlockedBy(){
+  const pid=$('t-proj')?.value;
+  const row=$('t-blockedby-row');
+  const sel=$('t-blockedby');
+  if(!row||!sel)return;
+  if(!pid){row.style.display='none';return;}
+  const stages=D.stages.filter(s=>s.pid===pid&&!s.done);
+  if(stages.length){
+    const cur=sel.value;
+    sel.innerHTML='<option value="">— не задано —</option>'+
+      stages.map(s=>`<option value="${s.id}"${s.id===cur?' selected':''}>${s.icon||'📋'} ${s.name}${s.deadline?' ('+fdate(s.deadline,true)+')':''}</option>`).join('');
+    row.style.display='';
+  }else{
+    sel.innerHTML='<option value="">— не задано —</option>';
+    row.style.display='none';
   }
 }
 
@@ -5830,6 +5925,9 @@ async function showSettingsModal(){
     <div class="fg" style="margin-top:8px"><label class="fl">GitHub PAT (для Web Push)</label>
       <input type="password" class="fi" id="s-github-pat" value="${D.githubPat||''}" placeholder="ghp_…" style="font-family:monospace;font-size:12px">
     </div>
+    <div class="fg" style="margin-top:8px"><label class="fl">ntfy.sh Топик</label>
+      <input type="text" class="fi" id="s-ntfy-topic" value="${D.ntfyTopic||''}" placeholder="fsc-уведомления" style="font-family:monospace;font-size:12px">
+    </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
       <button class="btn btn-p" style="font-size:12px" onclick="saveTgSettings()">💾 Сохранить</button>
       <button class="btn btn-s" style="font-size:12px" onclick="testTgConnection()">⚡ Тест бота</button>
@@ -5847,16 +5945,6 @@ async function showSettingsModal(){
       <button class="btn btn-s" style="font-size:12px" onclick="testPush()">🔔 Тест</button>
       <button class="btn btn-p" style="font-size:12px" onclick="testNotifNow()">📨 Отправить сводку в Telegram</button>
     </div>
-    <div class="fg" style="margin-bottom:0">
-      <label class="fl">🔑 OneSignal REST API Key</label>
-      <input type="password" class="fi" id="onesignal-key" value="${D.oneSignalApiKey||''}" placeholder="os_v2_..."
-        style="font-family:monospace;font-size:12px">
-    </div>
-    <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
-      <button class="btn btn-p" style="font-size:12px" onclick="saveOneSignalKey()">Сохранить ключ</button>
-      <span style="font-size:11px;color:var(--t3)">OneSignal → Settings → Keys &amp; IDs → REST API Key</span>
-    </div>
-
     <div class="sec-title" style="margin-top:16px">🗓 Google Календарь</div>
     <div style="font-size:12px;color:var(--t2);margin-bottom:10px;line-height:1.5">
       Синхронизирует дедлайны проектов, этапов и критических задач в твой Google Calendar.<br>
@@ -5915,10 +6003,12 @@ async function saveTgSettings(){
   const adminId=($('s-tg-admin')?.value||'').trim();
   const techDirId=($('s-tg-techdir')?.value||'').trim();
   const githubPat=($('s-github-pat')?.value||'').trim();
+  const ntfyTopic=($('s-ntfy-topic')?.value||'').trim();
   if(token)D.tgBotToken=token;
   if(adminId)D.tgAdminId=adminId;
   if(techDirId)D.tgTechDirId=techDirId;
   if(githubPat)D.githubPat=githubPat;
+  if(ntfyTopic)D.ntfyTopic=ntfyTopic;
   try{
     const {data}=await sb.from('app_data').select('data').eq('id','main').maybeSingle();
     const cur=data?.data||{};
@@ -5926,6 +6016,7 @@ async function saveTgSettings(){
     if(adminId)cur.tgAdminId=adminId;
     if(techDirId)cur.tgTechDirId=techDirId;
     if(githubPat)cur.githubPat=githubPat;
+    if(ntfyTopic)cur.ntfyTopic=ntfyTopic;
     const {error}=await sb.from('app_data').upsert({id:'main',data:cur,updated_at:new Date().toISOString()});
     if(error)throw error;
     toast('✅ Токены сохранены в Supabase','ok');

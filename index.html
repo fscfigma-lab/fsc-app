@@ -4283,10 +4283,11 @@ function _gMove(e){
         previewIds.add(s.id);
       });
     }
-    // 2) dep-chain BFS (всегда)
-    {const q=[_gDrag.id],vis=new Set([_gDrag.id]);
+    // 2) dep-chain BFS (всегда, в рамках того же помещения)
+    {const room=_gDrag.obj.room;
+    const q=[_gDrag.id],vis=new Set([_gDrag.id]);
     while(q.length){const cur=q.shift();
-      D.stages.filter(s=>s.blockedBy===cur&&!s.done&&!vis.has(s.id)).forEach(s=>{
+      D.stages.filter(s=>s.blockedBy===cur&&!s.done&&!vis.has(s.id)&&(!room||s.room===room)).forEach(s=>{
         vis.add(s.id);previewIds.add(s.id);q.push(s.id);
       });
     }}
@@ -4296,7 +4297,8 @@ function _gMove(e){
       if(!barEl)return;
       barEl.style.transition='none';
       barEl.style.opacity='0.5';
-      _applyBarShift(barEl,pctShift,barEl.dataset.hasStart==='1');
+      // Всегда translate (сохранение ширины = сохранение буфера), не растягиваем встык
+      _applyBarShift(barEl,pctShift,true);
     });
   }
 
@@ -4355,12 +4357,13 @@ function _gUp(e){
         });
       }
 
-      // 2) Всегда: рекурсивный BFS по цепочке blockedBy
-      {const q=[obj.id],vis=new Set([obj.id]);
+      // 2) Всегда: рекурсивный BFS по цепочке blockedBy (в рамках того же помещения)
+      {const room=obj.room;
+      const q=[obj.id],vis=new Set([obj.id]);
       while(q.length){
         const cur=q.shift();
         const curName=(D.stages.find(s=>s.id===cur)||{name:cur}).name;
-        D.stages.filter(s=>s.blockedBy===cur&&!s.done&&s.deadline&&!vis.has(s.id)).forEach(s=>{
+        D.stages.filter(s=>s.blockedBy===cur&&!s.done&&s.deadline&&!vis.has(s.id)&&(!room||s.room===room)).forEach(s=>{
           vis.add(s.id);
           if(!toShift.has(s.id))toShift.set(s.id,`Автосдвиг: «${curName}»`);
           q.push(s.id);

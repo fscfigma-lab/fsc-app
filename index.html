@@ -293,6 +293,7 @@ body{background:var(--bg)}
 .g-bar{position:absolute;height:26px;border-radius:6px;border:1px solid var(--b2);
   display:flex;align-items:center;padding:0 10px;font-size:11px;overflow:hidden;
   cursor:grab;transition:opacity .15s,box-shadow .15s,filter .15s;white-space:nowrap;font-weight:500}
+.g-bar.is-dragging,.g-sbar.is-dragging{transition:none !important;}
 .g-bar:hover{z-index:10;overflow:visible;min-width:max-content;box-shadow:var(--shadow-md);filter:brightness(1.15)}
 .g-bar:hover::after{content:'⠿⠿';position:absolute;right:5px;top:50%;transform:translateY(-50%);font-size:10px;opacity:.5;pointer-events:none}
 .g-bar.on-track{background:rgba(201,149,42,0.10);border-color:var(--acc-bd);color:var(--acc)}
@@ -4218,6 +4219,13 @@ function removeDemoRooms(){
   save();rGantt();toast('🗑 Демо этапы удалены','ok');
 }
 
+function _shiftDate(dateStr,deltaDays){
+  if(!dateStr)return null;
+  const d=new Date(dateStr+'T00:00:00');
+  d.setDate(d.getDate()+deltaDays);
+  return d.toISOString().slice(0,10);
+}
+
 function _gClientXY(e){
   // Возвращает {x,y} для mouse и touch событий
   if(e.touches&&e.touches.length)return{x:e.touches[0].clientX,y:e.touches[0].clientY};
@@ -4240,6 +4248,7 @@ function gBarDown(e,type,id){
   const origWidth=parseFloat(bar.dataset.ow||bar.style.width)||0;
   bar.style.transition='none';
   bar.style.willChange='left,width';
+  bar.classList.add('is-dragging');
 
   // Пред-вычисляем список зависимых баров один раз
   const cascadeBars=[];
@@ -4268,6 +4277,7 @@ function gBarDown(e,type,id){
       if(!el)return;
       el.style.transition='none';
       el.style.willChange='left';
+      el.classList.add('is-dragging');
       cascadeBars.push(el);
     });
   }
@@ -4352,15 +4362,18 @@ function _gCleanupDragBars(){
     _gDrag.bar.style.opacity='';
     _gDrag.bar.style.cursor='';
     _gDrag.bar.style.willChange='';
+    _gDrag.bar.classList.remove('is-dragging');
     _gDrag.cascadeBars.forEach(el=>{
       el.style.transition='';
       el.style.opacity='';
       el.style.willChange='';
+      el.classList.remove('is-dragging');
     });
   }
   document.querySelectorAll('.g-sbar[data-sid]').forEach(el=>{
     el.style.transition='';
     el.style.opacity='';
+    el.classList.remove('is-dragging');
   });
 }
 
@@ -4368,11 +4381,10 @@ function _gUp(e){
   if(!_gDrag)return;
   const {x}=_gClientXY(e);
   const dx=x-_gDrag.startX;
-  const days=Math.round(dx/_gDrag.cw*_gVP.total);
-  if(_gDrag.moved&&Math.abs(days)>=1){
+  const deltaDays=Math.round(dx/_gDrag.cw*_gVP.total);
+  if(_gDrag.moved&&Math.abs(deltaDays)>=1){
     const obj=_gDrag.obj;
-    const ms=days*86400000;
-    const nd=new Date(new Date(_gDrag.origDead).getTime()+ms).toISOString().slice(0,10);
+    const nd=_shiftDate(_gDrag.origDead,deltaDays);
     // Сохраняем в стек для отмены и применяем
     if(_gDrag.type==='stage'){
       // === Собираем всё что нужно сдвинуть ===
@@ -4418,12 +4430,12 @@ function _gUp(e){
       }
       if(_gUndo.length>10)_gUndo.shift();
 
-      // === Применяем сдвиги ===
+      // === Применяем сдвиги через calendar-aware _shiftDate (без DST-артефактов) ===
       toShift.forEach((reason,id)=>{
         const s=D.stages.find(s=>s.id===id);
         if(!s)return;
         const oldD=s.deadline;
-        const newD=new Date(new Date(s.deadline).getTime()+ms).toISOString().slice(0,10);
+        const newD=_shiftDate(s.deadline,deltaDays);
         const isRoot=id===obj.id;
         if(!s.deadlineHistory)s.deadlineHistory=[];
         s.deadlineHistory.push({
@@ -4433,7 +4445,7 @@ function _gUp(e){
           ancestorId:isRoot?undefined:obj.id,
           at:new Date().toISOString()
         });
-        if(s.startDate)s.startDate=new Date(new Date(s.startDate).getTime()+ms).toISOString().slice(0,10);
+        if(s.startDate)s.startDate=_shiftDate(s.startDate,deltaDays);
         s.deadline=newD;
       });
 
@@ -4455,9 +4467,9 @@ function _gUp(e){
       if(_gDrag.type==='proj'&&_gDrag.origStart)snap.fields.start=_gDrag.origStart;
       _gUndo.push(snap);
       if(_gUndo.length>10)_gUndo.shift();
-      if(_gDrag.origStart)obj.start=new Date(new Date(_gDrag.origStart).getTime()+ms).toISOString().slice(0,10);
+      if(_gDrag.origStart)obj.start=_shiftDate(_gDrag.origStart,deltaDays);
       obj.deadline=nd;
-      addLog(`📅 ${obj.name}: сроки сдвинуты ${days>0?'+':''}${days} дн.`,obj.id);
+      addLog(`📅 ${obj.name}: сроки сдвинуты ${deltaDays>0?'+':''}${deltaDays} дн.`,obj.id);
     }
     _gCleanupDragBars();
     save();rGantt();
@@ -4678,7 +4690,12 @@ function rTasks(){
   tasks.sort((a,b)=>{
     if(a.done&&!b.done)return 1;if(!a.done&&b.done)return-1;
     if(!a.dead&&b.dead)return 1;if(a.dead&&!b.dead)return-1;
-    return(a.dead||'').localeCompare(b.dead||'')||prioW(b.prio)-prioW(a.prio);
+    const dc=(a.dead||'').localeCompare(b.dead||'');
+    if(dc!==0)return dc;
+    // При равных датах: fast-задачи первыми, затем по приоритету
+    const fa=a.fast&&!a.done?1:0,fb=b.fast&&!b.done?1:0;
+    if(fb!==fa)return fb-fa;
+    return prioW(b.prio)-prioW(a.prio);
   });
   $('tasks-sub').textContent=decl(tasks.length,'задача','задачи','задач');
 
@@ -5433,7 +5450,7 @@ function saveTask(){
     createdAt:existing?.createdAt||new Date().toISOString(),
     closedAt:existing?.closedAt,
     // origDead — исходный срок при создании, никогда не меняется
-    origDead:isNew?(($('t-dead').value)||null):(existing.origDead||existing.dead||null),
+    origDead:isNew?(($('t-dead').value)||null):(existing.origDead||null),
     deadlineHistory:existing?.deadlineHistory||([])};
   if(existing&&existing.dead&&t.dead&&existing.dead!==t.dead){
     t.deadlineHistory.push({from:existing.dead,to:t.dead,by:D.currentUser?.name||'',at:new Date().toISOString()});

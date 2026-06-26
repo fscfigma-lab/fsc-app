@@ -5539,14 +5539,20 @@ async function _cloudSync(){
     const localStr=JSON.stringify({p:D.projects,t:D.tasks,s:D.stages});
     if(remoteStr===localStr)return;
     const savedUser=D.currentUser;
+    // Сохраняем секреты из текущего D — они могут отсутствовать в Supabase-копии
+    const _SEC_KEYS=['tgBotToken','tgAdminId','tgTechDirId','anthropicKey','githubPat','ntfyTopic','gcalClientId'];
+    const _savedSecs={};
+    _SEC_KEYS.forEach(k=>{if(D[k])_savedSecs[k]=D[k];});
     D=data.data;
     D.currentUser=savedUser;
+    // Восстанавливаем секреты если в Supabase они вдруг отсутствуют
+    _SEC_KEYS.forEach(k=>{if(!D[k]&&_savedSecs[k])D[k]=_savedSecs[k];});
     if(!D.stages)D.stages=[];
     if(!D.log)D.log=[];
     localStorage.setItem('fsc4',JSON.stringify(D));
     render(curPage);
     updateBadges&&updateBadges();
-  }catch(e){}
+  }catch(e){console.error('[sync] _cloudSync error:',e);}
 }
 
 /* ═══════════════════════════════════════
@@ -5649,25 +5655,35 @@ function _urlBase64ToUint8Array(b64){
 // Личное уведомление конкретному сотруднику по его tgId
 async function sendTgToUser(tgId, text){
   const token=D.tgBotToken;
-  if(!token||!tgId)return;
-  fetch(`https://api.telegram.org/bot${token}/sendMessage`,{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({chat_id:tgId,text,parse_mode:'HTML'})
-  }).catch(()=>{});
+  if(!token||!tgId){console.warn('[TG] sendTgToUser: нет токена или tgId');return;}
+  try{
+    const r=await fetch(`https://api.telegram.org/bot${token}/sendMessage`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({chat_id:tgId,text,parse_mode:'HTML'})
+    });
+    const j=await r.json();
+    if(!j.ok)console.error('[TG] sendTgToUser API error:',j.description,'→ chat_id:',tgId);
+    else console.log('[TG] sendTgToUser ✅ →',tgId);
+  }catch(e){console.error('[TG] sendTgToUser fetch failed:',e.message,'→ chat_id:',tgId);}
 }
 
 // Мгновенная отправка в Telegram прямо из браузера (без задержки)
 async function sendTgNow(title, body){
   const token=D.tgBotToken;
-  if(!token)return;
+  if(!token){console.warn('[TG] sendTgNow: tgBotToken не задан в D');return;}
   const targets=[D.tgAdminId,D.tgTechDirId].filter(Boolean);
+  if(!targets.length){console.warn('[TG] sendTgNow: нет получателей — tgAdminId и tgTechDirId не заданы');return;}
   const text=`<b>${title}</b>${body?'\n'+body:''}`;
   for(const id of targets){
-    fetch(`https://api.telegram.org/bot${token}/sendMessage`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({chat_id:id,text,parse_mode:'HTML'})
-    }).catch(()=>{});
+    try{
+      const r=await fetch(`https://api.telegram.org/bot${token}/sendMessage`,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({chat_id:id,text,parse_mode:'HTML'})
+      });
+      const j=await r.json();
+      if(!j.ok)console.error('[TG] sendTgNow API error:',j.description,'→ chat_id:',id);
+      else console.log('[TG] sendTgNow ✅ →',id);
+    }catch(e){console.error('[TG] sendTgNow fetch failed:',e.message,'→ chat_id:',id);}
   }
 }
 
@@ -5676,11 +5692,14 @@ async function sendPush(title,body,tag,tg=false){
   if(tg) sendTgNow(title,body);
   // В очередь для web push
   try{
-    const {data}=await sb.from('app_data').select('data').eq('id','push_queue').maybeSingle();
+    const {data,error:qErr}=await sb.from('app_data').select('data').eq('id','push_queue').maybeSingle();
+    if(qErr)throw qErr;
     const q=data?.data||[];
     q.push({title,body,tag:tag||'fsc',ts:Date.now()});
-    await sb.from('app_data').upsert({id:'push_queue',data:q});
-  }catch(e){console.warn('sendPush queue error:',e);}
+    const {error:uErr}=await sb.from('app_data').upsert({id:'push_queue',data:q});
+    if(uErr)throw uErr;
+    console.log('[push] добавлено в очередь:',title,'(всего в очереди:',q.length,')');
+  }catch(e){console.error('[push] sendPush queue error:',e);}
 }
 
 async function flushPushQueue(){

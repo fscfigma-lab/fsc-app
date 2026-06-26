@@ -17,6 +17,7 @@
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <style>
 @keyframes spin{to{transform:rotate(360deg)}}
 /* ── LOGIN ── */
@@ -350,6 +351,9 @@ body{background:var(--bg)}
 .g-mgr-badge.od{background:var(--red)}
 /* Room header rows within expanded project */
 .g-penalty{border-left:3px solid #dc2626!important;background:rgba(220,38,38,.04)}
+.ctr-room{background:var(--s1);border-radius:8px;padding:8px 10px;margin-bottom:6px;border:1px solid var(--b1)}
+.ctr-stage{border-radius:6px;transition:background .15s}.ctr-stage:hover{background:var(--s2)}
+.ctr-sname,.ctr-sdur,.ctr-rname{background:transparent;border:1px solid transparent}.ctr-sname:hover,.ctr-sname:focus,.ctr-sdur:hover,.ctr-sdur:focus,.ctr-rname:hover,.ctr-rname:focus{background:var(--s2);border-color:var(--b2)}
 .g-row .g-penalty-badge{display:inline-block;background:var(--red-bg);border:1px solid var(--red-bd);color:var(--red);font-size:9px;padding:1px 5px;border-radius:6px;margin-left:4px;white-space:nowrap}
 .g-room-hdr{display:flex;align-items:center;gap:6px;padding:5px 8px 5px 36px;
   background:rgba(201,149,42,0.06);border-bottom:1px solid var(--b1);
@@ -1315,7 +1319,7 @@ body{background:var(--bg)}
         <div class="ph-actions" id="proj-ph-actions" style="display:flex;gap:8px;align-items:center">
           <label class="btn btn-s" id="contract-btn" style="cursor:pointer;display:flex;align-items:center;gap:5px;font-size:12px" title="Создать проект из PDF договора">
             📎 Из договора
-            <input type="file" id="contract-file-inp" accept=".pdf" style="display:none" onchange="parseContractFile()">
+            <input type="file" id="contract-file-inp" accept=".pdf,.docx,.jpeg,.jpg,.png" style="display:none" onchange="parseContractFile()">
           </label>
           <button class="btn btn-p" onclick="openProjectModal()">+ Проект</button>
         </div>
@@ -1818,10 +1822,9 @@ body{background:var(--bg)}
 
 <!-- MODAL: CONTRACT IMPORT -->
 <div class="moverlay" id="m-contract">
-  <div class="modal" style="max-width:520px">
+  <div class="modal" style="max-width:580px;max-height:88vh;display:flex;flex-direction:column">
     <div class="mtitle">🤖 Проект из договора</div>
-    <div id="m-contract-body"><div style="color:var(--t3)">Загрузка…</div></div>
-    <div id="m-contract-rooms" style="margin-top:8px"></div>
+    <div id="m-contract-body" style="overflow-y:auto;flex:1;padding-right:2px"><div style="color:var(--t3)">Загрузка…</div></div>
     <div class="mfoot">
       <button class="btn btn-s" onclick="closeM('m-contract')">Отмена</button>
       <button class="btn btn-p" onclick="confirmContractProject()">✅ Создать проект</button>
@@ -3355,6 +3358,36 @@ let gStageFilter=''; // ''|'has'|'no'
 ═══════════════════════════════════════ */
 let _contractData=null;
 
+const _CONTRACT_SYS=`Ты анализатор договоров строительной компании FSC (мрамор, натуральный камень, монтаж).
+Изучи документ и верни ТОЛЬКО валидный JSON (без markdown, без \`\`\`, без пояснений):
+{
+  "name": "Краткое название (например: 'Jumeirah 128 / Апартамент 45')",
+  "client": "Имя заказчика или компании",
+  "address": "Адрес объекта",
+  "budget": число_рублей_или_null,
+  "start": "ГГГГ-ММ-ДД или null",
+  "deadline": "ГГГГ-ММ-ДД или null",
+  "scope": "Описание работ 1-2 предложения",
+  "rooms": [
+    {
+      "name": "Название помещения (Гостиная, Санузел, Кухня, Фасад...)",
+      "stages": [
+        {"name": "Замеры", "durationDays": 1},
+        {"name": "Изготовление", "durationDays": 14},
+        {"name": "Монтаж", "durationDays": 5},
+        {"name": "Полировка", "durationDays": 2}
+      ]
+    }
+  ]
+}
+Правила:
+1. rooms — все зоны/комнаты из спецификации. Если не указаны — одна группа с именем проекта.
+2. stages внутри room идут В ПОРЯДКЕ ВЫПОЛНЕНИЯ (цепочка Финиш→Старт).
+3. Стандарты FSC: Замеры(1-2дн), Проектирование(3-7дн), Изготовление(10-30дн), Монтаж(2-14дн), Полировка(1-3дн), Сдача(1дн).
+4. durationDays: реалистичная длительность этапа. Если в договоре явно — используй её, иначе стандартную.
+5. budget: сумма в рублях числом без символов, null если не найдено.
+6. Верни ТОЛЬКО JSON, без любого другого текста.`;
+
 async function parseContractFile(){
   const inp=$('contract-file-inp');
   const file=inp.files[0];
@@ -3364,58 +3397,61 @@ async function parseContractFile(){
 
   const btn=$('contract-btn');
   const origHTML=btn.innerHTML;
-  btn.innerHTML='⏳ Читаю договор…';
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  const isImage=/^(jpe?g|png)$/.test(ext);
+  const isDocx=ext==='docx';
+
+  btn.innerHTML=`⏳ ${isDocx?'Читаю DOCX':isImage?'Распознаю скан':'Читаю PDF'}…`;
   btn.style.pointerEvents='none';
 
   try{
-    // Читаем файл как base64
-    const base64=await new Promise((res,rej)=>{
-      const r=new FileReader();
-      r.onload=()=>res(r.result.split(',')[1]);
-      r.onerror=rej;
-      r.readAsDataURL(file);
-    });
+    let messages;
 
-    const sys=`Ты помощник строительной компании FSC (камень, мрамор, монтаж). Анализируешь договоры подряда.
-Извлеки данные и верни ТОЛЬКО валидный JSON (без markdown, без пояснений):
-{
-  "name": "краткое название объекта (например 'Jumeirah 128 / Интерьеры')",
-  "client": "имя заказчика/клиента",
-  "address": "адрес объекта",
-  "budget": число или null,
-  "start": "ГГГГ-ММ-ДД" или null,
-  "deadline": "ГГГГ-ММ-ДД" или null,
-  "scope": "краткое описание видов работ (1-2 предложения)",
-  "rooms": []
-}
-Поле rooms — массив помещений из спецификации (если есть):
-[{"name":"название помещения","stages":["Замеры","Изготовление","Монтаж","Полировка"]}]
-Стандартные этапы FSC: Замеры, Проектирование, Согласование, Изготовление, Монтаж, Полировка, Сдача.
-Если помещения не перечислены — rooms=[].`;
+    if(isDocx){
+      // mammoth → plain text → text prompt
+      if(typeof mammoth==='undefined')throw new Error('Библиотека mammoth не загружена');
+      const ab=await file.arrayBuffer();
+      const result=await mammoth.extractRawText({arrayBuffer:ab});
+      const text=result.value.trim();
+      if(!text)throw new Error('DOCX пуст или не удалось извлечь текст');
+      messages=[{role:'user',content:`Договор (текст):\n\n${text.slice(0,15000)}\n\nИзвлеки данные и верни JSON.`}];
+
+    } else if(isImage){
+      // Vision: base64 image
+      const base64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});
+      const mime=ext==='png'?'image/png':'image/jpeg';
+      messages=[{role:'user',content:[
+        {type:'image',source:{type:'base64',media_type:mime,data:base64}},
+        {type:'text',text:'Прочитай договор на изображении и верни JSON.'}
+      ]}];
+
+    } else {
+      // PDF (текстовый или скан — Claude обработает оба)
+      const base64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});
+      messages=[{role:'user',content:[
+        {type:'document',source:{type:'base64',media_type:'application/pdf',data:base64}},
+        {type:'text',text:'Извлеки данные из этого договора и верни JSON.'}
+      ]}];
+    }
 
     const res=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
-      headers:{
-        'x-api-key':key,
-        'anthropic-version':'2023-06-01',
-        'anthropic-dangerous-direct-browser-access':'true',
-        'content-type':'application/json'
-      },
-      body:JSON.stringify({
-        model:'claude-sonnet-4-6',
-        max_tokens:2000,
-        system:sys,
-        messages:[{role:'user',content:[
-          {type:'document',source:{type:'base64',media_type:'application/pdf',data:base64}},
-          {type:'text',text:'Извлеки данные из этого договора и верни JSON.'}
-        ]}]
-      })
+      headers:{'x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true','content-type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:3000,system:_CONTRACT_SYS,messages})
     });
-
     const resp=await res.json();
-    if(!res.ok)throw new Error(resp.error?.message||'API error');
+    if(!res.ok)throw new Error(resp.error?.message||'API error '+res.status);
+
     const raw=resp.content[0].text.trim();
     const json=JSON.parse(raw.startsWith('{')?raw:(raw.match(/\{[\s\S]+\}/)||['{}'])[0]);
+    // Нормализуем структуру rooms.stages
+    if(Array.isArray(json.rooms)){
+      json.rooms=json.rooms.map(r=>({
+        name:r.name||'Без названия',
+        stages:(r.stages||[]).map(s=>typeof s==='string'?{name:s,durationDays:_defaultDur(s)}:{name:s.name||s,durationDays:s.durationDays||_defaultDur(s.name||s)})
+      }));
+    } else { json.rooms=[]; }
+
     _contractData={...json,_filename:file.name};
     _showContractPreview(json,file.name);
 
@@ -3429,26 +3465,43 @@ async function parseContractFile(){
   }
 }
 
+function _defaultDur(name){
+  const n=(name||'').toLowerCase();
+  if(/замер|обмер/.test(n))return 1;
+  if(/проект|дизайн/.test(n))return 5;
+  if(/согласован/.test(n))return 3;
+  if(/изготовл|производств|фабрик/.test(n))return 14;
+  if(/монтаж|установ|укладк/.test(n))return 7;
+  if(/полировк|шлифовк/.test(n))return 2;
+  if(/доставк|транспорт/.test(n))return 2;
+  if(/сдача|приёмк|акт/.test(n))return 1;
+  return 3;
+}
+
 function _showContractPreview(d,fname){
-  const roomsHTML=d.rooms&&d.rooms.length
-    ?`<div style="background:var(--s1);border-radius:8px;padding:10px 12px;margin-top:4px">
-        <div style="font-size:10px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Помещения и этапы</div>
-        ${d.rooms.map(r=>`<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px;font-size:12px">
-          <span style="color:var(--acc);flex-shrink:0">🚪 ${escHtml(r.name)}</span>
-          <span style="color:var(--t3)">${r.stages.map(s=>`<span style="background:var(--s2);border-radius:4px;padding:1px 6px;margin-right:2px">${escHtml(s)}</span>`).join('')}</span>
-        </div>`).join('')}
-      </div>`
-    :`<div style="font-size:11px;color:var(--t3);padding:6px 0">Помещения не найдены в договоре — добавишь вручную после создания</div>`;
+  const rooms=d.rooms&&d.rooms.length?d.rooms:[{name:'Основные работы',stages:[
+    {name:'Замеры',durationDays:1},{name:'Изготовление',durationDays:14},{name:'Монтаж',durationDays:7}
+  ]}];
+
+  const treeHTML=rooms.map((r,ri)=>`
+    <div class="ctr-room" data-room-idx="${ri}">
+      <div style="display:flex;align-items:center;gap:6px;margin:8px 0 4px">
+        <span style="font-size:13px">🚪</span>
+        <input class="fi ctr-rname" value="${escHtml(r.name)}" style="font-weight:700;font-size:12px;flex:1;padding:3px 7px">
+        <button onclick="addContractStage(${ri})" style="border:1px dashed var(--b2);background:none;border-radius:6px;font-size:11px;color:var(--t3);cursor:pointer;padding:2px 8px">+ этап</button>
+      </div>
+      <div class="ctr-stages" id="ctr-stages-${ri}">
+        ${r.stages.map((s,si)=>_ctrStageRow(ri,si,s)).join('')}
+      </div>
+    </div>`).join('');
 
   $('m-contract-body').innerHTML=`
     <div style="font-size:11px;color:var(--t3);margin-bottom:10px;display:flex;align-items:center;gap:5px">
       📄 ${escHtml(fname)}
       <span style="background:var(--grn-bg);color:var(--grn);border-radius:4px;padding:1px 7px;font-size:10px;font-weight:600">ИИ прочитал</span>
     </div>
-    <div class="fg">
-      <label class="fl">Название проекта *</label>
-      <input type="text" class="fi" id="cp-name" value="${escHtml(d.name||'')}">
-    </div>
+    <div class="fg"><label class="fl">Название проекта *</label>
+      <input type="text" class="fi" id="cp-name" value="${escHtml(d.name||'')}"></div>
     <div class="fg" style="display:flex;gap:8px">
       <div style="flex:1"><label class="fl">Клиент</label>
         <input type="text" class="fi" id="cp-client" value="${escHtml(d.client||'')}"></div>
@@ -3458,17 +3511,52 @@ function _showContractPreview(d,fname){
     <div class="fg" style="display:flex;gap:8px">
       <div style="flex:1"><label class="fl">Бюджет (₽)</label>
         <input type="number" class="fi" id="cp-budget" value="${d.budget||''}"></div>
-      <div style="flex:1"><label class="fl">Начало</label>
-        <input type="date" class="fi" id="cp-start" value="${d.start||''}"></div>
+      <div style="flex:1"><label class="fl">Дата начала</label>
+        <input type="date" class="fi" id="cp-start" value="${d.start||TODAY()}"></div>
       <div style="flex:1"><label class="fl">Дедлайн</label>
         <input type="date" class="fi" id="cp-deadline" value="${d.deadline||''}"></div>
     </div>
-    <div class="fg">
-      <label class="fl">Объём работ</label>
+    <div class="fg"><label class="fl">Объём работ</label>
       <textarea class="fi" id="cp-scope" rows="2" style="resize:vertical">${escHtml(d.scope||'')}</textarea>
     </div>
-    ${roomsHTML}`;
+    <div style="border-top:1px solid var(--b1);margin-top:8px;padding-top:8px">
+      <div style="font-size:10px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">
+        📋 Помещения и этапы — можно редактировать
+      </div>
+      <div id="contract-stage-tree">${treeHTML}</div>
+    </div>`;
   openM('m-contract');
+}
+
+function _ctrStageRow(ri,si,s){
+  const icon=stageIcon(s.name||s);
+  return`<div class="ctr-stage" data-room-idx="${ri}" data-stage-idx="${si}" style="display:flex;align-items:center;gap:5px;margin:2px 0;padding:3px 0">
+    <span style="color:var(--t3);font-size:10px;width:12px;text-align:center">${si===0?'⬤':'↓'}</span>
+    <span style="font-size:14px;width:18px">${icon}</span>
+    <input class="fi ctr-sname" value="${escHtml(s.name||s)}" style="flex:1;font-size:12px;padding:3px 7px">
+    <input class="fi ctr-sdur" type="number" min="1" value="${s.durationDays||1}" style="width:46px;font-size:12px;padding:3px 5px;text-align:center">
+    <span style="font-size:11px;color:var(--t3);white-space:nowrap">дн.</span>
+    <button onclick="this.closest('.ctr-stage').remove();_renumberCtrRoom(${ri})" style="border:none;background:none;cursor:pointer;color:var(--t3);font-size:14px;padding:0 2px;line-height:1" title="Удалить">✕</button>
+  </div>`;
+}
+
+function addContractStage(ri){
+  const wrap=document.getElementById('ctr-stages-'+ri);
+  if(!wrap)return;
+  const si=wrap.querySelectorAll('.ctr-stage').length;
+  const div=document.createElement('div');
+  div.innerHTML=_ctrStageRow(ri,si,{name:'Новый этап',durationDays:1});
+  wrap.appendChild(div.firstElementChild);
+}
+
+function _renumberCtrRoom(ri){
+  const wrap=document.getElementById('ctr-stages-'+ri);
+  if(!wrap)return;
+  wrap.querySelectorAll('.ctr-stage').forEach((row,i)=>{
+    row.dataset.stageIdx=i;
+    const chain=row.querySelector('span');
+    if(chain)chain.textContent=i===0?'⬤':'↓';
+  });
 }
 
 /* ═══════════════════════════════════════
@@ -3626,33 +3714,59 @@ function confirmExcelImport(){
 function confirmContractProject(){
   const name=$('cp-name').value.trim();
   if(!name){toast('Укажи название проекта','err');return;}
-  const mgr=D.currentUser?.name||'';
+  const startVal=$('cp-start').value||TODAY();
   const pid=uid();
-  const proj={id:pid,name,
+  const proj={
+    id:pid,name,
     client:$('cp-client').value.trim()||'',
     address:$('cp-address').value.trim()||undefined,
-    manager:mgr,
-    start:$('cp-start').value||TODAY(),
+    manager:D.currentUser?.name||'',
+    start:startVal,
     deadline:$('cp-deadline').value||null,
     budget:parseFloat($('cp-budget').value)||null,
     scope:$('cp-scope').value.trim()||null,
-    status:'active',pct:0};
+    status:'active',pct:0
+  };
   D.projects.push(proj);
-  // Создаём этапы по помещениям из договора
-  if(_contractData?.rooms?.length){
-    let order=0;
-    _contractData.rooms.forEach(room=>{
-      (room.stages||[]).forEach(sname=>{
-        order++;
-        D.stages.push({id:uid(),pid,name:sname,icon:stageIcon(sname),
-          room:room.name,deadline:null,startDate:null,done:false,order});
+
+  // Читаем отредактированное дерево из DOM
+  const tree=document.getElementById('contract-stage-tree');
+  if(tree){
+    let globalOrder=0;
+    tree.querySelectorAll('.ctr-room').forEach(roomDiv=>{
+      const roomName=roomDiv.querySelector('.ctr-rname')?.value.trim()||'';
+      const stageRows=[...roomDiv.querySelectorAll('.ctr-stage')];
+      // Генерируем id всем этапам этой комнаты заранее для blockedBy
+      const ids=stageRows.map(()=>uid());
+      let curDate=new Date(startVal);
+      stageRows.forEach((row,i)=>{
+        const sname=(row.querySelector('.ctr-sname')?.value||'Этап').trim();
+        const dur=Math.max(1,parseInt(row.querySelector('.ctr-sdur')?.value)||1);
+        // Дедлайн: start + накопленные дни
+        curDate=new Date(curDate);
+        curDate.setDate(curDate.getDate()+dur);
+        const deadline=curDate.toISOString().split('T')[0];
+        globalOrder++;
+        D.stages.push({
+          id:ids[i],pid,
+          name:sname,
+          icon:stageIcon(sname),
+          room:roomName||undefined,
+          deadline,
+          startDate:i===0?startVal:undefined,
+          done:false,
+          order:globalOrder,
+          // Линейная цепочка Финиш→Старт внутри комнаты
+          blockedBy:i>0?ids[i-1]:undefined
+        });
       });
     });
   }
+
   addLog(`📎 Проект создан из договора: «${name}»`,pid);
   save();closeM('m-contract');
   render('projects');
-  toast(`✅ Проект «${name}» создан`,'ok');
+  toast(`✅ Проект «${name}» создан из договора`,'ok');
   setTimeout(()=>openProjectDetail(pid),350);
 }
 

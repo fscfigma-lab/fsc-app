@@ -5033,16 +5033,25 @@ function saveTask(){
     deadlineHistory:existing?.deadlineHistory||([])};
   if(existing&&existing.dead&&t.dead&&existing.dead!==t.dead){
     t.deadlineHistory.push({from:existing.dead,to:t.dead,by:D.currentUser?.name||'',at:new Date().toISOString()});
-    // Тихое уведомление руководству при переносе вперёд важной/просроченной задачи
+    // Тихое уведомление руководству при переносе вперёд любой активной задачи с дедлайном ≤ сегодня
     const driftDays=Math.round((new Date(t.dead)-new Date(existing.dead))/86400000);
-    if(driftDays>0&&(['high','critical'].includes(t.prio)||existing.dead<TODAY())){
+    const _prioHigh=['high','critical'].includes(t.prio);
+    const _wasDue=existing.dead<=TODAY(); // сегодня или уже просрочена
+    if(driftDays>0&&(_prioHigh||_wasDue||t.prio==='medium')){
       const _proj2=t.pid?D.projects.find(p=>p.id===t.pid):null;
-      sendTgNow('📅 Перенос срока',
-        `${D.currentUser?.name||'Менеджер'} перенёс(ла)\n«${t.name}»`+
+      const _tgMsg=`${D.currentUser?.name||'Менеджер'} перенёс(ла)\n«${t.name}»`+
         `${_proj2?'\n📁 '+_proj2.name:''}\n\n`+
         `${fdate(existing.dead,true)} → ${fdate(t.dead,true)} (+${driftDays} дн.)`+
-        `${['high','critical'].includes(t.prio)?'\n⚠️ Высокий приоритет':''}${existing.dead<TODAY()?'\n🔴 Задача была просрочена':''}`
-      );
+        `${_prioHigh?'\n⚠️ Высокий приоритет':''}${_wasDue?'\n🔴 Срок был нарушен':''}`;
+      if(D.tgBotToken&&(D.tgAdminId||D.tgTechDirId)){
+        sendTgNow('📅 Перенос срока',_tgMsg);
+        // Подтверждение отправки — только для admin/management, незаметно для менеджера
+        if(['admin','management'].includes(D.currentUser?.role_key)){
+          toast('📨 Руководство уведомлено в TG','ok');
+        }
+      } else {
+        console.warn('[drift] TG не настроен: tgBotToken=',!!D.tgBotToken,'tgAdminId=',!!D.tgAdminId,'tgTechDirId=',!!D.tgTechDirId);
+      }
     }
   }
   if(tedit){const idx=D.tasks.findIndex(x=>x.id===tedit);if(idx>=0){t.done=D.tasks[idx].done;D.tasks[idx]=t}}

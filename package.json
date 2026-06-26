@@ -7,10 +7,11 @@
     "start:desktop": "electron .",
     "build:desktop": "electron-builder --dir",
     "dist:desktop": "electron-builder",
-    "build:android": "npx cap sync android && npx cap open android",
-    "build:ios": "npx cap sync ios && npx cap open ios",
-    "cap:sync": "npx cap sync",
-    "cap:copy": "npx cap copy"
+    "build:web": "mkdir -p www && cp index.html sw.js manifest.json icon-192.png icon-512.png www/",
+    "build:android": "npm run build:web && npx cap sync android && npx cap open android",
+    "build:ios": "npm run build:web && npx cap sync ios && npx cap open ios",
+    "cap:sync": "npm run build:web && npx cap sync",
+    "cap:copy": "npm run build:web && npx cap copy"
   },
   "keywords": ["construction", "management", "pwa"],
   "author": "FSC",

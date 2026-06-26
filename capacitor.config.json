@@ -1,7 +1,7 @@
 {
   "appId": "com.fsc.app",
   "appName": "FSC App",
-  "webDir": ".",
+  "webDir": "www",
   "server": {
     "androidScheme": "https"
   },

@@ -1,0 +1,27 @@
+{
+  "appId": "com.fsc.app",
+  "appName": "FSC App",
+  "webDir": ".",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1000,
+      "backgroundColor": "#1C2B1C",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "Dark",
+      "backgroundColor": "#1C2B1C"
+    }
+  },
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  },
+  "ios": {
+    "contentInset": "automatic"
+  }
+}

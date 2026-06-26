@@ -1,0 +1,54 @@
+{
+  "name": "fsc-app",
+  "version": "1.0.0",
+  "description": "FSC — Five Stone Construction management app",
+  "main": "main.js",
+  "scripts": {
+    "start:desktop": "electron .",
+    "build:desktop": "electron-builder --dir",
+    "dist:desktop": "electron-builder",
+    "build:android": "npx cap sync android && npx cap open android",
+    "build:ios": "npx cap sync ios && npx cap open ios",
+    "cap:sync": "npx cap sync",
+    "cap:copy": "npx cap copy"
+  },
+  "keywords": ["construction", "management", "pwa"],
+  "author": "FSC",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.0.0"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/cli": "^6.0.0",
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/ios": "^6.0.0",
+    "@capacitor/splash-screen": "^6.0.0",
+    "@capacitor/status-bar": "^6.0.0"
+  },
+  "build": {
+    "appId": "com.fsc.app",
+    "productName": "FSC App",
+    "files": [
+      "index.html",
+      "main.js",
+      "sw.js",
+      "manifest.json",
+      "icon-192.png",
+      "icon-512.png",
+      "OneSignalSDKWorker.js"
+    ],
+    "mac": {
+      "icon": "icon-512.png",
+      "category": "public.app-category.business"
+    },
+    "win": {
+      "icon": "icon-192.png",
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}

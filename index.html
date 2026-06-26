@@ -3969,7 +3969,7 @@ function rGantt(){
           ${todayLine}
           ${(p.bl_start||p.bl_deadline)?`<div class="g-baseline" style="left:${(pos(p.bl_start)||0).toFixed(1)}%;width:${Math.max(1,(pos(p.bl_deadline)||100)-(pos(p.bl_start)||0)).toFixed(1)}%" title="Базовая линия: ${fdate(p.bl_start,true)} → ${fdate(p.bl_deadline,true)}"></div>`:''}
           ${(()=>{if(!p.clientDeadline)return '';const ce=pos(p.clientDeadline);if(ce===null)return '';const warn=p.deadline&&p.clientDeadline&&(new Date(p.clientDeadline)-new Date(p.deadline))/86400000<=7;return `<div class="g-cbar${warn?' g-cbar-warn':''}" style="left:${ce.toFixed(1)}%" title="Клиентский дедлайн: ${fdate(p.clientDeadline,true)}${warn?' ⚠️ До клиентского менее 7 дней!':''}"></div>`;})()}
-          ${ep>0&&sp<100?`<div class="g-bar ${cls}" style="left:${sp.toFixed(1)}%;width:${w.toFixed(1)}%;cursor:grab;position:relative;z-index:2" onmousedown="gBarDown(event,'proj','${p.id}')" title="${p.name}&#10;${fdate(p.start,true)} → ${fdate(p.deadline,true)}&#10;Прогресс: ${pct}%&#10;Перетащи чтобы сдвинуть сроки">
+          ${ep>0&&sp<100?`<div class="g-bar ${cls}" style="left:${sp.toFixed(1)}%;width:${w.toFixed(1)}%;cursor:grab;position:relative;z-index:2" onmousedown="gBarDown(event,'proj','${p.id}')" ontouchstart="gBarDown(event,'proj','${p.id}')" title="${p.name}&#10;${fdate(p.start,true)} → ${fdate(p.deadline,true)}&#10;Прогресс: ${pct}%&#10;Перетащи чтобы сдвинуть сроки">
             <div class="g-pf" style="width:${pct}%"></div>
             ${w>8?`<span style="position:relative;z-index:1;padding-left:5px;font-size:10px;font-weight:700">${pct}%</span>`:''}
             ${w>22?`<span style="position:relative;z-index:1;padding-left:6px;font-size:10px;opacity:.85">${p.name}</span>`:''}
@@ -4005,7 +4005,7 @@ function rGantt(){
           const pillLbl=s.done?'✓ выполнен':'⚠ просрочен';
           const barOrPill=isPast
             ?`<div class="g-sbar ${pillCls}" style="left:0%;width:auto;padding:0 8px;cursor:${s.done?'default':'pointer'};min-width:fit-content" ${!s.done?`onclick="openStageModal('${p.id}','${s.id}')"`:''}>${pillLbl} · ${fdate(s.deadline,true)}</div>`
-            :`<div class="g-sbar ${sBarCls}" data-sid="${s.id}" data-ol="${sStart.toFixed(2)}" data-ow="${sW.toFixed(2)}" data-has-start="${s.startDate?'1':'0'}" style="left:${sStart.toFixed(1)}%;width:${sW.toFixed(1)}%;${!s.done?'cursor:grab':''}" ${!s.done?`onmousedown="gBarDown(event,'stage','${s.id}')"`:''}  title="${s.name}${s.startDate?'&#10;Начало: '+fdate(s.startDate,true):''}&#10;Дедлайн: ${fdate(s.deadline,true)}&#10;${s.done?'✓ Выполнен':(dlLabel(s.deadline,false)||'В работе')}${!s.done?'&#10;Перетащи чтобы изменить срок':''}">${sW>8?sLabel+s.name.slice(0,20):sLabel}</div>`;
+            :`<div class="g-sbar ${sBarCls}" data-sid="${s.id}" data-ol="${sStart.toFixed(2)}" data-ow="${sW.toFixed(2)}" data-has-start="${s.startDate?'1':'0'}" style="left:${sStart.toFixed(1)}%;width:${sW.toFixed(1)}%;${!s.done?'cursor:grab':''}" ${!s.done?`onmousedown="gBarDown(event,'stage','${s.id}')" ontouchstart="gBarDown(event,'stage','${s.id}')"`:''}  title="${s.name}${s.startDate?'&#10;Начало: '+fdate(s.startDate,true):''}&#10;Дедлайн: ${fdate(s.deadline,true)}&#10;${s.done?'✓ Выполнен':(dlLabel(s.deadline,false)||'В работе')}${!s.done?'&#10;Перетащи чтобы изменить срок':''}">${sW>8?sLabel+s.name.slice(0,20):sLabel}</div>`;
           html+=`<div class="g-subrow${inRoom?' in-room':''}">
             <div class="g-rlabel" onclick="toggleStage('${s.id}',event)" title="${s.done?'Нажми чтобы отменить выполнение':'Отметить этап выполненным'}">
               <div class="g-sn">${s.done?'✓ ':''}${s.icon||'📋'} ${s.name}</div>
@@ -4218,8 +4218,16 @@ function removeDemoRooms(){
   save();rGantt();toast('🗑 Демо этапы удалены','ok');
 }
 
+function _gClientXY(e){
+  // Возвращает {x,y} для mouse и touch событий
+  if(e.touches&&e.touches.length)return{x:e.touches[0].clientX,y:e.touches[0].clientY};
+  if(e.changedTouches&&e.changedTouches.length)return{x:e.changedTouches[0].clientX,y:e.changedTouches[0].clientY};
+  return{x:e.clientX,y:e.clientY};
+}
+
 function gBarDown(e,type,id){
-  if(e.button!==0)return;
+  // Поддержка mouse и touch
+  if(e.type==='mousedown'&&e.button!==0)return;
   e.preventDefault();e.stopPropagation();
   const obj=type==='stage'?D.stages.find(s=>s.id===id):D.projects.find(p=>p.id===id);
   if(!obj)return;
@@ -4233,10 +4241,11 @@ function gBarDown(e,type,id){
   bar.style.transition='none';
   bar.style.willChange='left,width';
 
-  // Пред-вычисляем список зависимых баров один раз чтобы не делать DOM-поиск на каждый mousemove
+  // Пред-вычисляем список зависимых баров один раз
   const cascadeBars=[];
   if(type==='stage'){
     const previewIds=new Set([id]);
+    // _gCascade: все последующие в том же помещении
     if(_gCascade){
       const pid=obj.pid,room=obj.room,origDead=obj.deadline;
       D.stages.forEach(s=>{
@@ -4246,9 +4255,10 @@ function gBarDown(e,type,id){
         previewIds.add(s.id);
       });
     }
-    {const room=obj.room,q=[id],vis=new Set([id]);
+    // BFS по blockedBy — БЕЗ фильтра по room, чтобы не обрывать цепочку
+    {const q=[id],vis=new Set([id]);
     while(q.length){const cur=q.shift();
-      D.stages.filter(s=>s.blockedBy===cur&&!s.done&&!vis.has(s.id)&&(!room||s.room===room)).forEach(s=>{
+      D.stages.filter(s=>s.blockedBy===cur&&!s.done&&!vis.has(s.id)).forEach(s=>{
         vis.add(s.id);previewIds.add(s.id);q.push(s.id);
       });
     }}
@@ -4262,8 +4272,9 @@ function gBarDown(e,type,id){
     });
   }
 
+  const {x:startX}=_gClientXY(e);
   _gDrag={type,id,obj,bar,
-    startX:e.clientX,cw:rect.width,
+    startX,cw:rect.width,
     origDead:obj.deadline,
     origStart:type==='proj'?obj.start:(obj.startDate||null),
     origLeft,origWidth,hasStart,
@@ -4271,6 +4282,8 @@ function gBarDown(e,type,id){
     moved:false};
   document.addEventListener('mousemove',_gMove,{passive:true});
   document.addEventListener('mouseup',_gUp);
+  document.addEventListener('touchmove',_gMove,{passive:true});
+  document.addEventListener('touchend',_gUp);
   document.body.style.userSelect='none';
 }
 
@@ -4288,10 +4301,12 @@ function _applyBarShift(barEl,pctShift,hasStart){
 
 function _gMove(e){
   if(!_gDrag)return;
-  const dx=e.clientX-_gDrag.startX;
+  const {x,y}=_gClientXY(e);
+  const dx=x-_gDrag.startX;
   if(Math.abs(dx)<2)return;
   _gDrag.moved=true;
   _gDrag._dx=dx;
+  _gDrag._cy=y;
 
   // Все DOM-записи — только через rAF, чтобы не было дёрганья
   if(!_gDrag._raf){
@@ -4321,8 +4336,9 @@ function _gMove(e){
         document.body.appendChild(tip);
       }
       tip.textContent='📅 '+fdate(nd,true)+(days>0?' (+'+days+' дн.)':days<0?' ('+days+' дн.)':'');
-      tip.style.left=(e.clientX-tip.offsetWidth/2)+'px';
-      tip.style.top=(e.clientY-44)+'px';
+      const cx=_gDrag._dx+_gDrag.startX;
+      tip.style.left=(cx-tip.offsetWidth/2)+'px';
+      tip.style.top=((_gDrag._cy||cx)-44)+'px';
       tip.style.display='block';
     });
   }
@@ -4350,7 +4366,8 @@ function _gCleanupDragBars(){
 
 function _gUp(e){
   if(!_gDrag)return;
-  const dx=e.clientX-_gDrag.startX;
+  const {x}=_gClientXY(e);
+  const dx=x-_gDrag.startX;
   const days=Math.round(dx/_gDrag.cw*_gVP.total);
   if(_gDrag.moved&&Math.abs(days)>=1){
     const obj=_gDrag.obj;
@@ -4375,13 +4392,12 @@ function _gUp(e){
         });
       }
 
-      // 2) Всегда: рекурсивный BFS по цепочке blockedBy (в рамках того же помещения)
-      {const room=obj.room;
-      const q=[obj.id],vis=new Set([obj.id]);
+      // 2) Всегда: рекурсивный BFS по цепочке blockedBy (без фильтра room — не обрываем цепочку)
+      {const q=[obj.id],vis=new Set([obj.id]);
       while(q.length){
         const cur=q.shift();
         const curName=(D.stages.find(s=>s.id===cur)||{name:cur}).name;
-        D.stages.filter(s=>s.blockedBy===cur&&!s.done&&s.deadline&&!vis.has(s.id)&&(!room||s.room===room)).forEach(s=>{
+        D.stages.filter(s=>s.blockedBy===cur&&!s.done&&s.deadline&&!vis.has(s.id)).forEach(s=>{
           vis.add(s.id);
           if(!toShift.has(s.id))toShift.set(s.id,`Автосдвиг: «${curName}»`);
           q.push(s.id);
@@ -4451,6 +4467,8 @@ function _gUp(e){
   }
   document.removeEventListener('mousemove',_gMove);
   document.removeEventListener('mouseup',_gUp);
+  document.removeEventListener('touchmove',_gMove);
+  document.removeEventListener('touchend',_gUp);
   document.body.style.userSelect='';
   const tip=document.getElementById('g-dtip');if(tip)tip.style.display='none';
   _gDrag=null;

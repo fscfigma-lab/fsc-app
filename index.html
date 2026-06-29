@@ -269,61 +269,53 @@ body{background:var(--bg)}
 /* ── GANTT ── */
 .gantt-wrap{overflow-x:auto}
 .gantt{display:flex;flex-direction:column;min-width:900px;position:relative}
-.g-hrow{display:flex;border-bottom:1px solid var(--b1);position:sticky;top:0;
-  background:rgba(244,241,235,0.95);backdrop-filter:blur(8px);z-index:10}
+.g-hrow{display:flex;border-bottom:2px solid rgba(0,0,0,0.08);position:sticky;top:0;
+  background:rgba(255,255,255,0.97);backdrop-filter:blur(8px);z-index:10}
 .g-lcol{width:200px;flex-shrink:0;padding:10px 12px;font-size:9px;color:var(--t3);
-  font-weight:600;text-transform:uppercase;letter-spacing:1px;border-right:1px solid var(--b1)}
+  font-weight:700;text-transform:uppercase;letter-spacing:1.2px;border-right:1px solid rgba(0,0,0,0.06)}
 .g-months{display:flex;flex:1}
 .g-month{flex:1;min-width:80px;padding:10px 6px;text-align:center;font-size:10px;
-  color:var(--t2);font-weight:500;border-right:1px solid var(--b1);letter-spacing:.3px}
-.g-month.cur{color:var(--t1);font-weight:700}
-.g-row{display:flex;border-bottom:1px solid rgba(0,0,0,0.055);min-height:60px}
-.g-row:hover{background:rgba(201,149,42,0.03)}
-.g-rlabel{width:200px;flex-shrink:0;padding:8px 12px;border-right:1px solid var(--b1);
-  display:flex;flex-direction:column;justify-content:center;cursor:pointer}
+  color:var(--t3);font-weight:500;border-right:1px solid rgba(0,0,0,0.04);letter-spacing:.3px}
+.g-month.cur{color:var(--t1);font-weight:700;background:rgba(201,149,42,0.04)}
+.g-row{display:flex;border-bottom:1px solid rgba(0,0,0,0.06);min-height:60px;background:#fff}
+.g-row:hover{background:#FAFFFE}
+.g-rlabel{width:200px;flex-shrink:0;padding:8px 12px;border-right:1px solid rgba(0,0,0,0.06);
+  display:flex;flex-direction:column;justify-content:center;cursor:pointer;background:#fff}
 .g-rname{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .g-rmgr{font-size:11px;color:var(--t3);margin-top:2px}
-.g-rtl{flex:1;position:relative;display:flex;align-items:center}
-.g-grid{position:absolute;top:0;bottom:0;width:1px;background:#C8C3B8;opacity:0.22}
+.g-rtl{flex:1;position:relative;display:flex;align-items:center;background:#fff}
+.g-grid{position:absolute;top:0;bottom:0;width:1px;background:rgba(0,0,0,0.045);opacity:1}
 .g-today{position:absolute;top:0;bottom:0;width:2px;background:var(--red);z-index:5}
 /* "Сегодня" — только в шапке */
 .g-hrow .g-today::before{content:'Сегодня';position:absolute;top:4px;left:4px;font-size:9px;
   font-weight:700;color:var(--red);white-space:nowrap;background:var(--s1);
   padding:1px 5px;border-radius:3px;pointer-events:none}
-.g-bar{position:absolute;height:28px;border-radius:8px;border:1px solid;
+.g-bar{position:absolute;height:24px;border-radius:7px;border:1px solid transparent;
   display:flex;align-items:center;padding:0 10px;font-size:11px;overflow:hidden;
-  cursor:grab;transition:opacity .15s,box-shadow .15s,filter .15s;white-space:nowrap;font-weight:500;touch-action:none;text-overflow:ellipsis}
+  cursor:grab;transition:opacity .15s,box-shadow .15s,filter .15s;white-space:nowrap;font-weight:600;
+  touch-action:none;text-overflow:ellipsis;color:#fff;z-index:2}
 .g-bar.is-dragging,.g-sbar.is-dragging{transition:none !important;z-index:9999 !important;}
-.g-bar:not(.is-dragging):hover{z-index:10;overflow:visible;min-width:max-content;box-shadow:var(--shadow-md);filter:brightness(1.15)}
-.g-bar:not(.is-dragging):hover::after{content:'⠿⠿';position:absolute;right:5px;top:50%;transform:translateY(-50%);font-size:10px;opacity:.5;pointer-events:none}
-.g-bar.on-track{background:rgba(184,141,59,0.09);border-color:rgba(184,141,59,0.32);color:#8B6E2E}
-.g-bar.overdue{background:rgba(184,50,50,0.08);border-color:rgba(184,50,50,0.28);color:#9B3535}
-.g-bar.done{background:rgba(45,106,63,0.09);border-color:rgba(45,106,63,0.28);color:#2D6A3F}
-.g-bar.soon{background:rgba(139,106,0,0.10);border-color:rgba(139,106,0,0.35);color:#7A5E00}
-.g-pf{position:absolute;left:0;top:0;bottom:0;background:rgba(255,255,255,0.10);
-  border-radius:6px 0 0 6px;pointer-events:none;transition:width .5s cubic-bezier(.4,0,.2,1)}
+.g-bar:not(.is-dragging):hover{z-index:10;overflow:visible;min-width:max-content;box-shadow:0 4px 16px rgba(0,0,0,0.18);filter:brightness(1.08)}
+.g-bar:not(.is-dragging):hover::after{content:'⠿⠿';position:absolute;right:5px;top:50%;transform:translateY(-50%);font-size:10px;opacity:.4;pointer-events:none}
+.g-bar.on-track{background:#364F6B;border-color:#2C3F58}
+.g-bar.overdue{background:#B83232;border-color:#9B2828}
+.g-bar.done{background:#4A7D69;border-color:#3D6858}
+.g-bar.soon{background:#B8861A;border-color:#9A7015}
+.g-pf{position:absolute;left:0;top:0;bottom:0;background:rgba(255,255,255,0.18);
+  border-radius:7px 0 0 7px;pointer-events:none;transition:width .5s cubic-bezier(.4,0,.2,1)}
 .g-pf-lbl{position:absolute;right:4px;top:50%;transform:translateY(-50%);
   font-size:9px;font-weight:600;color:inherit;opacity:.7;z-index:2;pointer-events:none}
 /* Baseline — тонкая серая полоска под основным баром */
 .g-baseline{position:absolute;height:4px;bottom:6px;border-radius:2px;
   background:rgba(150,150,150,.35);border:1px solid rgba(150,150,150,.4);
   pointer-events:none;z-index:1}
-/* Клиентский дедлайн — вертикальная пунктирная линия */
-.g-cbar{position:absolute;top:4px;bottom:4px;width:0;
-  border-left:2px dashed rgba(120,120,120,.55);
-  pointer-events:none;z-index:3}
-.g-cbar::after{content:'КД';position:absolute;top:2px;left:4px;font-size:8px;
-  font-weight:700;color:rgba(120,120,120,.8);white-space:nowrap;
-  background:var(--s1);padding:0 3px;border-radius:2px}
-.g-cbar-warn{border-color:rgba(220,80,60,.6)}
-.g-cbar-warn::after{color:rgba(220,80,60,.9)}
 /* Milestone — ромбик на дедлайне */
 .g-milestone{position:absolute;top:50%;transform:translate(-50%,-50%) rotate(45deg);
-  width:10px;height:10px;border:2px solid currentColor;z-index:6;pointer-events:none}
-.g-milestone.overdue{color:var(--red)}
-.g-milestone.done{color:var(--grn)}
-.g-milestone.soon{color:var(--yel)}
-.g-milestone.ok{color:var(--t3)}
+  width:10px;height:10px;border:2px solid currentColor;z-index:6;pointer-events:none;background:#fff}
+.g-milestone.overdue{color:#B83232}
+.g-milestone.done{color:#4A7D69}
+.g-milestone.soon{color:#B8861A}
+.g-milestone.on-track{color:#364F6B}
 /* Zoom buttons */
 .g-zoom-bar{display:flex;gap:4px;align-items:center}
 .g-zoom-btn{padding:4px 12px;border-radius:4px;font-size:10px;border:1.5px solid var(--b2);
@@ -374,23 +366,24 @@ body{background:var(--bg)}
 .g-xbtn:hover{border-color:var(--acc-bd);color:var(--acc);background:var(--acc-bg)}
 /* Stage sub-row */
 .g-subrow{display:flex;border-bottom:1px solid rgba(0,0,0,0.04);min-height:44px;
-  background:rgba(248,245,238,0.60);transition:background .15s}
-.g-subrow:hover{background:rgba(201,149,42,0.04)}
+  background:#FAFAFA;transition:background .15s}
+.g-subrow:hover{background:#F5FFFE}
 .g-subrow .g-rlabel{padding-left:30px;cursor:pointer}
 .g-sn{font-size:11px;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
 .g-sd{font-size:9px;color:var(--t3);margin-top:2px}
 /* Stage bar */
-.g-sbar{position:absolute;height:14px;border-radius:4px;border:1px solid;
-  display:flex;align-items:center;padding:0 5px;font-size:9px;font-weight:600;
-  white-space:nowrap;overflow:hidden;cursor:grab;transition:opacity .15s,box-shadow .15s,filter .15s;touch-action:none;text-overflow:ellipsis}
-.g-sbar:not(.sdone):not(.is-dragging):hover{z-index:10;overflow:visible;box-shadow:0 2px 8px rgba(0,0,0,0.12);filter:brightness(1.15);height:17px;top:-2px}
-.g-sbar.sdone{background:rgba(45,106,63,0.09);border-color:rgba(45,106,63,0.28);color:#2D6A3F}
-.g-sbar.sod{background:rgba(184,50,50,0.09);border-color:rgba(184,50,50,0.30);color:#9B3535}
-.g-sbar.ssoon{background:rgba(139,106,0,0.10);border-color:rgba(139,106,0,0.35);color:#7A5E00}
-.g-sbar.sok{background:rgba(184,141,59,0.10);border-color:rgba(184,141,59,0.32);color:#8B6E2E}
-.g-sbar.swarn{background:rgba(184,141,59,0.16);border-color:rgba(184,141,59,0.55);color:#7A5E00;box-shadow:0 0 0 2px rgba(184,141,59,0.18)}
-.g-sbar.spenalty{background:rgba(184,50,50,0.12);border-color:rgba(184,50,50,0.45);color:#9B3535;box-shadow:0 0 0 2px rgba(184,50,50,0.18)}
-@keyframes gPulse{0%,100%{box-shadow:0 0 0 0 rgba(184,50,50,0.18)}50%{box-shadow:0 0 0 3px rgba(184,50,50,0.22)}}
+.g-sbar{position:absolute;height:18px;border-radius:5px;border:1px solid transparent;
+  display:flex;align-items:center;padding:0 6px;font-size:10px;font-weight:600;
+  white-space:nowrap;overflow:hidden;cursor:grab;transition:opacity .15s,box-shadow .15s,filter .15s;
+  touch-action:none;text-overflow:ellipsis;color:#fff;z-index:2}
+.g-sbar:not(.is-dragging):hover{z-index:10;overflow:visible;box-shadow:0 3px 12px rgba(0,0,0,0.20);filter:brightness(1.08)}
+.g-sbar.sdone{background:#556B5B;border-color:#46594C}
+.g-sbar.sod{background:#B83232;border-color:#9B2828}
+.g-sbar.ssoon{background:#A87820;border-color:#8D651A}
+.g-sbar.sok{background:#3D5A80;border-color:#334D6B}
+.g-sbar.swarn{background:#9A6E00;border-color:#7D5A00;box-shadow:0 0 0 2px rgba(154,110,0,0.30)}
+.g-sbar.spenalty{background:#8B1A1A;border-color:#721515;box-shadow:0 0 0 2px rgba(139,26,26,0.35)}
+@keyframes gPulse{0%,100%{opacity:1}50%{opacity:.75}}
 .g-sbar.sod{animation:gPulse 2.5s ease-in-out infinite}
 /* Gantt legend */
 .g-legend{display:flex;gap:14px;padding:5px 14px;border-bottom:1px solid var(--b1);
@@ -1204,21 +1197,22 @@ body{background:var(--bg)}
   .ph{top:42px}
 }
 body.is-dragging-gantt,body.is-dragging-gantt *{user-select:none !important;cursor:grabbing !important;}
-/* Клиентский коридор (буфер от внутреннего до клиентского дедлайна) */
-.g-cl-corridor{position:absolute;top:28%;bottom:28%;border-radius:3px;
-  background:rgba(45,106,63,0.06);border:1px dashed rgba(45,106,63,0.22);
+/* Коридор клиентского договора — светло-серая подложка за внутренним баром */
+.g-client-strip{position:absolute;height:22px;border-radius:6px;
+  background:rgba(0,0,0,0.04);border:1px solid rgba(0,0,0,0.08);
   pointer-events:none;z-index:1}
-/* Вертикальная линия клиентского дедлайна */
-.g-cl-line{position:absolute;top:5px;bottom:5px;width:0;
-  border-left:2px dashed rgba(45,106,63,0.48);pointer-events:none;z-index:3}
-.g-cl-line::after{content:'КД';position:absolute;top:2px;left:4px;font-size:8px;
-  font-weight:700;color:rgba(45,106,63,0.72);white-space:nowrap;
-  background:var(--s1);padding:0 3px;border-radius:2px}
-/* Штрафной бейдж внутри бара этапа */
-.g-pen-badge{position:absolute;right:4px;top:50%;transform:translateY(-50%);
-  font-size:8px;font-weight:700;color:#9B3535;white-space:nowrap;
-  background:rgba(184,50,50,0.12);border:1px solid rgba(184,50,50,0.32);
-  border-radius:4px;padding:1px 5px;pointer-events:none;z-index:2}
+.g-client-strip.proj{height:28px;border-radius:8px}
+/* Вертикальная линия клиентского дедлайна (граница коридора) */
+.g-cl-line{position:absolute;top:4px;bottom:4px;width:0;
+  border-left:2px dashed rgba(0,0,0,0.25);pointer-events:none;z-index:3}
+.g-cl-line::after{content:'КД';position:absolute;top:1px;left:4px;font-size:8px;
+  font-weight:700;color:rgba(0,0,0,0.40);white-space:nowrap;
+  background:#fff;padding:0 3px;border-radius:2px;letter-spacing:.3px}
+/* Штрафной бейдж на тёмном баре */
+.g-pen-badge{position:absolute;right:5px;top:50%;transform:translateY(-50%);
+  font-size:8px;font-weight:700;color:#fff;white-space:nowrap;
+  background:rgba(0,0,0,0.30);border:1px solid rgba(255,255,255,0.25);
+  border-radius:4px;padding:1px 5px;pointer-events:none;z-index:3}
 </style>
 </head>
 <body>
@@ -3989,11 +3983,20 @@ function rGantt(){
           ${gridLines()}
           ${todayLine}
           ${(p.bl_start||p.bl_deadline)?`<div class="g-baseline" style="left:${(pos(p.bl_start)||0).toFixed(1)}%;width:${Math.max(1,(pos(p.bl_deadline)||100)-(pos(p.bl_start)||0)).toFixed(1)}%" title="Базовая линия: ${fdate(p.bl_start,true)} → ${fdate(p.bl_deadline,true)}"></div>`:''}
-          ${(()=>{if(!p.clientDeadline)return '';const ce=pos(p.clientDeadline);if(ce===null)return '';const warn=p.deadline&&p.clientDeadline&&(new Date(p.clientDeadline)-new Date(p.deadline))/86400000<=7;return `<div class="g-cbar${warn?' g-cbar-warn':''}" style="left:${ce.toFixed(1)}%" title="Клиентский дедлайн: ${fdate(p.clientDeadline,true)}${warn?' ⚠️ До клиентского менее 7 дней!':''}"></div>`;})()}
-          ${ep>0&&sp<100?`<div class="g-bar ${cls}" style="left:${sp.toFixed(1)}%;width:${w.toFixed(1)}%;cursor:grab;position:relative;z-index:2" onmousedown="gBarDown(event,'proj','${p.id}')" ontouchstart="gBarDown(event,'proj','${p.id}')" title="${p.name}&#10;${fdate(p.start,true)} → ${fdate(p.deadline,true)}&#10;Прогресс: ${pct}%&#10;Перетащи чтобы сдвинуть сроки">
+          ${(()=>{
+            if(!p.clientDeadline)return '';
+            const cs=pos(p.start)||0;
+            const ce=pos(p.clientDeadline);
+            if(ce===null)return '';
+            const cw=Math.max(1,ce-cs);
+            const bufDays=p.deadline&&p.clientDeadline?Math.round((new Date(p.clientDeadline)-new Date(p.deadline))/86400000):999;
+            const lineStyle=bufDays<=0?'border-color:rgba(184,50,50,0.55)':bufDays<=7?'border-color:rgba(184,141,59,0.55)':'';
+            return `<div class="g-client-strip proj" style="left:${cs.toFixed(1)}%;width:${cw.toFixed(1)}%" title="Клиентский договор до: ${fdate(p.clientDeadline,true)}"></div><div class="g-cl-line" style="left:${ce.toFixed(1)}%;${lineStyle}" title="Клиентский дедлайн: ${fdate(p.clientDeadline,true)}${bufDays<=0?' ⚠️ ШТРАФ: опоздание '+Math.abs(bufDays)+' дн.':bufDays<=7?' ⚠️ Буфер: '+bufDays+' дн.':''}"></div>`;
+          })()}
+          ${ep>0&&sp<100?`<div class="g-bar ${cls}" style="left:${sp.toFixed(1)}%;width:${w.toFixed(1)}%;cursor:grab" onmousedown="gBarDown(event,'proj','${p.id}')" ontouchstart="gBarDown(event,'proj','${p.id}')" title="${p.name}&#10;${fdate(p.start,true)} → ${fdate(p.deadline,true)}&#10;Прогресс: ${pct}%&#10;Перетащи чтобы сдвинуть сроки">
             <div class="g-pf" style="width:${pct}%"></div>
-            ${w>8?`<span style="position:relative;z-index:1;padding-left:5px;font-size:10px;font-weight:700">${pct}%</span>`:''}
-            ${w>22?`<span style="position:relative;z-index:1;padding-left:6px;font-size:10px;opacity:.85">${p.name}</span>`:''}
+            ${w>8?`<span style="position:relative;z-index:1;font-size:10px;font-weight:700;color:#fff">${pct}%</span>`:''}
+            ${w>22?`<span style="position:relative;z-index:1;padding-left:6px;font-size:10px;color:rgba(255,255,255,0.85);overflow:hidden;text-overflow:ellipsis">${p.name}</span>`:''}
           </div>`:''}
           ${msPos!==null&&msPos>=0&&msPos<=102?`<div class="g-milestone ${cls}" style="left:${msPos.toFixed(1)}%" title="Дедлайн: ${fdate(p.deadline)}"></div>`:''}
           ${!expanded?stages.map(s=>{
@@ -4024,31 +4027,29 @@ function rGantt(){
           const pillCls=s.done?'sdone':sds==='overdue'?'sod':'sok';
           const pillLbl=s.done?'✓ выполнен':'⚠ просрочен';
 
-          // ШАГ 2+3: Клиентский коридор и штрафные зоны
+          // Клиентский коридор и штрафные зоны
           let penaltyCls='';
           let penBadgeHTML='';
           let corridorHTML='';
-          if(!s.done&&p.clientDeadline&&s.deadline){
+          if(p.clientDeadline&&s.deadline){
             const bufferDays=Math.round((new Date(p.clientDeadline)-new Date(s.deadline))/86400000);
             const cdPos=pos(p.clientDeadline);
-            if(bufferDays<0){
-              // Этап вышел за клиентский дедлайн → штраф
-              penaltyCls=' spenalty';
-              penBadgeHTML=`<span class="g-pen-badge">⚠️ +${Math.abs(bufferDays)}д.</span>`;
-            } else if(bufferDays<=3){
-              // Буфер почти исчерпан → предупреждение
-              penaltyCls=' swarn';
-            }
-            // Коридор: от дедлайна этапа до клиентского дедлайна (зона буфера)
-            if(cdPos!==null&&sPos!==null&&bufferDays>0){
-              const corrW=cdPos-sPos;
-              if(corrW>0.3){
-                corridorHTML+=`<div class="g-cl-corridor" style="left:${sPos.toFixed(1)}%;width:${corrW.toFixed(1)}%" title="Буфер до клиентского дедлайна: ${bufferDays} дн."></div>`;
+            if(!s.done){
+              if(bufferDays<0){
+                penaltyCls=' spenalty';
+                penBadgeHTML=`<span class="g-pen-badge">⚠️ +${Math.abs(bufferDays)}д.</span>`;
+              } else if(bufferDays<=3){
+                penaltyCls=' swarn';
               }
             }
-            // Вертикальная линия клиентского дедлайна
+            // Подложка клиентского коридора: от старта этапа до клиентского дедлайна
+            if(cdPos!==null&&cdPos>sStart){
+              corridorHTML=`<div class="g-client-strip" style="left:${sStart.toFixed(1)}%;width:${(cdPos-sStart).toFixed(1)}%" title="Клиентский договор до: ${fdate(p.clientDeadline,true)}${bufferDays<0?' — ⚠️ ШТРАФ: опоздание '+Math.abs(bufferDays)+' дн.':' · Буфер: '+bufferDays+' дн.'}"></div>`;
+            }
+            // Граница клиентского дедлайна
             if(cdPos!==null&&cdPos>=0&&cdPos<=100){
-              corridorHTML+=`<div class="g-cl-line" style="left:${cdPos.toFixed(1)}%" title="Клиентский дедлайн: ${fdate(p.clientDeadline,true)}"></div>`;
+              const lineColor=bufferDays<=0?'border-color:rgba(184,50,50,0.60)':bufferDays<=3?'border-color:rgba(154,110,0,0.60)':'';
+              corridorHTML+=`<div class="g-cl-line" style="left:${cdPos.toFixed(1)}%;${lineColor}" title="Клиентский дедлайн: ${fdate(p.clientDeadline,true)}"></div>`;
             }
           }
 

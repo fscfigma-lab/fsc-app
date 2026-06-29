@@ -2217,6 +2217,7 @@ async function showBackupModal(){
       <button class="btn btn-p" style="font-size:12px" onclick="exportJSON()">📥 Скачать JSON</button>
       <button class="btn btn-s" style="font-size:12px" onclick="importJSON()">📤 Загрузить JSON</button>
       <button class="btn btn-s" style="font-size:12px" onclick="autoBackup();toast('Бэкап создан','ok')">🔄 Создать сейчас</button>
+      <button class="btn btn-s" style="font-size:12px;color:var(--acc)" onclick="forceAppUpdate()">⬆️ Обновить приложение</button>
     </div>
     <div class="sec-title">Авто-бэкапы в облаке</div>
     ${rows}`;
@@ -6028,16 +6029,28 @@ const VAPID_PUBLIC='BH6RzcpUVh1IthqRn2TFafRHru_dlU1C0RnOSZW1YMtQ8irclAqNUB-h7eKW
 
 // Регистрируем наш SW и проверяем статус
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('/fsc-app/sw.js',{scope:'/fsc-app/'})
+  navigator.serviceWorker.register('/fsc-app/sw.js',{scope:'/fsc-app/',updateViaCache:'none'})
     .then(reg=>{
       _checkPushStatus();
-      reg.update(); // принудительно проверяем новую версию при каждом запуске
+      reg.update();
     }).catch(e=>console.warn('SW:',e));
   navigator.serviceWorker.addEventListener('message',e=>{
     if(e.data==='SW_UPDATED') window.location.reload();
   });
-  // controllerchange срабатывает когда новый SW берёт контроль — перезагружаем страницу
   navigator.serviceWorker.oncontrollerchange=()=>window.location.reload();
+}
+
+async function forceAppUpdate(){
+  toast('Очищаю кэш и обновляю…','ok');
+  try{
+    if('serviceWorker' in navigator){
+      const regs=await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r=>r.unregister()));
+    }
+    const keys=await caches.keys();
+    await Promise.all(keys.map(k=>caches.delete(k)));
+  }catch(_){}
+  setTimeout(()=>window.location.reload(true),500);
 }
 
 function _showPushBanner(){

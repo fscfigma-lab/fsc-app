@@ -1479,19 +1479,26 @@ function rDash(){
   });
   const _kpiWarnSet=new Set(_kpiWarn.map(p=>p.id));
   const _kpiOk=_kpiProjs.filter(p=>!_kpiCritSet.has(p.id)&&!_kpiWarnSet.has(p.id));
+  // Дрейфующие задачи: высокий приоритет + 2+ переноса (скрытый срыв)
+  const _driftTasks=myTasks.filter(t=>!t.done&&(t.dragCount||0)>=2&&['high','critical'].includes(t.prio));
+  const _kpiCritTotal=_kpiCrit.length+_driftTasks.length;
   const kpiEl=$('kpi-panel');
   if(kpiEl){
-    if(_kpiProjs.length){
+    if(_kpiProjs.length||_driftTasks.length){
       const fC=_kpiFilt==='critical', fW=_kpiFilt==='warn';
       const _namelist=arr=>arr.length
         ?arr.slice(0,2).map(p=>p.name.slice(0,24)).join(', ')+( arr.length>2?` +ещё ${arr.length-2}`:'')
         :'—';
+      const _critSub=_kpiCrit.length&&_driftTasks.length
+        ?`${_kpiCrit.length} штраф · ${_driftTasks.length} дрейф`
+        :_driftTasks.length?`${_driftTasks.length} задач${_driftTasks.length===1?'а':''} переносятся`
+        :_namelist(_kpiCrit);
       kpiEl.style.display='flex';
       kpiEl.innerHTML=
-        `<div class="kpi-block kpi-crit${fC?' kpi-active':''}" onclick="setKpiF('critical')" title="Фильтровать: только штрафные проекты">
-           <div class="kpi-title">Критично · Штрафы</div>
-           <div class="kpi-val">${_kpiCrit.length}</div>
-           <div class="kpi-sub">${_namelist(_kpiCrit)}</div>
+        `<div class="kpi-block kpi-crit${fC?' kpi-active':''}" onclick="setKpiF('critical')" title="Фильтровать: штрафные проекты + дрейфующие задачи">
+           <div class="kpi-title">Критично · Штрафы + Дрейф</div>
+           <div class="kpi-val">${_kpiCritTotal}</div>
+           <div class="kpi-sub">${_critSub}</div>
          </div>
          <div class="kpi-block kpi-warn${fW?' kpi-active':''}" onclick="setKpiF('warn')" title="Фильтровать: запас менее 3 дней">
            <div class="kpi-title">Зона риска · &lt;3 дн.</div>
@@ -1564,9 +1571,17 @@ function rDash(){
       ${risks.low.map(p=>`<div style="font-size:11px;color:var(--t3);margin-top:3px">${p.name}</div>`).join('')}
     </div>`;
 
-  // Urgent tasks
-  $('d-urgent').innerHTML=urgent.length?urgent.map(t=>tiHTML(t,true)).join(''):
-    `<div class="empty"><div class="empty-icon">✅</div><div class="empty-title">Нет срочных задач</div></div>`;
+  // Urgent tasks (+ дрейфующие задачи при KPI-фильтре критично)
+  let _urgentHTML='';
+  if(_kpiFilt==='critical'&&_driftTasks.length){
+    _urgentHTML+=`<div style="font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#B91C1C;padding:6px 0 4px;opacity:.8">⚠️ Скрытый срыв срока</div>`;
+    _urgentHTML+=_driftTasks.map(t=>tiHTML(t,true,true)).join('');
+    if(urgent.length)_urgentHTML+=`<div style="font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--t3);padding:8px 0 4px;opacity:.6">Срочные задачи</div>`;
+  }
+  _urgentHTML+=urgent.length?urgent.map(t=>tiHTML(t,true)).join('')
+    :(_kpiFilt==='critical'&&_driftTasks.length?''
+    :`<div class="empty"><div class="empty-icon">✅</div><div class="empty-title">Нет срочных задач</div></div>`);
+  $('d-urgent').innerHTML=_urgentHTML;
 
   // Management section: срез по менеджерам (только для руководства и admin)
   const mgmtSection=$('mgmt-section');
@@ -1752,6 +1767,84 @@ function updateBadges(n){
 function setDashWho(who){_dashWhoFilt=who;rDash();}
 function setKpiF(f){_kpiFilt=(f===_kpiFilt?null:f);rDash();}
 
+/* ── DRIFT COUNTER — Счётчик дрейфа ──────────────────────────────
+   Логика: ≤2 тихих переноса, 3-й → блокировка + причина          */
+function showDriftModal(ctxType,itemName,count){
+  const el=$('m-drift');if(!el)return;
+  $('drift-warning').innerHTML=
+    `⚠️ <b>«${escHtml(itemName||'')}»</b> переносится уже <b>${count}-й раз</b>.<br>
+     Функция тихого переноса заблокирована. Укажи причину для руководства.`;
+  $('drift-reason').value='';
+  $('drift-voice-btn').textContent='🎤 Надиктовать причину';
+  $('drift-rec-label').style.display='none';
+  openM('m-drift');
+}
+function cancelDrift(){
+  if(_driftMediaRec&&_driftMediaRec.state==='recording')_driftMediaRec.stop();
+  _driftPending=null;_driftMediaRec=null;_driftAudioChunks=[];
+  closeM('m-drift');
+}
+function confirmDrift(){
+  const reason=($('drift-reason')?.value||'').trim();
+  if(!reason){toast('Укажи причину переноса','err');return;}
+  if(_driftMediaRec&&_driftMediaRec.state==='recording')_driftMediaRec.stop();
+  _applyDrift(reason);
+}
+function _applyDrift(reason){
+  const pnd=_driftPending;if(!pnd){closeM('m-drift');return;}
+  _driftPending=null;_driftMediaRec=null;_driftAudioChunks=[];
+  if(pnd.type==='stage'){
+    const {obj,nd,deltaDays,toShift,snapList,logMsg}=pnd;
+    obj.dragCount=0;
+    if(snapList.length>1)_gUndo.push({type:'cascade',snaps:snapList});
+    else{const sn={type:'stage',id:obj.id,fields:{deadline:obj.deadline}};if(obj.startDate)sn.fields.startDate=obj.startDate;_gUndo.push(sn);}
+    if(_gUndo.length>10)_gUndo.shift();
+    toShift.forEach((_r,id)=>{
+      const s=D.stages.find(s=>s.id===id);if(!s)return;
+      const oldD=s.deadline;const newD=_shiftDate(s.deadline,deltaDays);
+      if(!s.deadlineHistory)s.deadlineHistory=[];
+      s.deadlineHistory.push({from:oldD,to:newD,by:D.currentUser?.name||'',reason:id===obj.id?reason:undefined,auto:id!==obj.id,at:new Date().toISOString()});
+      if(s.startDate)s.startDate=_shiftDate(s.startDate,deltaDays);
+      s.deadline=newD;
+    });
+    addLog(`${logMsg} · Причина: ${reason}`,obj.pid);
+    save();rGantt();_gShowUndoBtn();
+    toast('📅 Перенос зафиксирован с причиной','ok');
+  } else if(pnd.type==='task'){
+    const {t}=pnd;
+    t.dragCount=0;
+    if(!t.deadlineHistory)t.deadlineHistory=[];
+    t.deadlineHistory.push({from:pnd.existingDead,to:t.dead,by:D.currentUser?.name||'',reason,at:new Date().toISOString()});
+    if(tedit){const idx=D.tasks.findIndex(x=>x.id===tedit);if(idx>=0){t.done=D.tasks[idx].done;D.tasks[idx]=t;}}
+    else D.tasks.push(t);
+    const _lproj=t.pid?D.projects.find(p=>p.id===t.pid):null;
+    addLog(`📅 Перенос задачи «${t.name}»${_lproj?' ('+_lproj.name+')':''} · Причина: ${reason}`,t.pid);
+    save();closeM('m-task');render(curPage);
+    toast('✅ Задача обновлена (причина зафиксирована)','ok');
+  }
+  closeM('m-drift');
+}
+function toggleDriftVoice(){
+  if(_driftMediaRec&&_driftMediaRec.state==='recording'){_driftMediaRec.stop();return;}
+  if(!navigator.mediaDevices?.getUserMedia){toast('Микрофон недоступен','err');return;}
+  navigator.mediaDevices.getUserMedia({audio:true}).then(stream=>{
+    _driftAudioChunks=[];
+    _driftMediaRec=new MediaRecorder(stream);
+    _driftMediaRec.ondataavailable=e=>{if(e.data.size>0)_driftAudioChunks.push(e.data);};
+    _driftMediaRec.onstop=()=>{
+      stream.getTracks().forEach(tk=>tk.stop());
+      const approxSec=Math.round(_driftAudioChunks.reduce((s,c)=>s+c.size,0)/8000);
+      if(!$('drift-reason').value.trim())$('drift-reason').value=`[Голосовая запись ~${approxSec}с]`;
+      $('drift-voice-btn').textContent='🎤 Надиктовать причину';
+      $('drift-rec-label').style.display='none';
+      toast('🎤 Запись остановлена','ok');
+    };
+    _driftMediaRec.start();
+    $('drift-voice-btn').textContent='⏹ Остановить запись';
+    $('drift-rec-label').style.display='block';
+  }).catch(()=>toast('Нет доступа к микрофону','err'));
+}
+
 // ── PDF ДРОПЗОНА ──────────────────────────────────────────────────
 function pdfDzOver(e){e.preventDefault();$('pdf-dz').classList.add('dz-over');}
 function pdfDzLeave(e){$('pdf-dz').classList.remove('dz-over');}
@@ -1787,6 +1880,9 @@ function _pdfDzProcess(file){
 ═══════════════════════════════════════ */
 let _dashWhoFilt=null;
 let _kpiFilt=null; // null | 'critical' | 'warn'
+let _driftPending=null; // null | {type:'stage'|'task', ...}
+let _driftMediaRec=null;
+let _driftAudioChunks=[];
 let pfilt='all';
 let pSearch='';
 let pMgrFilt='';
@@ -2805,7 +2901,7 @@ function rGantt(){
     fHTML+=`<button class="g-fchip gfn" onclick="gExpandAll()" title="Раскрыть все этапы">⊞ Все этапы</button>`;
     fHTML+=`<button class="g-fchip gfn" onclick="gCollapseAll()" title="Свернуть все">⊟ Свернуть</button>`;
     fHTML+=`<button class="g-fchip ${_gCascade?'gfg':''}" onclick="gToggleCascade()" title="Каскадный сдвиг: следующие этапы двигаются вместе">🔗 Каскад</button>`;
-    fHTML+=`<span style="margin-left:auto;font-size:10px;color:var(--t3);opacity:.6;white-space:nowrap;padding:0 6px">v88</span>`;
+    fHTML+=`<span style="margin-left:auto;font-size:10px;color:var(--t3);opacity:.6;white-space:nowrap;padding:0 6px">v89</span>`;
     fHTML+=`<span style="width:1px;height:16px;background:var(--b2);margin:0 2px;flex-shrink:0"></span>`;
     fHTML+=`<button class="g-fchip ${gStageFilter==='has'?'gfa':''}" onclick="gSetStageF('has')" title="Только проекты с этапами">📋 С этапами</button>`;
     fHTML+=`<button class="g-fchip ${gStageFilter==='no'?'gfa':''}" onclick="gSetStageF('no')" title="Проекты без этапов — нужно заполнить">⬜ Без этапов</button>`;
@@ -3452,6 +3548,29 @@ function _gUp(e){
         const s=D.stages.find(s=>s.id===id);
         return s?{id:s.id,deadline:s.deadline,startDate:s.startDate}:null;
       }).filter(Boolean);
+
+      // Drift Counter: блокировка тихого переноса этапов с узким буфером (3-й+ раз)
+      if(deltaDays>0){
+        const _driftProj=D.projects.find(x=>x.id===obj.pid);
+        const _driftBuf=_driftProj?.clientDeadline
+          ?Math.round((new Date(_driftProj.clientDeadline)-new Date(nd))/86400000)
+          :999;
+        if(_driftBuf<=3){
+          const _newDC=(obj.dragCount||0)+1;
+          if(_newDC>=3){
+            const _cascCnt=toShift.size-1;
+            _driftPending={type:'stage',obj,nd,deltaDays,toShift,snapList,
+              logMsg:`📅 Этап «${obj.name}» → ${fdate(nd,true)}${_cascCnt>0?` +${_cascCnt} связ.`:''}`};
+            _gCleanupDragBars();rGantt();
+            document.removeEventListener('mousemove',_gMove);
+            document.removeEventListener('mouseup',_gUp);
+            showDriftModal('stage',obj.name,_newDC);
+            return;
+          }
+          obj.dragCount=_newDC;
+        }
+      }
+
       if(toShift.size===1){
         const snap={type:'stage',id:obj.id,fields:{deadline:_gDrag.origDead}};
         if(obj.startDate)snap.fields.startDate=obj.startDate;
@@ -4052,7 +4171,7 @@ function saveQuickTask(){
   if(t.who)pushTaskAssigned(t);
 }
 
-function tiHTML(task,showProj){
+function tiHTML(task,showProj,driftHighlight){
   const ds=dlStatus(task.dead,task.done);
   const proj=showProj?D.projects.find(p=>p.id===task.pid):null;
   const m=D.team.find(m=>m.name===task.who);
@@ -4086,10 +4205,16 @@ function tiHTML(task,showProj){
     ?`<span title="Исходный срок: ${fdate(_effOrig,true)}" style="font-size:9px;font-weight:700;background:rgba(234,88,12,.13);color:#C2410C;padding:2px 6px;border-radius:5px;cursor:default">+${_driftD}д.</span>`
     :_driftD<0?`<span title="Исходный срок: ${fdate(_effOrig,true)}" style="font-size:9px;font-weight:700;background:rgba(34,197,94,.13);color:#15803D;padding:2px 6px;border-radius:5px;cursor:default">${_driftD}д.</span>`
     :'';
-  return`<div class="ti ${task.done?'dn':''} ${ds==='overdue'&&!task.done?'od':''}" style="${urgStyle}" onclick="openTaskModal('${task.id}')">
+  // Drift Counter badge: пульсирующий бейдж при 2+ переносах высокоприоритетной задачи
+  const _dc=task.dragCount||0;
+  const _isHighPrio=['high','critical'].includes(task.prio);
+  const dragCountBadge=(_dc>=2&&_isHighPrio&&!task.done)
+    ?`<span class="drift-badge" title="Перенесена ${_dc} раза — скрытый срыв срока">⚠️ Скрытый срыв (Переносов: ${_dc})</span>`:'';
+  const _driftCls=(driftHighlight||(_dc>=2&&_isHighPrio&&!task.done&&_kpiFilt==='critical'))?'drift-task':'';
+  return`<div class="ti ${task.done?'dn':''} ${ds==='overdue'&&!task.done?'od':''} ${_driftCls}" style="${urgStyle}" onclick="openTaskModal('${task.id}')">
     <div class="tchk ${task.done?'ck':''}" onclick="toggleTask('${task.id}',event)"></div>
     <div class="tbody">
-      <div class="ttitle">${task.fast&&!task.done?'<span style="font-size:10px;font-weight:700;background:#FEF9C3;color:#854D0E;padding:2px 6px;border-radius:6px;letter-spacing:.4px">⚡ Быстрая</span> ':''}${task.name} ${urgBadge}${dlShiftBadge}${driftBadge}${extraIcons?`<span style="font-size:11px;opacity:.6">${extraIcons}</span>`:''}</div>
+      <div class="ttitle">${task.fast&&!task.done?'<span style="font-size:10px;font-weight:700;background:#FEF9C3;color:#854D0E;padding:2px 6px;border-radius:6px;letter-spacing:.4px">⚡ Быстрая</span> ':''}${task.name} ${urgBadge}${dlShiftBadge}${dragCountBadge}${driftBadge}${extraIcons?`<span style="font-size:11px;opacity:.6">${extraIcons}</span>`:''}</div>
       ${notesPreview}
       ${mobProj}
       ${taskTags}
@@ -4483,7 +4608,18 @@ function saveTask(){
     closedAt:existing?.closedAt,
     // origDead — исходный срок при создании, никогда не меняется
     origDead:isNew?(($('t-dead').value)||null):(existing.origDead||null),
+    dragCount:existing?.dragCount||0,
     deadlineHistory:existing?.deadlineHistory||([])};
+  // Drift Counter: блокировка тихого переноса высокоприоритетных задач (3-й+ раз)
+  const _dlMovedFwd=existing&&existing.dead&&t.dead&&t.dead>existing.dead;
+  if(_dlMovedFwd&&['high','critical'].includes(t.prio)){
+    t.dragCount=(existing.dragCount||0)+1;
+    if(t.dragCount>=3){
+      _driftPending={type:'task',t,existingDead:existing.dead};
+      showDriftModal('task',t.name,t.dragCount);
+      return;
+    }
+  }
   if(existing&&existing.dead&&t.dead&&existing.dead!==t.dead){
     t.deadlineHistory.push({from:existing.dead,to:t.dead,by:D.currentUser?.name||'',at:new Date().toISOString()});
     // Тихое уведомление руководству при переносе вперёд любой активной задачи с дедлайном ≤ сегодня
@@ -6117,6 +6253,28 @@ function speak(text){
     <div class="mfoot">
       <button class="btn btn-s" onclick="closeM('m-dash-cfg')">Отмена</button>
       <button class="btn btn-p" onclick="saveDashConfig()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Drift Modal — блокировка тихого переноса -->
+<div class="modal-overlay" id="m-drift" onclick="cancelDrift()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:440px">
+    <div class="modal-header" style="background:linear-gradient(135deg,#7F1D1D,#B91C1C)">
+      <h2 style="color:#fff;margin:0;font-size:18px">🚨 Счётчик дрейфа превышен</h2>
+    </div>
+    <div style="padding:20px 20px 8px">
+      <div id="drift-warning" style="font-size:14px;line-height:1.6;color:var(--t1);background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;padding:12px 14px;margin-bottom:16px"></div>
+      <label style="font-size:12px;font-weight:600;color:var(--t2);letter-spacing:.4px;text-transform:uppercase">Причина переноса</label>
+      <textarea id="drift-reason" rows="3" placeholder="Укажи причину переноса для руководства..." style="width:100%;margin-top:6px;padding:10px;border:1.5px solid var(--bdr);border-radius:10px;font-size:14px;resize:vertical;background:var(--bg2);color:var(--t1);box-sizing:border-box"></textarea>
+      <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+        <button class="btn" id="drift-voice-btn" onclick="toggleDriftVoice()" style="background:#F3F4F6;border:1.5px solid var(--bdr);color:var(--t1);font-size:13px;padding:8px 14px;border-radius:8px;flex-shrink:0">🎤 Надиктовать причину</button>
+        <span id="drift-rec-label" style="display:none;font-size:12px;color:#B91C1C;font-weight:600;animation:driftPulse 1s ease-in-out infinite">● Запись…</span>
+      </div>
+    </div>
+    <div style="padding:12px 20px 20px;display:flex;gap:10px">
+      <button class="btn btn-p" onclick="confirmDrift()" style="flex:1;background:#B91C1C;border-color:#B91C1C">Зафиксировать причину и перенести</button>
+      <button class="btn" onclick="cancelDrift()" style="flex-shrink:0">Отмена</button>
     </div>
   </div>
 </div>

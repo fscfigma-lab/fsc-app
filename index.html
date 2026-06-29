@@ -3327,10 +3327,14 @@ function insertDemoRooms(){
     },
   ];
 
-  demos.forEach(d=>{
+  const demoManager=mgr;
+  const demoPids=[];
+  // unshift = демо вставляется В НАЧАЛО списка → сразу видны в Ганте без скролла
+  demos.slice().reverse().forEach(d=>{
     const {stages,tasks,...proj}=d;
     const pid=uid();
-    D.projects.push({id:pid,...proj,_demo:true});
+    demoPids.push(pid);
+    D.projects.unshift({id:pid,...proj,_demo:true});
     stages.forEach((s,i)=>{
       D.stages.push({id:uid(),pid,name:s.name,icon:s.icon,
         startDate:s.startDate,deadline:s.deadline,done:false,order:i+1,
@@ -3343,8 +3347,9 @@ function insertDemoRooms(){
     gExpanded.add(pid);
   });
 
-  // Сбрасываем фильтры чтобы демо-проекты точно были видны
-  gMgrFilter='';gStageFilter='';gOff=0;
+  // Сбрасываем фильтры — демо видны сразу в начале списка
+  gMgrFilter=demoManager;  // фильтруем по демо-менеджеру → только 3 демо-проекта
+  gStageFilter='';gOff=0;
   if(gZoom!=='months'&&gZoom!=='weeks'){
     gZoom='months';
     ['days','weeks','months','quarters'].forEach(k=>{const btn=$('gz-'+k);if(btn)btn.classList.toggle('active',k==='months');});
@@ -3352,7 +3357,7 @@ function insertDemoRooms(){
 
   addLog('🎯 Демо: 3 проекта — норма / предупреждение / штраф');
   save();rGantt();
-  toast('🎯 Демо добавлено — 3 сценария двух договоров','ok');
+  toast('🎯 Демо: 3 проекта сверху. Для Drift Counter: потяни «Монтаж ⚠️» вправо или измени дедлайн задачи','ok');
 }
 
 function removeDemoRooms(){

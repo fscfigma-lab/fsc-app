@@ -4249,7 +4249,7 @@ function gBarDown(e,type,id){
   const origLeft=parseFloat(bar.dataset.ol||bar.style.left)||0;
   const origWidth=parseFloat(bar.dataset.ow||bar.style.width)||0;
   bar.style.transition='none';
-  bar.style.willChange='left,width';
+  bar.style.willChange='transform';
   bar.classList.add('is-dragging');
 
   // Пред-вычисляем список зависимых баров один раз
@@ -4299,16 +4299,8 @@ function gBarDown(e,type,id){
   document.body.style.userSelect='none';
 }
 
-function _applyBarShift(barEl,pctShift,hasStart){
-  const ol=parseFloat(barEl.dataset.ol||barEl.style.left)||0;
-  const ow=parseFloat(barEl.dataset.ow||barEl.style.width)||0;
-  if(hasStart){
-    // оба конца двигаются → translate
-    barEl.style.left=(ol+pctShift).toFixed(2)+'%';
-  } else {
-    // только deadline → ширина меняется
-    barEl.style.width=Math.max(0.5,ow+pctShift).toFixed(2)+'%';
-  }
+function _applyBarShift(barEl,dx){
+  barEl.style.transform='translateX('+dx+'px)';
 }
 
 function _gMove(e){
@@ -4332,25 +4324,25 @@ function _gMove(e){
 
       _gDrag.bar.style.opacity='0.8';
       _gDrag.bar.style.cursor='grabbing';
-      _applyBarShift(_gDrag.bar,pctShift,_gDrag.hasStart);
+      _applyBarShift(_gDrag.bar,dx);
 
-      // Зависимые бары — пред-вычисленный список, всегда translate
+      // Зависимые бары — transform, без layout
       _gDrag.cascadeBars.forEach(el=>{
         el.style.opacity='0.5';
-        _applyBarShift(el,pctShift,true);
+        _applyBarShift(el,dx);
       });
 
-      // Тултип с датой
+      // Тултип — transform вместо offsetWidth (нет layout read)
       const nd=new Date(new Date(_gDrag.origDead).getTime()+days*86400000).toISOString().slice(0,10);
       let tip=document.getElementById('g-dtip');
       if(!tip){
         tip=document.createElement('div');tip.id='g-dtip';
-        tip.style.cssText='position:fixed;background:#D4A853;color:#1C2B1C;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;pointer-events:none;z-index:9999;white-space:nowrap;box-shadow:0 2px 10px rgba(0,0,0,.25)';
+        tip.style.cssText='position:fixed;background:#D4A853;color:#1C2B1C;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;pointer-events:none;z-index:9999;white-space:nowrap;box-shadow:0 2px 10px rgba(0,0,0,.25);transform:translateX(-50%)';
         document.body.appendChild(tip);
       }
       tip.textContent='📅 '+fdate(nd,true)+(days>0?' (+'+days+' дн.)':days<0?' ('+days+' дн.)':'');
       const cx=_gDrag._dx+_gDrag.startX;
-      tip.style.left=(cx-tip.offsetWidth/2)+'px';
+      tip.style.left=cx+'px';
       tip.style.top=((_gDrag._cy||cx)-44)+'px';
       tip.style.display='block';
     });
@@ -4365,17 +4357,20 @@ function _gCleanupDragBars(){
     _gDrag.bar.style.opacity='';
     _gDrag.bar.style.cursor='';
     _gDrag.bar.style.willChange='';
+    _gDrag.bar.style.transform='';
     _gDrag.bar.classList.remove('is-dragging');
     _gDrag.cascadeBars.forEach(el=>{
       el.style.transition='';
       el.style.opacity='';
       el.style.willChange='';
+      el.style.transform='';
       el.classList.remove('is-dragging');
     });
   }
   document.querySelectorAll('.g-sbar[data-sid]').forEach(el=>{
     el.style.transition='';
     el.style.opacity='';
+    el.style.transform='';
     el.classList.remove('is-dragging');
   });
 }

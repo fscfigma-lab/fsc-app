@@ -1202,12 +1202,21 @@ body{background:var(--bg)}
   .ph{top:42px}
 }
 body.is-dragging-gantt,body.is-dragging-gantt *{user-select:none !important;cursor:grabbing !important;}
-/* Коридор клиентского договора — светло-серая подложка за внутренним баром */
+/* Два договора: внутренний бар (вверху) + клиентский бар (внизу) */
+.g-has-cbar2{min-height:66px}
+.g-has-cbar2 .g-bar{top:8px}
+/* Бар клиентского договора — нижний слот строки */
+.g-cbar2{position:absolute;height:14px;border-radius:5px;bottom:8px;
+  background:rgba(80,110,160,0.10);border:1px solid rgba(80,110,160,0.22);
+  display:flex;align-items:center;padding:0 7px;font-size:8.5px;font-weight:600;
+  color:rgba(80,110,160,0.65);pointer-events:none;white-space:nowrap;overflow:hidden;z-index:1}
+.g-cbar2.warn{background:rgba(184,134,26,0.12);border-color:rgba(184,134,26,0.35);color:rgba(140,95,0,0.8)}
+.g-cbar2.penalty{background:rgba(184,50,50,0.12);border-color:rgba(184,50,50,0.38);color:rgba(160,30,30,0.85)}
+/* Коридор этапа — светло-серая подложка */
 .g-client-strip{position:absolute;height:22px;border-radius:6px;
   background:rgba(0,0,0,0.04);border:1px solid rgba(0,0,0,0.08);
   pointer-events:none;z-index:1}
-.g-client-strip.proj{height:28px;border-radius:8px}
-/* Вертикальная линия клиентского дедлайна (граница коридора) */
+/* Вертикальная линия клиентского дедлайна */
 .g-cl-line{position:absolute;top:4px;bottom:4px;width:0;
   border-left:2px dashed rgba(0,0,0,0.25);pointer-events:none;z-index:3}
 .g-cl-line::after{content:'КД';position:absolute;top:1px;left:4px;font-size:8px;
@@ -4008,7 +4017,7 @@ function rGantt(){
       const penaltyStages=p.deadline?stages.filter(s=>!s.done&&s.deadline&&s.deadline>p.deadline):[];
       const critPath=odStages.length>0?` · ⚠ ${odStages.length} эт. просроч.`:(penaltyStages.length>0?` · 🔴 ${penaltyStages.length} эт. за дедлайн`:'');
 
-      html+=`<div class="g-row ${riskCls} ${odCls}${penaltyStages.length?' g-penalty':''}">
+      html+=`<div class="g-row ${riskCls} ${odCls}${penaltyStages.length?' g-penalty':''}${p.clientDeadline?' g-has-cbar2':''}">
         <div class="g-rlabel" onclick="openProjectDetail('${p.id}')">
           <div style="display:flex;align-items:center;min-width:0">
             <span class="g-xbtn" onclick="gToggleExpand('${p.id}',event)" title="${expanded?'Свернуть этапы':'Раскрыть этапы'}">${expanded?'▾':'▸'}</span>
@@ -4029,8 +4038,10 @@ function rGantt(){
             if(ce===null)return '';
             const cw=Math.max(1,ce-cs);
             const bufDays=p.deadline&&p.clientDeadline?Math.round((new Date(p.clientDeadline)-new Date(p.deadline))/86400000):999;
-            const lineStyle=bufDays<=0?'border-color:rgba(184,50,50,0.55)':bufDays<=7?'border-color:rgba(184,141,59,0.55)':'';
-            return `<div class="g-client-strip proj" style="left:${cs.toFixed(1)}%;width:${cw.toFixed(1)}%" title="Клиентский договор до: ${fdate(p.clientDeadline,true)}"></div><div class="g-cl-line" style="left:${ce.toFixed(1)}%;${lineStyle}" title="Клиентский дедлайн: ${fdate(p.clientDeadline,true)}${bufDays<=0?' ⚠️ ШТРАФ: опоздание '+Math.abs(bufDays)+' дн.':bufDays<=7?' ⚠️ Буфер: '+bufDays+' дн.':''}"></div>`;
+            const barCls=bufDays<0?'penalty':bufDays<=7?'warn':'';
+            const lbl=cw>15?`Договор КД ${fdate(p.clientDeadline,true)}`:cw>7?'Договор КД':'КД';
+            const ttip=`Клиентский договор до: ${fdate(p.clientDeadline,true)}${bufDays<0?' ⚠️ ШТРАФ '+Math.abs(bufDays)+' дн.':bufDays<=7?' · Буфер: '+bufDays+' дн.':''}`;
+            return `<div class="g-cbar2${barCls?' '+barCls:''}" style="left:${cs.toFixed(1)}%;width:${cw.toFixed(1)}%" title="${ttip}">${lbl}</div>`;
           })()}
           ${ep>0&&sp<100?`<div class="g-bar ${cls}" style="left:${sp.toFixed(1)}%;width:${w.toFixed(1)}%;cursor:grab" onmousedown="gBarDown(event,'proj','${p.id}')" ontouchstart="gBarDown(event,'proj','${p.id}')" title="${p.name}&#10;${fdate(p.start,true)} → ${fdate(p.deadline,true)}&#10;Прогресс: ${pct}%&#10;Перетащи чтобы сдвинуть сроки">
             <div class="g-pf" style="width:${pct}%"></div>
@@ -4251,62 +4262,69 @@ function gCollapseAll(){gExpanded.clear();rGantt();}
 function gToggleCascade(){_gCascade=!_gCascade;rGantt();toast(_gCascade?'🔗 Каскад включён — следующие этапы сдвигаются вместе':'Каскад выключен','ok');}
 
 function insertDemoRooms(){
-  // Выбираем проект — первый без этапов, иначе первый видимый
-  const projs=visibleProjects();
-  if(!projs.length){toast('Нет проектов','err');return;}
-  const target=projs.find(p=>!D.stages.some(s=>s.pid===p.id))||projs[0];
+  D.stages=D.stages.filter(s=>!s._demo);
+  D.projects=D.projects.filter(p=>!p._demo);
 
-  // Удаляем старые демо-этапы этого проекта если они есть
-  D.stages=D.stages.filter(s=>s.pid!==target.id||!s._demo);
+  function dt(n){const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);}
+  const mgr=(D.team&&D.team.length?D.team[0].name:null)||'Менеджер';
 
-  function dt(offsetDays){
-    const d=new Date();d.setDate(d.getDate()+offsetDays);
-    return d.toISOString().slice(0,10);
-  }
-
-  // Три помещения с реальными фазами (как в MS Project Jumeirah 128)
-  const demoData=[
-    {room:'-101/-102 Hall',color:'#D4A853',stages:[
-      {icon:'📐',name:'Замеры',          startDate:dt(0), deadline:dt(2)},
-      {icon:'🏭',name:'Изготовление',    startDate:dt(3), deadline:dt(17)},
-      {icon:'🔨',name:'Монтаж',          startDate:dt(18),deadline:dt(30)},
-      {icon:'✨',name:'Полировка',       startDate:dt(31),deadline:dt(38)},
-    ]},
-    {room:'-104 SPA & Lounge',stages:[
-      {icon:'📐',name:'Замеры',          startDate:dt(0), deadline:dt(3)},
-      {icon:'📝',name:'Проектирование',  startDate:dt(4), deadline:dt(10)},
-      {icon:'🏭',name:'Изготовление',    startDate:dt(11),deadline:dt(23)},
-      {icon:'🔨',name:'Монтаж',          startDate:dt(24),deadline:dt(35)},
-      {icon:'✨',name:'Полировка',       startDate:dt(36),deadline:dt(44)},
-    ]},
-    {room:'-116 Garage',stages:[
-      {icon:'📐',name:'Замеры',          startDate:dt(5), deadline:dt(7)},
-      {icon:'🏭',name:'Изготовление',    startDate:dt(8), deadline:dt(19)},
-      {icon:'🔨',name:'Монтаж',          startDate:dt(20),deadline:dt(28)},
-    ]},
+  // 3 сценария: норма / предупреждение / штраф
+  const demos=[
+    {
+      name:'🟢 Демо — Вилла А (норма)',client:'FSC Demo',
+      start:dt(-12),deadline:dt(22),clientDeadline:dt(36),
+      status:'active',pct:50,manager:mgr,
+      stages:[
+        {icon:'📐',name:'Замеры',      startDate:dt(-12),deadline:dt(-8)},
+        {icon:'🏭',name:'Изготовление',startDate:dt(-7), deadline:dt(10)},
+        {icon:'🔨',name:'Монтаж',      startDate:dt(11), deadline:dt(22)},
+        {icon:'✨',name:'Полировка',   startDate:dt(23), deadline:dt(30)},
+      ]
+    },
+    {
+      name:'🟡 Демо — Апартамент Б (предупреждение)',client:'FSC Demo',
+      start:dt(-8),deadline:dt(18),clientDeadline:dt(20),
+      status:'active',pct:65,manager:mgr,
+      stages:[
+        {icon:'📐',name:'Замеры',      startDate:dt(-8), deadline:dt(-5)},
+        {icon:'🏭',name:'Изготовление',startDate:dt(-4), deadline:dt(10)},
+        {icon:'🔨',name:'Монтаж',      startDate:dt(11), deadline:dt(18)},
+      ]
+    },
+    {
+      name:'🔴 Демо — Офис В (штраф)',client:'FSC Demo',
+      start:dt(-15),deadline:dt(24),clientDeadline:dt(16),
+      status:'active',pct:72,manager:mgr,
+      stages:[
+        {icon:'📐',name:'Замеры',      startDate:dt(-15),deadline:dt(-10)},
+        {icon:'🏭',name:'Изготовление',startDate:dt(-9), deadline:dt(8)},
+        {icon:'🔨',name:'Монтаж',      startDate:dt(9),  deadline:dt(24)},
+      ]
+    },
   ];
 
-  let order=D.stages.filter(s=>s.pid===target.id).reduce((m,s)=>Math.max(m,s.order||0),0);
-  demoData.forEach(({room,stages})=>{
-    stages.forEach(s=>{
-      order++;
-      D.stages.push({id:uid(),pid:target.id,name:s.name,icon:s.icon,
-        startDate:s.startDate,deadline:s.deadline,room,done:false,order,_demo:true});
+  demos.forEach(d=>{
+    const {stages,...proj}=d;
+    const pid=uid();
+    D.projects.push({id:pid,...proj,_demo:true});
+    stages.forEach((s,i)=>{
+      D.stages.push({id:uid(),pid,name:s.name,icon:s.icon,
+        startDate:s.startDate,deadline:s.deadline,done:false,order:i+1,_demo:true});
     });
+    gExpanded.add(pid);
   });
 
-  addLog(`🏠 Демо этапы по помещениям добавлены в «${target.name}»`,target.id);
-  save();
-  gExpanded.add(target.id);
-  rGantt();
-  toast(`🏠 Демо в «${target.name}» — раскрой проект чтобы увидеть помещения`,'ok');
+  addLog('🎯 Демо: 3 проекта — норма / предупреждение / штраф');
+  save();rGantt();
+  toast('🎯 Демо добавлено — 3 сценария двух договоров','ok');
 }
 
 function removeDemoRooms(){
-  const changed=D.stages.filter(s=>s._demo).map(s=>s.pid);
+  const had=D.stages.some(s=>s._demo)||D.projects.some(p=>p._demo);
   D.stages=D.stages.filter(s=>!s._demo);
-  if(!changed.length){toast('Нет демо данных','err');return;}
-  save();rGantt();toast('🗑 Демо этапы удалены','ok');
+  D.projects=D.projects.filter(p=>!p._demo);
+  if(!had){toast('Нет демо данных','err');return;}
+  save();rGantt();toast('🗑 Демо удалено','ok');
 }
 
 function _shiftDate(dateStr,deltaDays){

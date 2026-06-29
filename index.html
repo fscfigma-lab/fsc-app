@@ -293,7 +293,7 @@ body{background:var(--bg)}
 .g-bar{position:absolute;height:26px;border-radius:6px;border:1px solid var(--b2);
   display:flex;align-items:center;padding:0 10px;font-size:11px;overflow:hidden;
   cursor:grab;transition:opacity .15s,box-shadow .15s,filter .15s;white-space:nowrap;font-weight:500;touch-action:none}
-.g-bar.is-dragging,.g-sbar.is-dragging{transition:none !important;}
+.g-bar.is-dragging,.g-sbar.is-dragging{transition:none !important;z-index:9999 !important;}
 .g-bar:hover{z-index:10;overflow:visible;min-width:max-content;box-shadow:var(--shadow-md);filter:brightness(1.15)}
 .g-bar:hover::after{content:'⠿⠿';position:absolute;right:5px;top:50%;transform:translateY(-50%);font-size:10px;opacity:.5;pointer-events:none}
 .g-bar.on-track{background:rgba(201,149,42,0.10);border-color:var(--acc-bd);color:var(--acc)}
@@ -1201,6 +1201,7 @@ body{background:var(--bg)}
   .main{padding-top:42px}
   .ph{top:42px}
 }
+body.is-dragging-gantt,body.is-dragging-gantt *{user-select:none !important;cursor:grabbing !important;}
 </style>
 </head>
 <body>
@@ -4297,6 +4298,7 @@ function gBarDown(e,type,id){
   document.addEventListener('touchmove',_gMove,{passive:false});
   document.addEventListener('touchend',_gUp);
   document.body.style.userSelect='none';
+  document.body.classList.add('is-dragging-gantt');
 }
 
 function _applyBarShift(barEl,dx){
@@ -4480,6 +4482,7 @@ function _gUp(e){
   document.removeEventListener('touchmove',_gMove);
   document.removeEventListener('touchend',_gUp);
   document.body.style.userSelect='';
+  document.body.classList.remove('is-dragging-gantt');
   const tip=document.getElementById('g-dtip');if(tip)tip.style.display='none';
   _gDrag=null;
 }

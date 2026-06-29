@@ -3889,16 +3889,16 @@ function rGantt(){
     fHTML+=`<button class="g-fchip gfn" onclick="gExpandAll()" title="Раскрыть все этапы">⊞ Все этапы</button>`;
     fHTML+=`<button class="g-fchip gfn" onclick="gCollapseAll()" title="Свернуть все">⊟ Свернуть</button>`;
     fHTML+=`<button class="g-fchip ${_gCascade?'gfg':''}" onclick="gToggleCascade()" title="Каскадный сдвиг: следующие этапы двигаются вместе">🔗 Каскад</button>`;
-    fHTML+=`<span style="margin-left:auto;font-size:10px;color:var(--t3);opacity:.6;white-space:nowrap;padding:0 6px">v76</span>`;
+    fHTML+=`<span style="margin-left:auto;font-size:10px;color:var(--t3);opacity:.6;white-space:nowrap;padding:0 6px">v85</span>`;
     fHTML+=`<span style="width:1px;height:16px;background:var(--b2);margin:0 2px;flex-shrink:0"></span>`;
     fHTML+=`<button class="g-fchip ${gStageFilter==='has'?'gfa':''}" onclick="gSetStageF('has')" title="Только проекты с этапами">📋 С этапами</button>`;
     fHTML+=`<button class="g-fchip ${gStageFilter==='no'?'gfa':''}" onclick="gSetStageF('no')" title="Проекты без этапов — нужно заполнить">⬜ Без этапов</button>`;
     if(isAdmin()){
-      const hasDemo=D.stages.some(s=>s._demo);
+      const hasDemo=D.stages.some(s=>s._demo)||D.projects.some(p=>p._demo);
       fHTML+=`<span style="width:1px;height:16px;background:var(--b2);margin:0 2px;flex-shrink:0"></span>`;
       fHTML+=hasDemo
-        ?`<button class="g-fchip" onclick="removeDemoRooms()" style="color:var(--red)" title="Удалить демо этапы">🗑 Демо</button>`
-        :`<button class="g-fchip" onclick="insertDemoRooms()" title="Добавить демо этапы с разбивкой по помещениям">🏠 Демо</button>`;
+        ?`<button class="g-fchip" onclick="removeDemoRooms()" style="color:var(--red)" title="Удалить демо данные">🗑 Демо</button>`
+        :`<button class="g-fchip" onclick="insertDemoRooms()" title="Добавить демо: 3 сценария двух договоров">🏠 Демо</button>`;
     }
     fb.innerHTML=fHTML;
   }
@@ -4313,6 +4313,13 @@ function insertDemoRooms(){
     });
     gExpanded.add(pid);
   });
+
+  // Сбрасываем фильтры чтобы демо-проекты точно были видны
+  gMgrFilter='';gStageFilter='';gOff=0;
+  if(gZoom!=='months'&&gZoom!=='weeks'){
+    gZoom='months';
+    ['days','weeks','months','quarters'].forEach(k=>{const btn=$('gz-'+k);if(btn)btn.classList.toggle('active',k==='months');});
+  }
 
   addLog('🎯 Демо: 3 проекта — норма / предупреждение / штраф');
   save();rGantt();

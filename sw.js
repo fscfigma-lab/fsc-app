@@ -1,9 +1,10 @@
-const CACHE = 'fsc-v87';
+const CACHE = 'fsc-v88';
 const BASE = '/fsc-app';
 
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE).then(c => c.addAll([
+      BASE+'/', BASE+'/index.html',
       BASE+'/icon-192.png', BASE+'/icon-512.png',
       BASE+'/manifest.json', BASE+'/style.css'
     ]))

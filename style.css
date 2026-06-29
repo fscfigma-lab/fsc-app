@@ -262,9 +262,9 @@ body{background:var(--bg)}
 .g-day-wd{font-size:8px;font-weight:600;opacity:.55;letter-spacing:.4px;text-transform:uppercase;display:block;line-height:1}
 .g-week-row{display:flex;border-bottom:1px solid rgba(0,0,0,0.06)}
 .g-week-label{flex:1;text-align:center;font-size:9px;color:var(--t3);font-weight:600;padding:3px 6px;border-right:1px solid rgba(0,0,0,0.04);letter-spacing:.3px}
-.g-row{display:flex;border-bottom:1px solid rgba(0,0,0,0.06);min-height:60px;background:#fff}
+.g-row{display:flex;border-bottom:1px solid rgba(0,0,0,0.06);min-height:46px;background:#fff}
 .g-row:hover{background:#FAFFFE}
-.g-rlabel{width:200px;flex-shrink:0;padding:8px 12px;border-right:1px solid rgba(0,0,0,0.06);
+.g-rlabel{width:200px;flex-shrink:0;padding:5px 12px;border-right:1px solid rgba(0,0,0,0.06);
   display:flex;flex-direction:column;justify-content:center;cursor:pointer;background:#fff}
 .g-rname{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .g-rmgr{font-size:11px;color:var(--t3);margin-top:2px}
@@ -350,7 +350,7 @@ body{background:var(--bg)}
   line-height:1}
 .g-xbtn:hover{border-color:var(--acc-bd);color:var(--acc);background:var(--acc-bg)}
 /* Stage sub-row */
-.g-subrow{display:flex;border-bottom:1px solid rgba(0,0,0,0.04);min-height:44px;
+.g-subrow{display:flex;border-bottom:1px solid rgba(0,0,0,0.04);min-height:38px;
   background:#FAFAFA;transition:background .15s}
 .g-subrow:hover{background:#F5FFFE}
 .g-subrow .g-rlabel{padding-left:30px;cursor:pointer}
@@ -1209,7 +1209,7 @@ body{background:var(--bg)}
 body.is-dragging-gantt,body.is-dragging-gantt *{user-select:none !important;cursor:grabbing !important;}
 /* Два договора: внутренний бар (вверху) + клиентский бар (внизу) */
 /* Коридор клиентского договора: серая подложка на заднем плане, строка компактная */
-.g-has-cbar2{min-height:48px}
+.g-has-cbar2{min-height:50px}
 .g-cbar2{position:absolute;top:22%;bottom:22%;border-radius:4px;
   background:#EBEBEB;border:none;z-index:0;pointer-events:none}
 /* Цветовые статусы бара проекта по буферу до клиентского дедлайна */

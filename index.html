@@ -1135,8 +1135,7 @@ function canEditProject(p){
 }
 // Может создавать проекты
 function canCreateProject(){return isAdmin()||isManagement();}
-// Видит ленту изменений
-function canSeeNotif(){return isAdmin()||isManagement();}
+// Видит ленту изменений — см. полную версию в блоке NOTIFICATIONS
 function visibleProjects(){
   if(canSeeAll())return D.projects;
   if(!D.currentUser)return[];
@@ -2806,7 +2805,7 @@ function rGantt(){
     fHTML+=`<button class="g-fchip gfn" onclick="gExpandAll()" title="Раскрыть все этапы">⊞ Все этапы</button>`;
     fHTML+=`<button class="g-fchip gfn" onclick="gCollapseAll()" title="Свернуть все">⊟ Свернуть</button>`;
     fHTML+=`<button class="g-fchip ${_gCascade?'gfg':''}" onclick="gToggleCascade()" title="Каскадный сдвиг: следующие этапы двигаются вместе">🔗 Каскад</button>`;
-    fHTML+=`<span style="margin-left:auto;font-size:10px;color:var(--t3);opacity:.6;white-space:nowrap;padding:0 6px">v85</span>`;
+    fHTML+=`<span style="margin-left:auto;font-size:10px;color:var(--t3);opacity:.6;white-space:nowrap;padding:0 6px">v88</span>`;
     fHTML+=`<span style="width:1px;height:16px;background:var(--b2);margin:0 2px;flex-shrink:0"></span>`;
     fHTML+=`<button class="g-fchip ${gStageFilter==='has'?'gfa':''}" onclick="gSetStageF('has')" title="Только проекты с этапами">📋 С этапами</button>`;
     fHTML+=`<button class="g-fchip ${gStageFilter==='no'?'gfa':''}" onclick="gSetStageF('no')" title="Проекты без этапов — нужно заполнить">⬜ Без этапов</button>`;

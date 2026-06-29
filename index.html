@@ -3311,24 +3311,34 @@ function insertDemoRooms(){
       ]
     },
     {
-      name:'🔴 Демо — Офис В (штраф)',client:'FSC Demo',
+      name:'🔴 Демо — Офис В (штраф + ⚠️ Drift)',client:'FSC Demo',
       start:dt(-15),deadline:dt(24),clientDeadline:dt(16),
       status:'active',pct:72,manager:mgr,
+      // Монтаж уже переносился 2 раза — следующий drag заблокирует Drift Counter
       stages:[
         {icon:'📐',name:'Замеры',      startDate:dt(-15),deadline:dt(-10)},
         {icon:'🏭',name:'Изготовление',startDate:dt(-9), deadline:dt(8)},
-        {icon:'🔨',name:'Монтаж',      startDate:dt(9),  deadline:dt(24)},
+        {icon:'🔨',name:'Монтаж ⚠️',   startDate:dt(9),  deadline:dt(14), dragCount:2},
+      ],
+      // Задача с dragCount:2 — следующий перенос дедлайна вызовет Drift Modal
+      tasks:[
+        {name:'⚠️ Контроль монтажа (перенести дедлайн)',prio:'high',dead:dt(14),who:mgr,dragCount:2},
       ]
     },
   ];
 
   demos.forEach(d=>{
-    const {stages,...proj}=d;
+    const {stages,tasks,...proj}=d;
     const pid=uid();
     D.projects.push({id:pid,...proj,_demo:true});
     stages.forEach((s,i)=>{
       D.stages.push({id:uid(),pid,name:s.name,icon:s.icon,
-        startDate:s.startDate,deadline:s.deadline,done:false,order:i+1,_demo:true});
+        startDate:s.startDate,deadline:s.deadline,done:false,order:i+1,
+        dragCount:s.dragCount||0,_demo:true});
+    });
+    (tasks||[]).forEach(t=>{
+      D.tasks.push({id:uid(),pid,...t,done:false,
+        createdAt:new Date().toISOString(),origDead:t.dead,deadlineHistory:[],_demo:true});
     });
     gExpanded.add(pid);
   });
@@ -3346,9 +3356,10 @@ function insertDemoRooms(){
 }
 
 function removeDemoRooms(){
-  const had=D.stages.some(s=>s._demo)||D.projects.some(p=>p._demo);
+  const had=D.stages.some(s=>s._demo)||D.projects.some(p=>p._demo)||D.tasks.some(t=>t._demo);
   D.stages=D.stages.filter(s=>!s._demo);
   D.projects=D.projects.filter(p=>!p._demo);
+  D.tasks=D.tasks.filter(t=>!t._demo);
   if(!had){toast('Нет демо данных','err');return;}
   save();rGantt();toast('🗑 Демо удалено','ok');
 }

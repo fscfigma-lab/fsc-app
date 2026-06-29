@@ -277,6 +277,11 @@ body{background:var(--bg)}
 .g-month{flex:1;min-width:80px;padding:10px 6px;text-align:center;font-size:10px;
   color:var(--t3);font-weight:500;border-right:1px solid rgba(0,0,0,0.04);letter-spacing:.3px}
 .g-month.cur{color:var(--t1);font-weight:700;background:rgba(201,149,42,0.04)}
+.g-month.wknd{background:rgba(0,0,0,0.025);color:var(--t3)}
+.g-month.g-day{min-width:44px;display:flex;flex-direction:column;align-items:center;padding:5px 2px;gap:1px;font-size:14px;font-weight:700}
+.g-day-wd{font-size:8px;font-weight:600;opacity:.55;letter-spacing:.4px;text-transform:uppercase;display:block;line-height:1}
+.g-week-row{display:flex;border-bottom:1px solid rgba(0,0,0,0.06)}
+.g-week-label{flex:1;text-align:center;font-size:9px;color:var(--t3);font-weight:600;padding:3px 6px;border-right:1px solid rgba(0,0,0,0.04);letter-spacing:.3px}
 .g-row{display:flex;border-bottom:1px solid rgba(0,0,0,0.06);min-height:60px;background:#fff}
 .g-row:hover{background:#FAFFFE}
 .g-rlabel{width:200px;flex-shrink:0;padding:8px 12px;border-right:1px solid rgba(0,0,0,0.06);
@@ -1360,6 +1365,7 @@ body.is-dragging-gantt,body.is-dragging-gantt *{user-select:none !important;curs
         <div><div class="ph-title">Гант</div><div class="ph-sub" id="gantt-label">Временная шкала</div></div>
         <div class="ph-actions" style="gap:6px;align-items:center;flex-wrap:wrap">
           <div class="g-zoom-bar">
+            <button class="g-zoom-btn" id="gz-days" onclick="gSetZoom('days')">Дни</button>
             <button class="g-zoom-btn" id="gz-weeks" onclick="gSetZoom('weeks')">Недели</button>
             <button class="g-zoom-btn active" id="gz-months" onclick="gSetZoom('months')">Месяцы</button>
             <button class="g-zoom-btn" id="gz-quarters" onclick="gSetZoom('quarters')">Кварталы</button>
@@ -3811,7 +3817,7 @@ function confirmContractProject(){
 
 function gSetZoom(z){
   gZoom=z;gOff=0;
-  ['weeks','months','quarters'].forEach(k=>{
+  ['days','weeks','months','quarters'].forEach(k=>{
     const btn=$('gz-'+k);if(btn)btn.classList.toggle('active',k===z);
   });
   rGantt();
@@ -3830,7 +3836,14 @@ function rGantt(){
   const now=new Date();
   let pStart,pEnd,cols=[];
 
-  if(gZoom==='weeks'){
+  if(gZoom==='days'){
+    const mon=new Date(now);mon.setDate(now.getDate()-((now.getDay()+6)%7)+gOff*7);mon.setHours(0,0,0,0);
+    pStart=mon;pEnd=new Date(mon);pEnd.setDate(mon.getDate()+13);
+    for(let i=0;i<14;i++){const d=new Date(mon);d.setDate(mon.getDate()+i);cols.push(d);}
+    const s=`${cols[0].getDate()} ${MS_SHORT[cols[0].getMonth()]}`;
+    const e=`${cols[13].getDate()} ${MS_SHORT[cols[13].getMonth()]} ${cols[13].getFullYear()}`;
+    $('gantt-label').textContent=`${s} — ${e}`;
+  } else if(gZoom==='weeks'){
     const mon=new Date(now);mon.setDate(now.getDate()-((now.getDay()+6)%7)+gOff*7);mon.setHours(0,0,0,0);
     pStart=mon;pEnd=new Date(mon);pEnd.setDate(mon.getDate()+70);
     for(let i=0;i<10;i++){const w=new Date(mon);w.setDate(mon.getDate()+i*7);cols.push(w);}
@@ -3893,9 +3906,18 @@ function rGantt(){
   </div>`;
 
   // Заголовок таблицы
+  const _WD=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
   let colsHTML='';
   cols.forEach(c=>{
     let lbl,cur=false;
+    if(gZoom==='days'){
+      const dow=(c.getDay()+6)%7;
+      const isWknd=dow>=5;
+      cur=c.toDateString()===now.toDateString();
+      lbl=`<span class="g-day-wd">${_WD[dow]}</span>${c.getDate()}`;
+      colsHTML+=`<div class="g-month g-day${cur?' cur':''}${isWknd?' wknd':''}">${lbl}</div>`;
+      return;
+    }
     if(gZoom==='weeks'){lbl=`${c.getDate()} ${MS_SHORT[c.getMonth()]}`;cur=Math.abs(c-now)<7*86400000;}
     else if(gZoom==='months'){lbl=`${MS_SHORT[c.getMonth()]} ${c.getFullYear()}`;cur=c.getMonth()===now.getMonth()&&c.getFullYear()===now.getFullYear();}
     else{const q=Math.floor(c.getMonth()/3)+1;lbl=`Q${q} ${c.getFullYear()}`;cur=c.getFullYear()===now.getFullYear()&&Math.floor(now.getMonth()/3)===q-1;}
@@ -3903,11 +3925,28 @@ function rGantt(){
   });
   // Today line с меткой — только в шапке
   const hdrTodayLine=todayPos>=0&&todayPos<=100?`<div class="g-today" style="left:${todayPos.toFixed(1)}%;position:absolute;z-index:6"></div>`:'';
-  let html=legendHTML+`<div class="g-hrow"><div class="g-lcol">Проект / Этапы</div><div class="g-months" style="position:relative">${colsHTML}${hdrTodayLine}</div></div>`;
+  let html;
+  if(gZoom==='days'){
+    const wFmt=d=>`${d.getDate()} ${MS_SHORT[d.getMonth()]}`;
+    const weekRowHTML=`<div class="g-week-label">${wFmt(cols[0])} — ${wFmt(cols[6])}</div><div class="g-week-label" style="border-right:none">${wFmt(cols[7])} — ${wFmt(cols[13])}</div>`;
+    html=legendHTML+`<div class="g-hrow"><div class="g-lcol">Проект / Этапы</div><div style="flex:1;display:flex;flex-direction:column"><div class="g-week-row">${weekRowHTML}</div><div class="g-months" style="position:relative">${colsHTML}${hdrTodayLine}</div></div></div>`;
+  } else {
+    html=legendHTML+`<div class="g-hrow"><div class="g-lcol">Проект / Этапы</div><div class="g-months" style="position:relative">${colsHTML}${hdrTodayLine}</div></div>`;
+  }
 
   // Хелперы
   function gridLines(){
     let g='';
+    if(gZoom==='days'){
+      const dayW=(1/total*100).toFixed(3);
+      cols.forEach(c=>{
+        const gp=(c-pStart)/86400000/total*100;
+        const dow=(c.getDay()+6)%7;
+        if(dow>=5)g+=`<div style="position:absolute;top:0;bottom:0;left:${gp.toFixed(3)}%;width:${dayW}%;background:rgba(0,0,0,0.03);pointer-events:none;z-index:0"></div>`;
+        if(gp>0&&gp<100)g+=`<div class="g-grid" style="left:${gp.toFixed(2)}%"></div>`;
+      });
+      return g;
+    }
     cols.forEach(c=>{const gp=(c-pStart)/86400000/total*100;if(gp>0&&gp<100)g+=`<div class="g-grid" style="left:${gp.toFixed(1)}%"></div>`;});
     return g;
   }

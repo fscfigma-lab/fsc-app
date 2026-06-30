@@ -1257,3 +1257,8 @@ body.is-dragging-gantt,body.is-dragging-gantt *{user-select:none !important;curs
   padding:1px 6px;border-radius:5px;margin-left:5px;letter-spacing:.2px;vertical-align:middle}
 .drift-sched-badge.ahead{background:#DCFCE7;color:#15803D}
 .drift-sched-badge.behind{background:#FEE2E2;color:#B91C1C}
+
+/* Rollup-индикатор (Scheduler.computeRollup) — информационный, не статус */
+.g-rollup-badge{display:inline-block;font-size:9px;font-weight:600;
+  padding:1px 6px;border-radius:5px;margin-left:5px;letter-spacing:.2px;
+  vertical-align:middle;background:rgba(100,116,139,0.12);color:#475569}

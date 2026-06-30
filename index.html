@@ -495,7 +495,13 @@
     </div>
     <div class="modal-scroll">
     <div class="fg"><label class="fl">Название *</label><input type="text" class="fi" id="t-name" placeholder="Что нужно сделать?"></div>
-    <div class="fg"><label class="fl">Проект</label><select class="fi" id="t-proj" onchange="_refreshTaskBlockedBy()"></select></div>
+    <div class="fg"><label class="fl">Проект</label><select class="fi" id="t-proj" onchange="_refreshTaskBlockedBy();_refreshTaskStageLink()"></select></div>
+    <div class="fg" id="t-stage-row" style="display:none">
+      <label class="fl">📋 Относится к этапу</label>
+      <select class="fi" id="t-stage">
+        <option value="">— не задано —</option>
+      </select>
+    </div>
     <div class="fg" id="t-blockedby-row" style="display:none">
       <label class="fl">🔗 Зависит от этапа</label>
       <select class="fi" id="t-blockedby">
@@ -1327,6 +1333,13 @@ function driftBadgeHTML(pid){
   if(d===null||d===0)return'';
   const ahead=d<0;
   return `<span class="drift-sched-badge ${ahead?'ahead':'behind'}" title="${ahead?'Опережение графика':'Отставание от графика'} относительно базовой линии (среднее по незавершённым этапам)">${ahead?'▲':'▼'} ${ahead?'опережение':'отставание'} ${Math.abs(d)}д</span>`;
+}
+
+// Параллельный rollup-индикатор (Scheduler.computeRollup) — НЕ хранимая
+// дата, чисто информационная подсказка «что говорят связанные задачи/этапы»
+function rollupBadgeHTML(span){
+  if(!span)return'';
+  return `<span class="g-rollup-badge" title="Фактический охват по связанным задачам/этапам (не влияет на хранимый дедлайн)">📋 ${fdate(span.start,true)} → ${fdate(span.finish,true)}</span>`;
 }
 
 /* ═══════════════════════════════════════
@@ -2849,6 +2862,29 @@ const Scheduler={
       s.deadline=newD;
     });
     return{undoSnapshot,summary:{logMsg:`${logMsg} · Причина: ${reason}`}};
+  },
+
+  // ── ROLLUP (параллельный вычисляемый индикатор, НЕ источник истины) ──
+  // Чистая функция: D → {stages:Map, projects:Map}. НЕ мутирует D, не
+  // пишет в s.deadline/p.deadline (те остаются единственным хранимым
+  // источником истины — drag/Sheets-синк/Drift Counter их не теряют).
+  // Stage: start=min(t.dead по задачам с t.sid===stage.id), finish=max(...)
+  // Project: start=min(stage-rollup.start по этапам проекта), finish=max(...)
+  // Нет данных для расчёта → null, не выдумываем дату из ничего.
+  computeRollup(D){
+    const stages=new Map();
+    D.stages.forEach(s=>{
+      const linked=D.tasks.filter(t=>t.sid===s.id&&t.dead).map(t=>t.dead).sort();
+      stages.set(s.id, linked.length?{start:linked[0],finish:linked[linked.length-1]}:null);
+    });
+    const projects=new Map();
+    D.projects.forEach(p=>{
+      const spans=D.stages.filter(s=>s.pid===p.id).map(s=>stages.get(s.id)).filter(Boolean);
+      if(!spans.length){projects.set(p.id,null);return;}
+      const starts=spans.map(x=>x.start).sort(), finishes=spans.map(x=>x.finish).sort();
+      projects.set(p.id,{start:starts[0],finish:finishes[finishes.length-1]});
+    });
+    return{stages,projects};
   }
 };
 
@@ -3287,6 +3323,7 @@ function rGantt(){
     </div>`;
     return;
   }
+  const _rollup=Scheduler.computeRollup(D); // параллельный индикатор, считается раз за рендер
   const now=new Date();
   let pStart,pEnd,cols=[];
 
@@ -3334,7 +3371,7 @@ function rGantt(){
     fHTML+=`<button class="g-fchip gfn" onclick="gExpandAll()" title="Раскрыть все этапы">⊞ Все этапы</button>`;
     fHTML+=`<button class="g-fchip gfn" onclick="gCollapseAll()" title="Свернуть все">⊟ Свернуть</button>`;
     fHTML+=`<button class="g-fchip ${_gCascade?'gfg':''}" onclick="gToggleCascade()" title="Каскадный сдвиг: следующие этапы двигаются вместе">🔗 Каскад</button>`;
-    fHTML+=`<span style="margin-left:auto;font-size:10px;color:var(--t3);opacity:.6;white-space:nowrap;padding:0 6px">v94</span>`;
+    fHTML+=`<span style="margin-left:auto;font-size:10px;color:var(--t3);opacity:.6;white-space:nowrap;padding:0 6px">v95</span>`;
     fHTML+=`<span style="width:1px;height:16px;background:var(--b2);margin:0 2px;flex-shrink:0"></span>`;
     fHTML+=`<button class="g-fchip ${gStageFilter==='has'?'gfa':''}" onclick="gSetStageF('has')" title="Только проекты с этапами">📋 С этапами</button>`;
     fHTML+=`<button class="g-fchip ${gStageFilter==='no'?'gfa':''}" onclick="gSetStageF('no')" title="Проекты без этапов — нужно заполнить">⬜ Без этапов</button>`;
@@ -3476,7 +3513,7 @@ function rGantt(){
             <span class="g-xbtn" onclick="gToggleExpand('${p.id}',event)" title="${expanded?'Свернуть этапы':'Раскрыть этапы'}">${expanded?'▾':'▸'}</span>
             <div style="flex:1;min-width:0">
               <div class="g-rname">${p.name}</div>
-              <div class="g-rmgr">${p.manager?p.manager.split(' ')[0]:'—'} · ${pct}%${driftBadgeHTML(p.id)}${stageHint}${critPath}</div>
+              <div class="g-rmgr">${p.manager?p.manager.split(' ')[0]:'—'} · ${pct}%${driftBadgeHTML(p.id)}${stageHint}${critPath}${rollupBadgeHTML(_rollup.projects.get(p.id))}</div>
             </div>
           </div>
         </div>
@@ -3562,7 +3599,7 @@ function rGantt(){
           html+=`<div class="g-subrow${inRoom?' in-room':''}">
             <div class="g-rlabel" onclick="toggleStage('${s.id}',event)" title="${s.done?'Нажми чтобы отменить выполнение':'Отметить этап выполненным'}">
               <div class="g-sn">${s.done?'✓ ':''}${s.icon||'📋'} ${s.name}</div>
-              <div class="g-sd">${s.startDate?fdate(s.startDate,true)+' → ':''}${fdate(s.deadline,true)}${s.done?' · выполнен':(dlLabel(s.deadline,s.done)?` · ${dlLabel(s.deadline,s.done)}`:'')}${!s.done&&sds==='overdue'?' ⚠️':''}</div>
+              <div class="g-sd">${s.startDate?fdate(s.startDate,true)+' → ':''}${fdate(s.deadline,true)}${s.done?' · выполнен':(dlLabel(s.deadline,s.done)?` · ${dlLabel(s.deadline,s.done)}`:'')}${!s.done&&sds==='overdue'?' ⚠️':''}${rollupBadgeHTML(_rollup.stages.get(s.id))}</div>
             </div>
             <div class="g-rtl">
               ${gridLines()}
@@ -4923,6 +4960,8 @@ function openTaskModal(tid,forceProj){
       $('t-remind-d').value=rd[0]||'';$('t-remind-t').value=rd[1]||'';
       _refreshTaskBlockedBy();
       if(t.blockedBy)$('t-blockedby').value=t.blockedBy;
+      _refreshTaskStageLink();
+      if(t.sid)$('t-stage').value=t.sid;
     }
   }else{
     $('t-name').value='';$('t-notes').value='';
@@ -4931,6 +4970,7 @@ function openTaskModal(tid,forceProj){
     $('t-dead').value=TODAY();$('t-time').value='';$('t-who').value=D.currentUser?.name||'';$('t-prio').value='medium';
     _tTags=[];_tPhotos=[];_tFiles=[];$('t-remind-d').value='';$('t-remind-t').value='';
     _refreshTaskBlockedBy();
+    _refreshTaskStageLink();
   }
   _renderTagPre();_renderTagList();_renderPhotos();_renderTaskFiles();
   openM('m-task');
@@ -4946,6 +4986,7 @@ function saveTask(){
   const t={id:tedit||uid(),name,pid:$('t-proj').value||null,dead:$('t-dead').value||null,
     time:$('t-time').value||null,who:$('t-who').value||null,prio:$('t-prio').value,done:false,
     blockedBy:$('t-blockedby')?.value||undefined,
+    sid:$('t-stage')?.value||undefined,
     notes,
     tags:_tTags.length?[..._tTags]:undefined,
     photos:_tPhotos.length?[..._tPhotos]:undefined,
@@ -5018,6 +5059,28 @@ function _refreshTaskBlockedBy(){
   if(!row||!sel)return;
   if(!pid){row.style.display='none';return;}
   const stages=D.stages.filter(s=>s.pid===pid&&!s.done);
+  if(stages.length){
+    const cur=sel.value;
+    sel.innerHTML='<option value="">— не задано —</option>'+
+      stages.map(s=>`<option value="${s.id}"${s.id===cur?' selected':''}>${s.icon||'📋'} ${s.name}${s.deadline?' ('+fdate(s.deadline,true)+')':''}</option>`).join('');
+    row.style.display='';
+  }else{
+    sel.innerHTML='<option value="">— не задано —</option>';
+    row.style.display='none';
+  }
+}
+
+// Структурная связь задача→этап (t.sid) — используется параллельным
+// rollup-индикатором (Scheduler.computeRollup), НЕ зависимостью (это
+// отдельное от t-blockedby поле). Этапы показываем все (включая done) —
+// в отличие от t-blockedby, тут это не блокировка, а просто «к чему относится».
+function _refreshTaskStageLink(){
+  const pid=$('t-proj')?.value;
+  const row=$('t-stage-row');
+  const sel=$('t-stage');
+  if(!row||!sel)return;
+  if(!pid){row.style.display='none';return;}
+  const stages=D.stages.filter(s=>s.pid===pid);
   if(stages.length){
     const cur=sel.value;
     sel.innerHTML='<option value="">— не задано —</option>'+

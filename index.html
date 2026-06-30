@@ -622,9 +622,18 @@
     </div>
     <div class="fg" id="s-blockedby-row" style="display:none">
       <label class="fl">🔗 Зависит от этапа</label>
-      <select class="fi" id="s-blockedby">
+      <select class="fi" id="s-blockedby" onchange="_refreshDependencyTypeRow()">
         <option value="">— не задано —</option>
       </select>
+      <div id="s-blockedby-type-row" style="display:none;margin-top:8px;gap:8px">
+        <select class="fi" id="s-blockedby-type" style="flex:1">
+          <option value="FS">FS — Финиш → Старт</option>
+          <option value="SS">SS — Старт → Старт</option>
+          <option value="FF">FF — Финиш → Финиш</option>
+          <option value="SF">SF — Старт → Финиш</option>
+        </select>
+        <input type="number" class="fi" id="s-blockedby-lag" placeholder="lag, дн." title="Задержка (lag) в днях; отрицательное = опережение (lead)" style="width:100px">
+      </div>
     </div>
     <div class="mfoot">
       <button class="btn btn-d" id="s-del-btn" style="display:none;margin-right:auto" onclick="deleteStageFromModal()">Удалить</button>
@@ -2353,6 +2362,14 @@ function _refreshStagePredecessor(){
     bbSel.innerHTML='<option value="">— не задано —</option>';
     bbRow.style.display=room?'none':''; // если выбрана комната и нет других этапов — скрываем
   }
+  _refreshDependencyTypeRow();
+}
+
+// Показывает/скрывает поля type/lag — видны, только когда реально выбран предшественник
+function _refreshDependencyTypeRow(){
+  const row=$('s-blockedby-type-row');
+  if(!row)return;
+  row.style.display=$('s-blockedby')?.value?'flex':'none';
 }
 
 function openStageModal(pid,sid){
@@ -2369,6 +2386,11 @@ function openStageModal(pid,sid){
   $('s-del-btn').style.display=s?'':'none';
   // blockedBy — фильтруем по помещению если задано
   _refreshStagePredecessor();
+  // Выставляем ПОСЛЕ rebuild — нужные <option> уже существуют в DOM
+  if(s?.blockedBy)$('s-blockedby').value=s.blockedBy;
+  $('s-blockedby-type').value=s?.blockedByType||'FS';
+  $('s-blockedby-lag').value=s?.blockedByLag||0;
+  _refreshDependencyTypeRow();
   openM('m-stage');
 }
 
@@ -2381,6 +2403,24 @@ function saveStageModal(){
   if(!name){toast('Введи название этапа','err');return;}
   if(!deadline){toast('Укажи дедлайн','err');return;}
   const blockedBy=$('s-blockedby')?.value||undefined;
+  const blockedByType=blockedBy?($('s-blockedby-type')?.value||'FS'):undefined;
+  const blockedByLag=blockedBy?(parseInt($('s-blockedby-lag')?.value,10)||0):undefined;
+
+  // Цикл-проверка: новый этап с blockedBy циклом замкнуться не может
+  // (на него ещё никто не ссылается) — проверяем только при редактировании.
+  if(blockedBy&&_stageEditId){
+    const items=D.stages.filter(s=>s.pid===_stagePid).map(s=>({
+      id:s.id,
+      dependsOn:s.id===_stageEditId
+        ?[{id:blockedBy,type:blockedByType,lag:blockedByLag}]
+        :(s.blockedBy?[{id:s.blockedBy,type:s.blockedByType||'FS',lag:s.blockedByLag||0}]:[])
+    }));
+    if(DependencyEngine.detectCycle(items).hasCycle){
+      toast('🔁 Это создаст циклическую зависимость — выбери другой этап','err');
+      return;
+    }
+  }
+
   if(_stageEditId){
     const s=D.stages.find(x=>x.id===_stageEditId);
     if(s){
@@ -2389,12 +2429,12 @@ function saveStageModal(){
         s.deadlineHistory.push({from:s.deadline,to:deadline,by:D.currentUser?.name||'',at:new Date().toISOString()});
       }
       s.name=name;s.deadline=deadline;s.icon=icon;s.room=room;s.startDate=startDate;
-      s.blockedBy=blockedBy;
+      s.blockedBy=blockedBy;s.blockedByType=blockedByType;s.blockedByLag=blockedByLag;
       s.photos=_sPhotos.length?[..._sPhotos]:undefined;
     }
   } else {
     const maxOrder=D.stages.filter(s=>s.pid===_stagePid).reduce((m,s)=>Math.max(m,s.order||0),0);
-    D.stages.push({id:uid(),pid:_stagePid,name,icon,deadline,startDate,room,blockedBy,done:false,order:maxOrder+1,photos:_sPhotos.length?[..._sPhotos]:undefined});
+    D.stages.push({id:uid(),pid:_stagePid,name,icon,deadline,startDate,room,blockedBy,blockedByType,blockedByLag,done:false,order:maxOrder+1,photos:_sPhotos.length?[..._sPhotos]:undefined});
     addLog(`${icon} Этап «${name}» добавлен`,_stagePid);
     const proj=D.projects.find(p=>p.id===_stagePid);
     sendPush(`${icon} Новый этап`,`«${name}»${proj?' — '+proj.name:''}${deadline?' · срок '+deadline:''}${D.currentUser?' · '+D.currentUser.name:''}`,`construction`);
@@ -2434,6 +2474,136 @@ let _gCascade=true;
 let gStageFilter=''; // ''|'has'|'no'
 
 /* ═══════════════════════════════════════
+   DEPENDENCY ENGINE — универсальный, не знает о D/DOM/save(). Полная
+   модель зависимостей: FS/SS/FF/SF + lag/lead (lag<0 = lead). Стоит
+   ПЕРЕД Scheduler — Scheduler зовёт его, не наоборот (поэтому свои
+   копии shiftDate/daysBetween, а не вызов Scheduler.shiftDate —
+   избегаем обратной ссылки снизу вверх по файлу).
+
+   items: [{id, start, end, dependsOn:[{id,type,lag}]}]
+   start/end — generic-имена; конкретное приложение (Scheduler) само
+   мэппит их на свои поля (s.startDate/s.deadline) на границе.
+
+   Реактивная модель (не полный CPM-пересчёт всего графа): при сдвиге
+   корневого узла на deltaDays — BFS по преемникам, для каждого
+   считаем требуемую границу по формуле типа связи относительно НОВЫХ
+   дат предшественника; если текущее значение уже удовлетворяет
+   ограничению — узел не двигаем и BFS дальше по этой ветке не идёт.
+═══════════════════════════════════════ */
+const DependencyEngine={
+  shiftDate(dateStr,deltaDays){
+    if(!dateStr)return null;
+    const[y,m,day]=dateStr.split('-').map(Number);
+    const d=new Date(Date.UTC(y,m-1,day));
+    d.setUTCDate(d.getUTCDate()+deltaDays);
+    return d.toISOString().slice(0,10);
+  },
+  daysBetween(a,b){
+    const[ya,ma,da]=a.split('-').map(Number),[yb,mb,db]=b.split('-').map(Number);
+    return Math.round((Date.UTC(yb,mb-1,db)-Date.UTC(ya,ma-1,da))/86400000);
+  },
+
+  // Требуемая граница преемника относительно ТЕКУЩИХ (уже обновлённых
+  // вызывающим) дат предшественника. Возвращает {field:'start'|'end', date}.
+  constraintFor(pred,dep){
+    const lag=dep.lag||0;
+    switch(dep.type){
+      case'SS':return{field:'start',date:this.shiftDate(pred.start,lag)};
+      case'FF':return{field:'end',date:this.shiftDate(pred.end,lag)};
+      case'SF':return{field:'end',date:this.shiftDate(pred.start,lag)};
+      case'FS':default:return{field:'start',date:this.shiftDate(pred.end,lag)};
+    }
+  },
+
+  // Чистая reachability по графу преемников (БЕЗ дат) — для preview,
+  // когда deltaDays ещё неизвестна (drag только начался).
+  reachableSuccessors(items,rootId){
+    const successorsOf=new Map();
+    items.forEach(it=>{
+      (it.dependsOn||[]).forEach(dep=>{
+        if(!successorsOf.has(dep.id))successorsOf.set(dep.id,[]);
+        successorsOf.get(dep.id).push(it.id);
+      });
+    });
+    const visited=new Set([rootId]),q=[rootId];
+    while(q.length){
+      const cur=q.shift();
+      (successorsOf.get(cur)||[]).forEach(id=>{
+        if(!visited.has(id)){visited.add(id);q.push(id);}
+      });
+    }
+    visited.delete(rootId);
+    return visited;
+  },
+
+  // DFS 3-цветная проверка цикла по dependsOn-рёбрам (направление роли не играет)
+  detectCycle(items){
+    const byId=new Map(items.map(it=>[it.id,it]));
+    const state=new Map();
+    let cyclePath=null;
+    const visit=(id,path)=>{
+      if(state.get(id)===2)return false;
+      if(state.get(id)===1){cyclePath=[...path,id];return true;}
+      state.set(id,1);
+      const it=byId.get(id);
+      for(const dep of(it?.dependsOn||[])){
+        if(visit(dep.id,[...path,id]))return true;
+      }
+      state.set(id,2);
+      return false;
+    };
+    for(const it of items){
+      if(state.get(it.id)!==2&&visit(it.id,[]))return{hasCycle:true,path:cyclePath};
+    }
+    return{hasCycle:false};
+  },
+
+  // changedId уже сдвинут В ПЕРЕДАННОМ items (это «данность», прямая
+  // манипуляция пользователя). Иммутабельно: каждый элемент результата —
+  // либо та же ссылка (не тронут), либо новый объект (изменён).
+  recalculate(items,changedId){
+    const cyc=this.detectCycle(items);
+    if(cyc.hasCycle)return{items,touchedIds:new Set(),cycle:true,cyclePath:cyc.path};
+
+    const result=new Map(items.map(it=>[it.id,it]));
+    const successorsOf=new Map();
+    items.forEach(it=>{
+      (it.dependsOn||[]).forEach(dep=>{
+        if(!successorsOf.has(dep.id))successorsOf.set(dep.id,[]);
+        successorsOf.get(dep.id).push({succId:it.id,dep});
+      });
+    });
+
+    const touched=new Set([changedId]);
+    const q=[changedId];
+    while(q.length){
+      const predId=q.shift();
+      const pred=result.get(predId);
+      (successorsOf.get(predId)||[]).forEach(({succId,dep})=>{
+        const succ=result.get(succId);
+        const constraint=this.constraintFor(pred,dep);
+        const curVal=constraint.field==='start'?succ.start:succ.end;
+        if(constraint.date&&(!curVal||constraint.date>curVal)){
+          const shiftAmount=curVal?this.daysBetween(curVal,constraint.date):0;
+          if(shiftAmount===0)return; // уже на месте — не считаем «тронутым»
+          result.set(succId,{
+            ...succ,
+            start:succ.start?this.shiftDate(succ.start,shiftAmount):succ.start,
+            end:this.shiftDate(succ.end,shiftAmount),
+          });
+          touched.add(succId);
+          q.push(succId);
+        }
+      });
+    }
+
+    touched.delete(changedId); // changedId уже был «тронут» вызывающим — не задваиваем
+    touched.add(changedId);
+    return{items:items.map(it=>result.get(it.id)),touchedIds:touched,cycle:false};
+  }
+};
+
+/* ═══════════════════════════════════════
    SCHEDULER — пересчёт дат, зависимости, каскад, вычисление Stage/Project.
    Гант (gBarDown/_gMove/_gUp) отвечает только за рендер/drag/zoom/
    selection/preview и зовёт эти методы. Контракт: методы Scheduler НЕ
@@ -2453,13 +2623,25 @@ const Scheduler={
     return d.toISOString().slice(0,10);
   },
 
+  // Generic-представление этапов проекта для DependencyEngine: исключает
+  // done (бизнес-правило FSC — завершённые этапы заморожены, движок
+  // об этом не знает и знать не должен), мэппит deadline→end,
+  // startDate→start (или start=end, если явного начала нет — только
+  // для расчётов внутри движка, в D ничего не пишется).
+  _buildDependencyItems(pid){
+    return D.stages.filter(s=>s.pid===pid&&!s.done).map(s=>({
+      id:s.id,
+      start:s.startDate||s.deadline,
+      end:s.deadline,
+      dependsOn:s.blockedBy?[{id:s.blockedBy,type:s.blockedByType||'FS',lag:s.blockedByLag||0}]:[]
+    }));
+  },
+
   // Зависимости + каскад для этапа — единый источник истины для preview
-  // (gBarDown) и commit (planStageShift). Раньше это были два слегка
-  // разных алгоритма: preview не фильтровал blockedBy-цепочку по
-  // s.deadline, commit фильтровал — preview мог подсвечивать этап без
-  // дедлайна, который реально никогда не сдвигался. Здесь — строгий
-  // (commit) вариант как единственный источник истины.
-  // Map<stageId, reasonString>, ключи вставляются в порядке: root первым.
+  // (gBarDown) и базы commit (planStageShift). Map<stageId, reasonString>,
+  // ключи вставляются в порядке: root первым. Зависимостная часть — через
+  // DependencyEngine.reachableSuccessors (чистая reachability, без дат —
+  // на момент preview deltaDays ещё не известна).
   computeStageShiftSet(stage,cascadeEnabled){
     const toShift=new Map();
     toShift.set(stage.id,D.currentUser?.name||'');
@@ -2473,17 +2655,51 @@ const Scheduler={
         if(!toShift.has(s.id))toShift.set(s.id,`Каскад${room?' ('+room+')':''}: «${stage.name}»`);
       });
     }
-    {const q=[stage.id],vis=new Set([stage.id]);
-    while(q.length){
-      const cur=q.shift();
-      const curName=(D.stages.find(s=>s.id===cur)||{name:cur}).name;
-      D.stages.filter(s=>s.blockedBy===cur&&!s.done&&s.deadline&&!vis.has(s.id)).forEach(s=>{
-        vis.add(s.id);
-        if(!toShift.has(s.id))toShift.set(s.id,`Автосдвиг: «${curName}»`);
-        q.push(s.id);
-      });
-    }}
+    const items=this._buildDependencyItems(stage.pid);
+    DependencyEngine.reachableSuccessors(items,stage.id).forEach(sid=>{
+      const s=D.stages.find(s=>s.id===sid);
+      if(!toShift.has(sid))toShift.set(sid,`Автосдвиг: «${s?.name||sid}»`);
+    });
     return toShift;
+  },
+
+  // Вычисление Stage через DependencyEngine: реальная математика
+  // FS/SS/FF/SF+lag, а не слепой uniform-сдвиг. Возвращает
+  // Map<stageId,{deadline,startDate}> (БЕЗ root — его считает planStageShift
+  // сам через nd) + cycle-флаг. startDate включается в результат, ТОЛЬКО
+  // если у исходного этапа startDate уже был задан — иначе можно случайно
+  // «придумать» явное начало этапу, у которого его не было (это меняет
+  // рендер бара в Ганте).
+  computeDependencyShifts(stage,deltaDays){
+    const items=this._buildDependencyItems(stage.pid);
+    const rootItem=items.find(it=>it.id===stage.id);
+    if(!rootItem)return{shifts:new Map(),cycle:false};
+    const shiftedItems=items.map(it=>it.id===stage.id
+      ?{...it,start:it.start?this.shiftDate(it.start,deltaDays):it.start,end:this.shiftDate(it.end,deltaDays)}
+      :it);
+    const result=DependencyEngine.recalculate(shiftedItems,stage.id);
+    const shifts=new Map();
+    if(result.cycle)return{shifts,cycle:true};
+    result.items.forEach(it=>{
+      if(it.id===stage.id||!result.touchedIds.has(it.id))return;
+      const hadStartDate=!!D.stages.find(s=>s.id===it.id)?.startDate;
+      shifts.set(it.id,{deadline:it.end,startDate:hadStartDate?it.start:undefined});
+    });
+    return{shifts,cycle:false};
+  },
+
+  // Общий хелпер для commitStageShift И commitDriftPlan — единственное
+  // место, которое знает как применить одну запись плана к этапу.
+  // mode:'fixed' (из DependencyEngine, точные даты) | 'delta' (каскад/root,
+  // uniform-сдвиг). Если расходится — будет расходиться один раз, не в двух местах.
+  _applyShiftEntry(s,entry,deltaDays,rootNd,isRoot){
+    if(entry.mode==='fixed'){
+      return{newD:entry.deadline,newStartDate:entry.startDate};
+    }
+    return{
+      newD:isRoot?rootNd:this.shiftDate(s.deadline,deltaDays),
+      newStartDate:s.startDate?this.shiftDate(s.startDate,deltaDays):undefined
+    };
   },
 
   // Снапшот {id,deadline,startDate} для undo-стека
@@ -2509,11 +2725,35 @@ const Scheduler={
   },
 
   // Вычисление Stage: полный план переноса, БЕЗ мутации D.
+  // toShift: Map<stageId,{reason,mode:'fixed'|'delta',deadline?,startDate?}>.
+  // Приоритет: зависимости (DependencyEngine, реальная математика
+  // FS/SS/FF/SF+lag) считаются ПЕРВЫМИ и побеждают; каскад (uniform-сдвиг
+  // по комнате/проекту) добивает только то, что зависимость не тронула.
+  // _gCascade по умолчанию включён — пересечение частое, не редкий edge case.
   planStageShift(stage,deltaDays,cascadeEnabled){
     const nd=this.shiftDate(stage.deadline,deltaDays);
-    const toShift=this.computeStageShiftSet(stage,cascadeEnabled);
-    const snapList=this.snapshotStages(toShift);
     const project=D.projects.find(p=>p.id===stage.pid);
+
+    const toShift=new Map();
+    toShift.set(stage.id,{reason:D.currentUser?.name||'',mode:'delta'});
+
+    const depResult=this.computeDependencyShifts(stage,deltaDays);
+    depResult.shifts.forEach((info,id)=>{
+      toShift.set(id,{reason:`Зависимость: «${stage.name}»`,mode:'fixed',deadline:info.deadline,startDate:info.startDate});
+    });
+
+    if(cascadeEnabled){
+      const pid=stage.pid,room=stage.room,origDead=stage.deadline;
+      D.stages.filter(s=>{
+        if(s.id===stage.id||s.pid!==pid||s.done||!s.deadline)return false;
+        if(room)return s.room===room&&s.deadline>=origDead;
+        return s.deadline>=origDead;
+      }).forEach(s=>{
+        if(!toShift.has(s.id))toShift.set(s.id,{reason:`Каскад${room?' ('+room+')':''}: «${stage.name}»`,mode:'delta'});
+      });
+    }
+
+    const snapList=this.snapshotStages(toShift);
     const drift=this.checkStageDrift(stage,project,nd,deltaDays);
     const cascCount=toShift.size-1;
     const logMsg=`📅 Этап «${stage.name}» → ${fdate(nd,true)}${cascCount>0?` +${cascCount} связ.`:''}`;
@@ -2526,21 +2766,21 @@ const Scheduler={
   // МУТИРУЕТ D: применяет невозблокированный план. → {undoSnapshot,summary}
   commitStageShift(plan){
     const{stage,toShift,snapList,nd,deltaDays,dragCountToApply,logMsg}=plan;
-    toShift.forEach((reason,id)=>{
+    toShift.forEach((entry,id)=>{
       const s=D.stages.find(s=>s.id===id);
       if(!s)return;
       const isRoot=id===stage.id;
       const oldD=s.deadline;
-      const newD=isRoot?nd:this.shiftDate(s.deadline,deltaDays);
+      const{newD,newStartDate}=this._applyShiftEntry(s,entry,deltaDays,nd,isRoot);
       if(!s.deadlineHistory)s.deadlineHistory=[];
       s.deadlineHistory.push({
         from:oldD,to:newD,
-        by:isRoot?(D.currentUser?.name||''):reason,
+        by:isRoot?(D.currentUser?.name||''):entry.reason,
         auto:!isRoot,
         ancestorId:isRoot?undefined:stage.id,
         at:new Date().toISOString()
       });
-      if(s.startDate)s.startDate=this.shiftDate(s.startDate,deltaDays);
+      if(newStartDate)s.startDate=newStartDate;
       s.deadline=newD;
       if(isRoot&&dragCountToApply!=null)s.dragCount=dragCountToApply;
     });
@@ -2587,19 +2827,25 @@ const Scheduler={
     return{blocked:false,...this.commitProjectShift(obj,plan)};
   },
 
-  // Применение ранее заблокированного переноса после причины (drift-модалка confirm)
+  // Применение ранее заблокированного переноса после причины (drift-модалка confirm).
+  // КРИТИЧНО: отдельная точка коммита от commitStageShift — тот же toShift
+  // (включая 'fixed'-записи от DependencyEngine) реплеится сюда, поэтому
+  // обязан использовать тот же _applyShiftEntry, иначе зависимости тихо
+  // откатятся к слепому uniform-сдвигу при срабатывании Drift Counter.
   commitDriftPlan(pending,reason){
-    const{obj,deltaDays,toShift,snapList,logMsg}=pending;
+    const{obj,nd,deltaDays,toShift,snapList,logMsg}=pending;
     obj.dragCount=0;
     const undoSnapshot=snapList.length>1
       ?{type:'cascade',snaps:snapList}
       :(()=>{const sn={type:'stage',id:obj.id,fields:{deadline:obj.deadline}};if(obj.startDate)sn.fields.startDate=obj.startDate;return sn;})();
-    toShift.forEach((_r,id)=>{
+    toShift.forEach((entry,id)=>{
       const s=D.stages.find(s=>s.id===id);if(!s)return;
-      const oldD=s.deadline;const newD=this.shiftDate(s.deadline,deltaDays);
+      const isRoot=id===obj.id;
+      const oldD=s.deadline;
+      const{newD,newStartDate}=this._applyShiftEntry(s,entry,deltaDays,nd,isRoot);
       if(!s.deadlineHistory)s.deadlineHistory=[];
       s.deadlineHistory.push({from:oldD,to:newD,by:D.currentUser?.name||'',reason:id===obj.id?reason:undefined,auto:id!==obj.id,at:new Date().toISOString()});
-      if(s.startDate)s.startDate=this.shiftDate(s.startDate,deltaDays);
+      if(newStartDate)s.startDate=newStartDate;
       s.deadline=newD;
     });
     return{undoSnapshot,summary:{logMsg:`${logMsg} · Причина: ${reason}`}};
@@ -3088,7 +3334,7 @@ function rGantt(){
     fHTML+=`<button class="g-fchip gfn" onclick="gExpandAll()" title="Раскрыть все этапы">⊞ Все этапы</button>`;
     fHTML+=`<button class="g-fchip gfn" onclick="gCollapseAll()" title="Свернуть все">⊟ Свернуть</button>`;
     fHTML+=`<button class="g-fchip ${_gCascade?'gfg':''}" onclick="gToggleCascade()" title="Каскадный сдвиг: следующие этапы двигаются вместе">🔗 Каскад</button>`;
-    fHTML+=`<span style="margin-left:auto;font-size:10px;color:var(--t3);opacity:.6;white-space:nowrap;padding:0 6px">v92</span>`;
+    fHTML+=`<span style="margin-left:auto;font-size:10px;color:var(--t3);opacity:.6;white-space:nowrap;padding:0 6px">v93</span>`;
     fHTML+=`<span style="width:1px;height:16px;background:var(--b2);margin:0 2px;flex-shrink:0"></span>`;
     fHTML+=`<button class="g-fchip ${gStageFilter==='has'?'gfa':''}" onclick="gSetStageF('has')" title="Только проекты с этапами">📋 С этапами</button>`;
     fHTML+=`<button class="g-fchip ${gStageFilter==='no'?'gfa':''}" onclick="gSetStageF('no')" title="Проекты без этапов — нужно заполнить">⬜ Без этапов</button>`;

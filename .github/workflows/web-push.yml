@@ -152,8 +152,8 @@ jobs:
             const getProjName = pid => projects.find(p => p.id === pid)?.name || '—';
             const messages = [];
 
-            // ── УТРЕННЯЯ СВОДКА В TELEGRAM (только 09:00) ──────────────────
-            if (isMorning) {
+            // ── СВОДКА В TELEGRAM (09:00 и 18:00 МСК) ──────────────────
+            if (isMorning || isEvening) {
               const overdueT = tasks.filter(t => !t.done && t.dead && t.dead < today)
                 .sort((a,b) => a.dead.localeCompare(b.dead));
               const todayT  = tasks.filter(t => !t.done && t.dead === today);
@@ -166,7 +166,9 @@ jobs:
 
               let lines = [];
               const dateStr = new Date().toLocaleDateString('ru-RU',{day:'numeric',month:'long',timeZone:'Europe/Moscow'});
-              lines.push(`☀️ <b>Утренняя сводка FSC — ${dateStr}</b>\n`);
+              const slotEmoji = isMorning ? '☀️' : '🌙';
+              const slotLabel = isMorning ? 'Утренняя' : 'Вечерняя';
+              lines.push(`${slotEmoji} <b>${slotLabel} сводка FSC — ${dateStr}</b>\n`);
 
               if (overdueT.length) {
                 lines.push(`🔴 <b>Просрочено задач: ${overdueT.length}</b>`);
@@ -213,7 +215,7 @@ jobs:
                 for (const id of targets) await tgSend(id, msg);
               } else {
                 const targets = [D.tgAdminId, D.tgTechDirId].filter(Boolean);
-                for (const id of targets) await tgSend(id, `✅ <b>Утренняя сводка FSC</b>\n\nПросроченных задач и этапов нет. Всё по плану 👍`);
+                for (const id of targets) await tgSend(id, `✅ <b>${slotLabel} сводка FSC</b>\n\nПросроченных задач и этапов нет. Всё по плану 👍`);
               }
             }
 

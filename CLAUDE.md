@@ -86,8 +86,10 @@ importJSON()  // загружает из файла
 ## GitHub
 - Репо: `https://github.com/fscfigma-lab/fsc-app`
 - Ветка: `main` → автодеплой на GitHub Pages (~2 мин после push)
-- `.github/workflows/web-push.yml` — каждые 30 мин
-- `.github/workflows/daily-push.yml` — 09:00 + 18:00 МСК
+- `.github/workflows/web-push.yml` — крутится каждые 30 мин; сам проверяет время и шлёт:
+  - очередь push на устройства (только в слот 09:00 МСК)
+  - сводку в Telegram админу+техдиру (слоты 09:00 и 18:00 МСК, дедуп через `notify_state` в Supabase)
+- `.github/workflows/daily-push.yml` — заглушка, только ручной запуск (`workflow_dispatch`), логику не содержит
 - `.gitignore` включает `*.bak`
 
 ## Функции приложения

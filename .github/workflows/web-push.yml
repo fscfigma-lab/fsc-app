@@ -110,19 +110,23 @@ jobs:
             const now = new Date();
             const utcHour = now.getUTCHours();
             const today = now.toISOString().slice(0, 10);
-            const isMorning = utcHour === 6;   // 09:00 МСК
-            const isEvening = utcHour === 15;  // 18:00 МСК
-            if (!isMorning && !isEvening) { console.log(`Не время (${utcHour}:xx UTC) — пропуск`); return; }
 
-            // Проверяем — уже отправляли сегодня этот слот?
+            // Догоняющее окно вместо точного часа. GitHub Actions не гарантирует
+            // ровно "каждые 30 мин" — при нагрузке прогоны сдвигаются часами
+            // (наблюдали реальные разрывы 04:45→08:30, 12:00→16:23 UTC), и если
+            // ровно нужный час (6 или 15) пропущен — старая логика теряла слот
+            // на весь день без дозвона. Теперь: окно открыто несколько часов,
+            // первый же прогон в его пределах досылает слот, если ещё не слали.
             const stRes = await fetch(`${SUPA_URL}/rest/v1/app_data?id=eq.notify_state&select=data`, { headers });
             const stRows = await stRes.json();
             const state = stRows?.[0]?.data || {};
-            const slotKey = isMorning ? 'last_morning' : 'last_evening';
-            if (state[slotKey] === today) {
-              console.log(`${slotKey} уже отправлялось сегодня (${today}) — пропуск`);
+            const isMorning = utcHour >= 6 && utcHour < 15 && state.last_morning !== today;
+            const isEvening = utcHour >= 15 && state.last_evening !== today;
+            if (!isMorning && !isEvening) {
+              console.log(`Не время или уже отправлено (${utcHour}:xx UTC, today=${today}, last_morning=${state.last_morning}, last_evening=${state.last_evening}) — пропуск`);
               return;
             }
+            const slotKey = isMorning ? 'last_morning' : 'last_evening';
 
             // Загружаем данные
             const res = await fetch(`${SUPA_URL}/rest/v1/app_data?id=eq.main&select=data`, { headers });

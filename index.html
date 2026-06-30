@@ -3334,7 +3334,7 @@ function rGantt(){
     fHTML+=`<button class="g-fchip gfn" onclick="gExpandAll()" title="Раскрыть все этапы">⊞ Все этапы</button>`;
     fHTML+=`<button class="g-fchip gfn" onclick="gCollapseAll()" title="Свернуть все">⊟ Свернуть</button>`;
     fHTML+=`<button class="g-fchip ${_gCascade?'gfg':''}" onclick="gToggleCascade()" title="Каскадный сдвиг: следующие этапы двигаются вместе">🔗 Каскад</button>`;
-    fHTML+=`<span style="margin-left:auto;font-size:10px;color:var(--t3);opacity:.6;white-space:nowrap;padding:0 6px">v93</span>`;
+    fHTML+=`<span style="margin-left:auto;font-size:10px;color:var(--t3);opacity:.6;white-space:nowrap;padding:0 6px">v94</span>`;
     fHTML+=`<span style="width:1px;height:16px;background:var(--b2);margin:0 2px;flex-shrink:0"></span>`;
     fHTML+=`<button class="g-fchip ${gStageFilter==='has'?'gfa':''}" onclick="gSetStageF('has')" title="Только проекты с этапами">📋 С этапами</button>`;
     fHTML+=`<button class="g-fchip ${gStageFilter==='no'?'gfa':''}" onclick="gSetStageF('no')" title="Проекты без этапов — нужно заполнить">⬜ Без этапов</button>`;
@@ -3654,7 +3654,7 @@ function _drawGanttDeps(){
   marker.id='gdep-arr';marker.setAttribute('markerWidth','7');marker.setAttribute('markerHeight','7');
   marker.setAttribute('refX','6');marker.setAttribute('refY','3.5');marker.setAttribute('orient','auto');
   const mpoly=document.createElementNS(NS,'polygon');
-  mpoly.setAttribute('points','0 0, 7 3.5, 0 7');mpoly.setAttribute('fill','#C9952A');mpoly.setAttribute('opacity','0.85');
+  mpoly.setAttribute('points','0 0, 7 3.5, 0 7');mpoly.setAttribute('fill','#64748B');mpoly.setAttribute('opacity','0.8');
   marker.appendChild(mpoly);defs.appendChild(marker);svg.appendChild(defs);
   const cr=container.getBoundingClientRect();
   function drawArrow(fromEl,toEl){
@@ -3665,9 +3665,9 @@ function _drawGanttDeps(){
     const cx=(x1+x2)/2;
     const path=document.createElementNS(NS,'path');
     path.setAttribute('d',`M${x1.toFixed(1)},${y1.toFixed(1)} C${cx.toFixed(1)},${y1.toFixed(1)} ${cx.toFixed(1)},${y2.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}`);
-    path.setAttribute('stroke','#C9952A');path.setAttribute('stroke-width','1.5');
-    path.setAttribute('stroke-dasharray','5 3');path.setAttribute('fill','none');
-    path.setAttribute('opacity','0.75');path.setAttribute('marker-end','url(#gdep-arr)');
+    path.setAttribute('stroke','#64748B');path.setAttribute('stroke-width','1.5');
+    path.setAttribute('fill','none');
+    path.setAttribute('opacity','0.6');path.setAttribute('marker-end','url(#gdep-arr)');
     svg.appendChild(path);
   }
   deps.forEach(s=>{

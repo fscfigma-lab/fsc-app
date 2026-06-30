@@ -1818,20 +1818,10 @@ function _applyDrift(reason){
   const pnd=_driftPending;if(!pnd){closeM('m-drift');return;}
   _driftPending=null;_driftMediaRec=null;_driftAudioChunks=[];
   if(pnd.type==='stage'){
-    const {obj,nd,deltaDays,toShift,snapList,logMsg}=pnd;
-    obj.dragCount=0;
-    if(snapList.length>1)_gUndo.push({type:'cascade',snaps:snapList});
-    else{const sn={type:'stage',id:obj.id,fields:{deadline:obj.deadline}};if(obj.startDate)sn.fields.startDate=obj.startDate;_gUndo.push(sn);}
+    const result=Scheduler.commitDriftPlan(pnd,reason);
+    _gUndo.push(result.undoSnapshot);
     if(_gUndo.length>10)_gUndo.shift();
-    toShift.forEach((_r,id)=>{
-      const s=D.stages.find(s=>s.id===id);if(!s)return;
-      const oldD=s.deadline;const newD=_shiftDate(s.deadline,deltaDays);
-      if(!s.deadlineHistory)s.deadlineHistory=[];
-      s.deadlineHistory.push({from:oldD,to:newD,by:D.currentUser?.name||'',reason:id===obj.id?reason:undefined,auto:id!==obj.id,at:new Date().toISOString()});
-      if(s.startDate)s.startDate=_shiftDate(s.startDate,deltaDays);
-      s.deadline=newD;
-    });
-    addLog(`${logMsg} · Причина: ${reason}`,obj.pid);
+    addLog(result.summary.logMsg,pnd.obj.pid);
     save();rGantt();_gShowUndoBtn();
     toast('📅 Перенос зафиксирован с причиной','ok');
   } else if(pnd.type==='task'){
@@ -2444,6 +2434,176 @@ let _gCascade=true;
 let gStageFilter=''; // ''|'has'|'no'
 
 /* ═══════════════════════════════════════
+   SCHEDULER — пересчёт дат, зависимости, каскад, вычисление Stage/Project.
+   Гант (gBarDown/_gMove/_gUp) отвечает только за рендер/drag/zoom/
+   selection/preview и зовёт эти методы. Контракт: методы Scheduler НЕ
+   трогают DOM и не зовут save()/rGantt()/toast()/addLog()/openM()/
+   closeM() — только читают/пишут D и возвращают данные.
+   _gUndo.push() и _driftPending= остаются ответственностью вызывающего кода.
+═══════════════════════════════════════ */
+const Scheduler={
+  // Календарно-безопасная арифметика дат (Date.setDate сам разруливает DST/смену месяца)
+  shiftDate(dateStr,deltaDays){
+    if(!dateStr)return null;
+    const d=new Date(dateStr+'T00:00:00');
+    d.setDate(d.getDate()+deltaDays);
+    return d.toISOString().slice(0,10);
+  },
+
+  // Зависимости + каскад для этапа — единый источник истины для preview
+  // (gBarDown) и commit (planStageShift). Раньше это были два слегка
+  // разных алгоритма: preview не фильтровал blockedBy-цепочку по
+  // s.deadline, commit фильтровал — preview мог подсвечивать этап без
+  // дедлайна, который реально никогда не сдвигался. Здесь — строгий
+  // (commit) вариант как единственный источник истины.
+  // Map<stageId, reasonString>, ключи вставляются в порядке: root первым.
+  computeStageShiftSet(stage,cascadeEnabled){
+    const toShift=new Map();
+    toShift.set(stage.id,D.currentUser?.name||'');
+    if(cascadeEnabled){
+      const pid=stage.pid,room=stage.room,origDead=stage.deadline;
+      D.stages.filter(s=>{
+        if(s.id===stage.id||s.pid!==pid||s.done||!s.deadline)return false;
+        if(room)return s.room===room&&s.deadline>=origDead;
+        return s.deadline>=origDead;
+      }).forEach(s=>{
+        if(!toShift.has(s.id))toShift.set(s.id,`Каскад${room?' ('+room+')':''}: «${stage.name}»`);
+      });
+    }
+    {const q=[stage.id],vis=new Set([stage.id]);
+    while(q.length){
+      const cur=q.shift();
+      const curName=(D.stages.find(s=>s.id===cur)||{name:cur}).name;
+      D.stages.filter(s=>s.blockedBy===cur&&!s.done&&s.deadline&&!vis.has(s.id)).forEach(s=>{
+        vis.add(s.id);
+        if(!toShift.has(s.id))toShift.set(s.id,`Автосдвиг: «${curName}»`);
+        q.push(s.id);
+      });
+    }}
+    return toShift;
+  },
+
+  // Снапшот {id,deadline,startDate} для undo-стека
+  snapshotStages(toShift){
+    return[...toShift.keys()].map(id=>{
+      const s=D.stages.find(s=>s.id===id);
+      return s?{id:s.id,deadline:s.deadline,startDate:s.startDate}:null;
+    }).filter(Boolean);
+  },
+
+  // Drift Counter — чистая проверка, без мутаций. dragCountToApply:
+  // null (гейт не сработал) | число (гейт сработал — даже если не
+  // заблокировано, это инкремент, который commit обязан применить).
+  checkStageDrift(stage,project,nd,deltaDays){
+    if(deltaDays<=0)return{blocked:false,dragCountToApply:null};
+    const buf=project?.clientDeadline
+      ?Math.round((new Date(project.clientDeadline)-new Date(nd))/86400000)
+      :999;
+    if(buf>3)return{blocked:false,dragCountToApply:null};
+    const newDC=(stage.dragCount||0)+1;
+    if(newDC>=3)return{blocked:true,dragCountToApply:newDC};
+    return{blocked:false,dragCountToApply:newDC};
+  },
+
+  // Вычисление Stage: полный план переноса, БЕЗ мутации D.
+  planStageShift(stage,deltaDays,cascadeEnabled){
+    const nd=this.shiftDate(stage.deadline,deltaDays);
+    const toShift=this.computeStageShiftSet(stage,cascadeEnabled);
+    const snapList=this.snapshotStages(toShift);
+    const project=D.projects.find(p=>p.id===stage.pid);
+    const drift=this.checkStageDrift(stage,project,nd,deltaDays);
+    const cascCount=toShift.size-1;
+    const logMsg=`📅 Этап «${stage.name}» → ${fdate(nd,true)}${cascCount>0?` +${cascCount} связ.`:''}`;
+    if(drift.blocked){
+      return{blocked:true,pending:{type:'stage',obj:stage,nd,deltaDays,toShift,snapList,logMsg,dragCountToApply:drift.dragCountToApply}};
+    }
+    return{blocked:false,stage,toShift,snapList,nd,deltaDays,dragCountToApply:drift.dragCountToApply,logMsg};
+  },
+
+  // МУТИРУЕТ D: применяет невозблокированный план. → {undoSnapshot,summary}
+  commitStageShift(plan){
+    const{stage,toShift,snapList,nd,deltaDays,dragCountToApply,logMsg}=plan;
+    toShift.forEach((reason,id)=>{
+      const s=D.stages.find(s=>s.id===id);
+      if(!s)return;
+      const isRoot=id===stage.id;
+      const oldD=s.deadline;
+      const newD=isRoot?nd:this.shiftDate(s.deadline,deltaDays);
+      if(!s.deadlineHistory)s.deadlineHistory=[];
+      s.deadlineHistory.push({
+        from:oldD,to:newD,
+        by:isRoot?(D.currentUser?.name||''):reason,
+        auto:!isRoot,
+        ancestorId:isRoot?undefined:stage.id,
+        at:new Date().toISOString()
+      });
+      if(s.startDate)s.startDate=this.shiftDate(s.startDate,deltaDays);
+      s.deadline=newD;
+      if(isRoot&&dragCountToApply!=null)s.dragCount=dragCountToApply;
+    });
+    const proj=D.projects.find(x=>x.id===stage.pid);
+    let crossedDeadlineCount=0;
+    if(proj?.deadline){
+      crossedDeadlineCount=[...toShift.keys()].filter(id=>{
+        const s=D.stages.find(s=>s.id===id);return s&&s.deadline>proj.deadline;
+      }).length;
+    }
+    const rootSnap=snapList.find(s=>s.id===stage.id);
+    const undoSnapshot=toShift.size===1
+      ?{type:'stage',id:stage.id,fields:rootSnap.startDate?{deadline:rootSnap.deadline,startDate:rootSnap.startDate}:{deadline:rootSnap.deadline}}
+      :{type:'cascade',snaps:snapList};
+    return{undoSnapshot,summary:{logMsg,crossedDeadlineCount,projName:proj?.name,projId:proj?.id}};
+  },
+
+  // Вычисление Project: простой случай — без каскада, без Drift-гейта
+  // (сохраняю существующую асимметрию: у проектов гейта никогда не было).
+  planProjectShift(project,deltaDays){
+    return{nd:this.shiftDate(project.deadline,deltaDays),origDead:project.deadline,origStart:project.start,deltaDays};
+  },
+  commitProjectShift(project,plan){
+    const undoSnapshot={type:'proj',id:project.id,fields:{deadline:plan.origDead}};
+    if(plan.origStart)undoSnapshot.fields.start=plan.origStart;
+    if(plan.origStart)project.start=this.shiftDate(plan.origStart,plan.deltaDays);
+    project.deadline=plan.nd;
+    const logMsg=`📅 ${project.name}: сроки сдвинуты ${plan.deltaDays>0?'+':''}${plan.deltaDays} дн.`;
+    return{undoSnapshot,summary:{logMsg}};
+  },
+
+  // ЕДИНАЯ точка входа для _gUp(): mouseup → Scheduler.recalculate() → render() → save()
+  // ctx: {type:'stage'|'proj', obj, deltaDays, cascadeEnabled}
+  // → {blocked:true, pending}  — D НЕ тронут, _driftPending не пишет сама Scheduler
+  // → {blocked:false, undoSnapshot, summary}
+  recalculate(ctx){
+    const{type,obj,deltaDays,cascadeEnabled}=ctx;
+    if(type==='stage'){
+      const plan=this.planStageShift(obj,deltaDays,cascadeEnabled);
+      if(plan.blocked)return{blocked:true,pending:plan.pending};
+      return{blocked:false,...this.commitStageShift(plan)};
+    }
+    const plan=this.planProjectShift(obj,deltaDays);
+    return{blocked:false,...this.commitProjectShift(obj,plan)};
+  },
+
+  // Применение ранее заблокированного переноса после причины (drift-модалка confirm)
+  commitDriftPlan(pending,reason){
+    const{obj,deltaDays,toShift,snapList,logMsg}=pending;
+    obj.dragCount=0;
+    const undoSnapshot=snapList.length>1
+      ?{type:'cascade',snaps:snapList}
+      :(()=>{const sn={type:'stage',id:obj.id,fields:{deadline:obj.deadline}};if(obj.startDate)sn.fields.startDate=obj.startDate;return sn;})();
+    toShift.forEach((_r,id)=>{
+      const s=D.stages.find(s=>s.id===id);if(!s)return;
+      const oldD=s.deadline;const newD=this.shiftDate(s.deadline,deltaDays);
+      if(!s.deadlineHistory)s.deadlineHistory=[];
+      s.deadlineHistory.push({from:oldD,to:newD,by:D.currentUser?.name||'',reason:id===obj.id?reason:undefined,auto:id!==obj.id,at:new Date().toISOString()});
+      if(s.startDate)s.startDate=this.shiftDate(s.startDate,deltaDays);
+      s.deadline=newD;
+    });
+    return{undoSnapshot,summary:{logMsg:`${logMsg} · Причина: ${reason}`}};
+  }
+};
+
+/* ═══════════════════════════════════════
    CONTRACT IMPORT (AI PDF PARSING)
 ═══════════════════════════════════════ */
 let _contractData=null;
@@ -2925,7 +3085,7 @@ function rGantt(){
     fHTML+=`<button class="g-fchip gfn" onclick="gExpandAll()" title="Раскрыть все этапы">⊞ Все этапы</button>`;
     fHTML+=`<button class="g-fchip gfn" onclick="gCollapseAll()" title="Свернуть все">⊟ Свернуть</button>`;
     fHTML+=`<button class="g-fchip ${_gCascade?'gfg':''}" onclick="gToggleCascade()" title="Каскадный сдвиг: следующие этапы двигаются вместе">🔗 Каскад</button>`;
-    fHTML+=`<span style="margin-left:auto;font-size:10px;color:var(--t3);opacity:.6;white-space:nowrap;padding:0 6px">v90</span>`;
+    fHTML+=`<span style="margin-left:auto;font-size:10px;color:var(--t3);opacity:.6;white-space:nowrap;padding:0 6px">v91</span>`;
     fHTML+=`<span style="width:1px;height:16px;background:var(--b2);margin:0 2px;flex-shrink:0"></span>`;
     fHTML+=`<button class="g-fchip ${gStageFilter==='has'?'gfa':''}" onclick="gSetStageF('has')" title="Только проекты с этапами">📋 С этапами</button>`;
     fHTML+=`<button class="g-fchip ${gStageFilter==='no'?'gfa':''}" onclick="gSetStageF('no')" title="Проекты без этапов — нужно заполнить">⬜ Без этапов</button>`;
@@ -3405,10 +3565,7 @@ function removeDemoRooms(){
 }
 
 function _shiftDate(dateStr,deltaDays){
-  if(!dateStr)return null;
-  const d=new Date(dateStr+'T00:00:00');
-  d.setDate(d.getDate()+deltaDays);
-  return d.toISOString().slice(0,10);
+  return Scheduler.shiftDate(dateStr,deltaDays);
 }
 
 function _gClientXY(e){
@@ -3442,23 +3599,8 @@ function gBarDown(e,type,id){
   const cascadeBars=[];
   const cascadeOrigPcts=[];
   if(type==='stage'){
-    const previewIds=new Set([id]);
-    if(_gCascade){
-      const pid=obj.pid,room=obj.room,origDead=obj.deadline;
-      D.stages.forEach(s=>{
-        if(s.id===id||s.done||!s.deadline||s.pid!==pid)return;
-        if(room&&s.room!==room)return;
-        if(s.deadline<origDead)return;
-        previewIds.add(s.id);
-      });
-    }
-    {const q=[id],vis=new Set([id]);
-    while(q.length){const cur=q.shift();
-      D.stages.filter(s=>s.blockedBy===cur&&!s.done&&!vis.has(s.id)).forEach(s=>{
-        vis.add(s.id);previewIds.add(s.id);q.push(s.id);
-      });
-    }}
-    previewIds.forEach(sid=>{
+    const toShiftPreview=Scheduler.computeStageShiftSet(obj,_gCascade);
+    toShiftPreview.forEach((_reason,sid)=>{
       if(sid===id)return;
       const el=document.querySelector(`.g-sbar[data-sid="${sid}"]`);
       if(!el)return;
@@ -3562,115 +3704,21 @@ function _gUp(e){
   const deltaDays=Math.round(dx/_gDrag.rtlWidth*_gVP.total);
   if(_gDrag.moved&&Math.abs(deltaDays)>=1){
     const obj=_gDrag.obj;
-    const nd=_shiftDate(_gDrag.origDead,deltaDays);
-    // Сохраняем в стек для отмены и применяем
-    if(_gDrag.type==='stage'){
-      // === Собираем всё что нужно сдвинуть ===
-      // toShift: Map<stageId, reasonString>
-      const toShift=new Map();
-      toShift.set(obj.id, D.currentUser?.name||'');
-
-      // 1) _gCascade-режим: все последующие этапы проекта (по помещению или глобально)
-      if(_gCascade){
-        const pid=obj.pid,room=obj.room,origDead=_gDrag.origDead;
-        D.stages.filter(s=>{
-          if(s.id===obj.id||s.pid!==pid||s.done||!s.deadline)return false;
-          if(room)return s.room===room&&s.deadline>=origDead;
-          return s.deadline>=origDead;
-        }).forEach(s=>{
-          if(!toShift.has(s.id))toShift.set(s.id,`Каскад${room?' ('+room+')':''}: «${obj.name}»`);
-        });
-      }
-
-      // 2) Всегда: рекурсивный BFS по цепочке blockedBy (без фильтра room — не обрываем цепочку)
-      {const q=[obj.id],vis=new Set([obj.id]);
-      while(q.length){
-        const cur=q.shift();
-        const curName=(D.stages.find(s=>s.id===cur)||{name:cur}).name;
-        D.stages.filter(s=>s.blockedBy===cur&&!s.done&&s.deadline&&!vis.has(s.id)).forEach(s=>{
-          vis.add(s.id);
-          if(!toShift.has(s.id))toShift.set(s.id,`Автосдвиг: «${curName}»`);
-          q.push(s.id);
-        });
-      }}
-
-      // === Снапшот для отмены ===
-      const snapList=[...toShift.keys()].map(id=>{
-        const s=D.stages.find(s=>s.id===id);
-        return s?{id:s.id,deadline:s.deadline,startDate:s.startDate}:null;
-      }).filter(Boolean);
-
-      // Drift Counter: блокировка тихого переноса этапов с узким буфером (3-й+ раз)
-      if(deltaDays>0){
-        const _driftProj=D.projects.find(x=>x.id===obj.pid);
-        const _driftBuf=_driftProj?.clientDeadline
-          ?Math.round((new Date(_driftProj.clientDeadline)-new Date(nd))/86400000)
-          :999;
-        if(_driftBuf<=3){
-          const _newDC=(obj.dragCount||0)+1;
-          if(_newDC>=3){
-            const _cascCnt=toShift.size-1;
-            _driftPending={type:'stage',obj,nd,deltaDays,toShift,snapList,
-              logMsg:`📅 Этап «${obj.name}» → ${fdate(nd,true)}${_cascCnt>0?` +${_cascCnt} связ.`:''}`};
-            _gCleanupDragBars();rGantt();
-            document.removeEventListener('mousemove',_gMove);
-            document.removeEventListener('mouseup',_gUp);
-            showDriftModal('stage',obj.name,_newDC);
-            return;
-          }
-          obj.dragCount=_newDC;
-        }
-      }
-
-      if(toShift.size===1){
-        const snap={type:'stage',id:obj.id,fields:{deadline:_gDrag.origDead}};
-        if(obj.startDate)snap.fields.startDate=obj.startDate;
-        _gUndo.push(snap);
-      } else {
-        _gUndo.push({type:'cascade',snaps:snapList});
-      }
-      if(_gUndo.length>10)_gUndo.shift();
-
-      // === Применяем сдвиги через calendar-aware _shiftDate (без DST-артефактов) ===
-      toShift.forEach((reason,id)=>{
-        const s=D.stages.find(s=>s.id===id);
-        if(!s)return;
-        const oldD=s.deadline;
-        const newD=_shiftDate(s.deadline,deltaDays);
-        const isRoot=id===obj.id;
-        if(!s.deadlineHistory)s.deadlineHistory=[];
-        s.deadlineHistory.push({
-          from:oldD,to:newD,
-          by:isRoot?(D.currentUser?.name||''):reason,
-          auto:!isRoot,
-          ancestorId:isRoot?undefined:obj.id,
-          at:new Date().toISOString()
-        });
-        if(s.startDate)s.startDate=_shiftDate(s.startDate,deltaDays);
-        s.deadline=newD;
-      });
-
-      const cascCount=toShift.size-1;
-      addLog(`📅 Этап «${obj.name}» → ${fdate(nd,true)}${cascCount>0?` +${cascCount} связ.`:''}`,obj.pid);
-      // Штрафной сигнал: если сдвинутые этапы вышли за дедлайн проекта
-      const proj=D.projects.find(x=>x.id===obj.pid);
-      if(proj?.deadline){
-        const crossed=[...toShift.keys()].filter(id=>{const s=D.stages.find(s=>s.id===id);return s&&s.deadline>proj.deadline;});
-        if(crossed.length){
-          toast(`🔴 ${crossed.length} эт. вышли за дедлайн проекта!`,'err');
-          addLog(`🔴 Штрафной риск: ${crossed.length} эт. за «${proj.name}»`,proj.id);
-        }
-      }
-
-    } else {
-      // Проект
-      const snap={type:_gDrag.type,id:_gDrag.id,fields:{deadline:_gDrag.origDead}};
-      if(_gDrag.type==='proj'&&_gDrag.origStart)snap.fields.start=_gDrag.origStart;
-      _gUndo.push(snap);
-      if(_gUndo.length>10)_gUndo.shift();
-      if(_gDrag.origStart)obj.start=_shiftDate(_gDrag.origStart,deltaDays);
-      obj.deadline=nd;
-      addLog(`📅 ${obj.name}: сроки сдвинуты ${deltaDays>0?'+':''}${deltaDays} дн.`,obj.id);
+    const result=Scheduler.recalculate({type:_gDrag.type,obj,deltaDays,cascadeEnabled:_gCascade});
+    if(result.blocked){
+      _driftPending=result.pending;
+      _gCleanupDragBars();rGantt();
+      document.removeEventListener('mousemove',_gMove);
+      document.removeEventListener('mouseup',_gUp);
+      showDriftModal('stage',obj.name,result.pending.dragCountToApply);
+      return;
+    }
+    _gUndo.push(result.undoSnapshot);
+    if(_gUndo.length>10)_gUndo.shift();
+    addLog(result.summary.logMsg,_gDrag.type==='stage'?obj.pid:obj.id);
+    if(result.summary.crossedDeadlineCount){
+      toast(`🔴 ${result.summary.crossedDeadlineCount} эт. вышли за дедлайн проекта!`,'err');
+      addLog(`🔴 Штрафной риск: ${result.summary.crossedDeadlineCount} эт. за «${result.summary.projName}»`,result.summary.projId);
     }
     _gCleanupDragBars();
     save();rGantt();

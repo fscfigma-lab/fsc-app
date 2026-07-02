@@ -2708,8 +2708,10 @@ const Scheduler={
       const pid=stage.pid,room=stage.room,origDead=stage.deadline;
       D.stages.filter(s=>{
         if(s.id===stage.id||s.pid!==pid||s.done||!s.deadline)return false;
-        if(room)return s.room===room&&s.deadline>=origDead;
-        return s.deadline>=origDead;
+        // Строго больше origDead: параллельные этапы (та же дата) не захватываем —
+        // последовательность при одинаковых датах задаётся через blockedBy/DependencyEngine.
+        if(room)return s.room===room&&s.deadline>origDead;
+        return s.deadline>origDead;
       }).forEach(s=>{
         if(!toShift.has(s.id))toShift.set(s.id,`Каскад${room?' ('+room+')':''}: «${stage.name}»`);
       });
@@ -2805,9 +2807,12 @@ const Scheduler={
       const pid=stage.pid,room=stage.room,origDead=stage.deadline;
       D.stages.filter(s=>{
         if(s.id===stage.id||s.pid!==pid||s.done||!s.deadline)return false;
-        if(room)return s.room===room&&s.deadline>=origDead;
-        return s.deadline>=origDead;
-      }).forEach(s=>{
+        // Строго больше origDead: параллельные этапы (та же дата) не захватываем.
+        // Явные последовательности при равных датах → через blockedBy/DependencyEngine.
+        if(room)return s.room===room&&s.deadline>origDead;
+        return s.deadline>origDead;
+      }).sort((a,b)=>a.deadline.localeCompare(b.deadline))  // детерминированный порядок по дедлайну
+      .forEach(s=>{
         if(!toShift.has(s.id))toShift.set(s.id,{reason:`Каскад${room?' ('+room+')':''}: «${stage.name}»`,mode:'delta'});
       });
     }

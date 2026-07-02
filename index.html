@@ -121,6 +121,17 @@
         <div class="risk-row" id="d-risks"></div>
         </div>
 
+        <div id="db-deviations">
+        <div class="sec-title">🔔 Критические отклонения</div>
+        <div class="risk-row" id="d-deviations"></div>
+        </div>
+
+        <div id="db-donut">
+        <div class="divider"></div>
+        <div class="sec-title">🍩 Распределение проектов</div>
+        <div id="d-donut"></div>
+        </div>
+
         <div id="db-urgent">
         <div class="sec-title">📌 Требуют внимания сегодня</div>
         <div id="d-urgent-filters" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
@@ -947,30 +958,64 @@ const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
 function loadLocal(){try{const s=localStorage.getItem('fsc4');if(s)return JSON.parse(s)}catch(e){}
   return JSON.parse(JSON.stringify(DEFAULTS))}
 let _saveCount=0;
+let _cloudSavedAt=null;  // updated_at последней версии, прочитанной из Supabase (OCC)
+let _isMerging=false;    // защита от рекурсии внутри _saveToCloud при merge-retry
+
 function save(){
   D.savedAt=new Date().toISOString();
-  localStorage.setItem('fsc4_user', D.currentUser ? JSON.stringify(D.currentUser) : '');
-  localStorage.setItem('fsc4', JSON.stringify(D));
-  const cloudD = Object.assign({}, D);
-  delete cloudD.currentUser;
-  // Сохраняем критичные конфиг-поля — они могут быть только в Supabase,
-  // но не в локальном D (добавляются вручную, не через UI)
-  const _PRESERVE=['tgBotToken','tgAdminId','tgTechDirId','anthropicKey','githubPat'];
-  const _missing=_PRESERVE.filter(k=>!cloudD[k]);
-  if(_missing.length){
-    sb.from('app_data').select('data').eq('id','main').maybeSingle()
-      .then(({data})=>{
-        if(data?.data){_missing.forEach(k=>{if(data.data[k])cloudD[k]=data.data[k];});}
-        sb.from('app_data').upsert({id:'main',data:cloudD,updated_at:D.savedAt})
-          .then(({error})=>{if(error)console.error('Supabase save error:',error)});
-      });
-  } else {
-    sb.from('app_data').upsert({id:'main',data:cloudD,updated_at:D.savedAt})
-      .then(({error})=>{if(error)console.error('Supabase save error:',error)});
-  }
-  // Авто-бэкап каждые 20 сохранений
+  localStorage.setItem('fsc4_user',D.currentUser?JSON.stringify(D.currentUser):'');
+  localStorage.setItem('fsc4',JSON.stringify(D));
   _saveCount++;
   if(_saveCount%20===0)autoBackup();
+  _saveToCloud();
+}
+
+async function _saveToCloud(){
+  const cloudD=Object.assign({},D);
+  delete cloudD.currentUser;
+  // Критичные конфиг-поля — могут отсутствовать локально (заданы вручную в Supabase)
+  const _PRESERVE=['tgBotToken','tgAdminId','tgTechDirId','anthropicKey','githubPat'];
+  const _missing=_PRESERVE.filter(k=>!cloudD[k]);
+  // Читаем remote если: нужны секреты ИЛИ нужна OCC-проверка
+  const needsRead=_missing.length>0||(_cloudSavedAt&&!_isMerging);
+  if(needsRead){
+    try{
+      const {data:row}=await sb.from('app_data').select('data,updated_at').eq('id','main').maybeSingle();
+      // 1. Восстановить недостающие секреты
+      if(row?.data)_missing.forEach(k=>{if(row.data[k])cloudD[k]=row.data[k];});
+      // 2. OCC: если кто-то записал в Supabase после нашего последнего чтения — мержим
+      if(_cloudSavedAt&&!_isMerging&&row?.updated_at>_cloudSavedAt&&row?.data?.projects){
+        _isMerging=true;
+        _mergeRemoteD(row.data);
+        Object.assign(cloudD,D);delete cloudD.currentUser;
+        _PRESERVE.forEach(k=>{if(!cloudD[k]&&row.data[k])cloudD[k]=row.data[k];});
+        localStorage.setItem('fsc4',JSON.stringify(D));
+        render(curPage);
+        toast('🔄 Изменения другого устройства объединены','ok');
+        _isMerging=false;
+      }
+    }catch(e){console.warn('[save] OCC check error:',e);_isMerging=false;}
+  }
+  const {error}=await sb.from('app_data').upsert({id:'main',data:cloudD,updated_at:D.savedAt});
+  if(error)console.error('Supabase save error:',error);
+  else _cloudSavedAt=D.savedAt;
+}
+
+// Объединяет remote D в локальный D: union по id — local-версия побеждает при конфликте id,
+// remote-only сущности (добавлены другим устройством) — добавляются.
+function _mergeRemoteD(remote){
+  function mergeById(local,rem){
+    if(!rem)return local||[];
+    const ids=new Set((local||[]).map(x=>x.id));
+    return[...(local||[]),...rem.filter(x=>!ids.has(x.id))];
+  }
+  D.projects=mergeById(D.projects,remote.projects);
+  D.stages  =mergeById(D.stages,  remote.stages);
+  D.tasks   =mergeById(D.tasks,   remote.tasks);
+  D.team    =mergeById(D.team,    remote.team);
+  // Лента: union по id, сортировка ts desc, лимит 200
+  const logMap=new Map([...(remote.log||[]),...(D.log||[])].map(l=>[l.id,l]));
+  D.log=[...logMap.values()].sort((a,b)=>b.ts.localeCompare(a.ts)).slice(0,200);
 }
 
 /* ═══════════════════════════════════════
@@ -1027,6 +1072,7 @@ function importJSON(){
       const user=D.currentUser;
       Object.assign(D,imported);
       D.currentUser=user;
+      _cloudSavedAt=null; // импорт — намеренная замена, пропускаем OCC
       save();render(curPage);
       toast('✅ Данные восстановлены из файла','ok');
     }catch(err){
@@ -5500,9 +5546,10 @@ function checkNotifs(){
 document.addEventListener('DOMContentLoaded',async()=>{
   // Try to load fresh data from Supabase
   try{
-    const {data,error}=await sb.from('app_data').select('data').eq('id','main').maybeSingle();
+    const {data,error}=await sb.from('app_data').select('data,updated_at').eq('id','main').maybeSingle();
     if(!error&&data&&data.data&&data.data.projects){
       D=data.data;
+      _cloudSavedAt=data.updated_at||D.savedAt||null;
       if(!D.stages)D.stages=[];
       if(!D.log)D.log=[];
       const localUser=localStorage.getItem('fsc4_user');
@@ -5550,18 +5597,19 @@ async function _cloudSync(){
   // Не синхронизируем пока открыта модалка — не сбиваем пользователя
   if(document.querySelector('.moverlay[style*="flex"]'))return;
   try{
-    const {data,error}=await sb.from('app_data').select('data').eq('id','main').maybeSingle();
+    const {data,error}=await sb.from('app_data').select('data,updated_at').eq('id','main').maybeSingle();
     if(error||!data?.data?.projects)return;
     // Сравниваем контент — если отличается, берём из Supabase (он всегда master)
     const remoteStr=JSON.stringify({p:data.data.projects,t:data.data.tasks,s:data.data.stages});
     const localStr=JSON.stringify({p:D.projects,t:D.tasks,s:D.stages});
-    if(remoteStr===localStr)return;
+    if(remoteStr===localStr){_cloudSavedAt=data.updated_at||_cloudSavedAt;return;}
     const savedUser=D.currentUser;
     // Сохраняем секреты из текущего D — они могут отсутствовать в Supabase-копии
     const _SEC_KEYS=['tgBotToken','tgAdminId','tgTechDirId','anthropicKey','githubPat','ntfyTopic','gcalClientId'];
     const _savedSecs={};
     _SEC_KEYS.forEach(k=>{if(D[k])_savedSecs[k]=D[k];});
     D=data.data;
+    _cloudSavedAt=data.updated_at||D.savedAt||null;
     D.currentUser=savedUser;
     // Восстанавливаем секреты если в Supabase они вдруг отсутствуют
     _SEC_KEYS.forEach(k=>{if(!D[k]&&_savedSecs[k])D[k]=_savedSecs[k];});

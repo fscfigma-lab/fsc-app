@@ -2867,6 +2867,7 @@ const Scheduler={
     if(plan.origStart)undoSnapshot.fields.start=plan.origStart;
     if(plan.origStart)project.start=this.shiftDate(plan.origStart,plan.deltaDays);
     project.deadline=plan.nd;
+    project.manualDates=true;  // drag на Ганте = ручной перенос, Sheets не перезаписывает
     const logMsg=`📅 ${project.name}: сроки сдвинуты ${plan.deltaDays>0?'+':''}${plan.deltaDays} дн.`;
     return{undoSnapshot,summary:{logMsg}};
   },
@@ -4888,7 +4889,8 @@ function saveProject(withPlan){
     budget:parseInt($('p-budget').value)||null,
     pct:parseInt($('p-pct').value)||0,
     plita:parseFloat(plita)||null,mozaika:parseFloat(mozaika)||null,
-    spec:parseFloat(spec)||null,complexity:parseFloat(complexity)||1
+    spec:parseFloat(spec)||null,complexity:parseFloat(complexity)||1,
+    manualDates:true  // пользователь явно задал даты через модалку — Sheets не перезаписывает
   };
   if(p.deadline<TODAY()&&p.status==='active')p.status='overdue';
   if(p.pct>=100)p.status='done';
@@ -6129,14 +6131,16 @@ async function syncFromSheets(silent){
           ex.pct=pct;
           if(pct===100) ex.status='done';
           else if(ex.status!=='paused'){
-            const dl=deadline||ex.deadline;
+            // Если даты защищены ручной правкой — статус считаем по хранимому дедлайну
+            const dl=(ex.manualDates?null:deadline)||ex.deadline;
             ex.status=dl&&dl<TODAY()?'overdue':'active';
           }
         }
         if(address)ex.address=address;
         if(contact)ex.client=contact;
-        if(start)ex.start=start;
-        if(deadline)ex.deadline=deadline;
+        // Не затираем даты, если РП вручную перенёс проект на Ганте или в модалке
+        if(start&&!ex.manualDates)ex.start=start;
+        if(deadline&&!ex.manualDates)ex.deadline=deadline;
         if(weekPlan)ex.weekPlan=weekPlan;
         ex.sheetSync=new Date().toISOString();
         if(!ex.sheetName)ex.sheetName=name; // фиксируем имя из таблицы для стабильного матчинга
@@ -6604,6 +6608,7 @@ function executeVoiceAction(cmd, original){
       const p = D.projects.find(x=>x.id===cmd.project_id);
       if(!p){ toast('Проект не найден','err'); break; }
       p.deadline = cmd.deadline;
+      p.manualDates = true;  // AI-команда = пользователь инициировал, Sheets не перезаписывает
       save(); render(curPage);
       const msg = `📅 Дедлайн "${p.name}" перенесён на ${fdate(cmd.deadline)}`;
       toast(msg, 'ok');

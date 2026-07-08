@@ -307,6 +307,16 @@ body{background:var(--bg)}
 .g-milestone.done{color:#3C8C63}
 .g-milestone.soon{color:#A66C16}
 .g-milestone.on-track{color:#3B5C8E}
+/* Sub-row milestone (этап без startDate — только дедлайн) */
+.g-smilestone{position:absolute;top:50%;transform:translate(-50%,-50%) rotate(45deg);
+  width:14px;height:14px;border:2px solid currentColor;border-radius:2px;background:#fff;
+  z-index:3;pointer-events:all;cursor:grab;transition:filter .15s,z-index 0s}
+.g-smilestone:hover{filter:brightness(1.15);z-index:10}
+.g-smilestone.on-track{color:#3B5C8E}
+.g-smilestone.overdue{color:#C23B3B}
+.g-smilestone.done{color:#3C8C63;cursor:default}
+.g-smilestone.soon{color:#C9892B}
+.g-smilestone.is-dragging{cursor:grabbing;filter:brightness(1.1)}
 /* Zoom — единый сегментированный переключатель (pill), кнопки/id/onclick те же */
 .g-zoom-bar{display:flex;gap:2px;align-items:center;background:rgba(15,23,42,0.045);
   border-radius:8px;padding:2px}

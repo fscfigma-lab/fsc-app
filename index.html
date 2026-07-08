@@ -3645,9 +3645,21 @@ function rGantt(){
           }
 
           const sBarCls=(s.done?'sdone':sds==='overdue'?'sod':(sds==='soon'||sds==='today')?'ssoon':'sok')+penaltyCls;
-          const barOrPill=isPast
-            ?`<div class="g-sbar ${pillCls}" style="left:0%;width:auto;padding:0 8px;cursor:${s.done?'default':'pointer'};min-width:fit-content" ${!s.done?`onclick="openStageModal('${p.id}','${s.id}')"`:''}>${pillLbl} · ${fdate(s.deadline,true)}</div>`
-            :`<div class="g-sbar ${sBarCls}" data-sid="${s.id}" data-ol="${sStart.toFixed(2)}" data-ow="${sW.toFixed(2)}" data-has-start="${s.startDate?'1':'0'}" style="left:${sStart.toFixed(1)}%;width:${sW.toFixed(1)}%;${!s.done?'cursor:grab':''}" ${!s.done?`onmousedown="gBarDown(event,'stage','${s.id}')" ontouchstart="gBarDown(event,'stage','${s.id}')"`:''}  title="${s.name}${s.startDate?'&#10;Начало: '+fdate(s.startDate,true):''}&#10;Дедлайн: ${fdate(s.deadline,true)}&#10;${s.done?'✓ Выполнен':(dlLabel(s.deadline,false)||'В работе')}${!s.done?'&#10;Перетащи чтобы изменить срок':''}">${sW>8?sLabel+s.name.slice(0,20):sLabel}${penBadgeHTML}</div>`;
+          // Milestone: этап без startDate — только ромб на дедлайне, startDate не изобретаем
+          const milCls=s.done?'done':penaltyCls?'overdue':sds==='overdue'?'overdue':(sds==='soon'||sds==='today')?'soon':'on-track';
+          const milTitle=`${s.name}&#10;Дедлайн: ${fdate(s.deadline,true)}&#10;${s.done?'✓ Выполнен':(dlLabel(s.deadline,false)||'В работе')}${!s.done?'&#10;Перетащи чтобы изменить срок':''}`;
+          let barOrPill;
+          if(!s.startDate){
+            barOrPill=sPos!==null&&sPos>=0&&sPos<=100
+              ?(s.done
+                ?`<div class="g-smilestone ${milCls}" style="left:${sPos.toFixed(1)}%" title="${milTitle}"></div>`
+                :`<div class="g-smilestone ${milCls}" data-sid="${s.id}" data-ol="${sPos.toFixed(2)}" data-ow="0" data-has-start="0" style="left:${sPos.toFixed(1)}%" onmousedown="gBarDown(event,'stage','${s.id}')" ontouchstart="gBarDown(event,'stage','${s.id}')" title="${milTitle}"></div>`)
+              :'';
+          }else if(isPast){
+            barOrPill=`<div class="g-sbar ${pillCls}" style="left:0%;width:auto;padding:0 8px;cursor:${s.done?'default':'pointer'};min-width:fit-content" ${!s.done?`onclick="openStageModal('${p.id}','${s.id}')"`:''}>${pillLbl} · ${fdate(s.deadline,true)}</div>`;
+          }else{
+            barOrPill=`<div class="g-sbar ${sBarCls}" data-sid="${s.id}" data-ol="${sStart.toFixed(2)}" data-ow="${sW.toFixed(2)}" data-has-start="1" style="left:${sStart.toFixed(1)}%;width:${sW.toFixed(1)}%;${!s.done?'cursor:grab':''}" ${!s.done?`onmousedown="gBarDown(event,'stage','${s.id}')" ontouchstart="gBarDown(event,'stage','${s.id}')"`:''}  title="${s.name}&#10;Начало: ${fdate(s.startDate,true)}&#10;Дедлайн: ${fdate(s.deadline,true)}&#10;${s.done?'✓ Выполнен':(dlLabel(s.deadline,false)||'В работе')}${!s.done?'&#10;Перетащи чтобы изменить срок':''}">${sW>8?sLabel+s.name.slice(0,20):sLabel}${penBadgeHTML}</div>`;
+          }
           html+=`<div class="g-subrow${inRoom?' in-room':''}">
             <div class="g-rlabel" onclick="toggleStage('${s.id}',event)" title="${s.done?'Нажми чтобы отменить выполнение':'Отметить этап выполненным'}">
               <div class="g-sn">${s.done?'✓ ':''}${s.icon||'📋'} ${s.name}</div>
@@ -3940,7 +3952,7 @@ function gBarDown(e,type,id){
     const toShiftPreview=Scheduler.computeStageShiftSet(obj,_gCascade);
     toShiftPreview.forEach((_reason,sid)=>{
       if(sid===id)return;
-      const el=document.querySelector(`.g-sbar[data-sid="${sid}"]`);
+      const el=document.querySelector(`[data-sid="${sid}"]`);
       if(!el)return;
       const elPct=parseFloat(el.dataset.ol)||parseFloat(el.style.left)||0;
       el.style.transform='translateX(0)';
@@ -4027,7 +4039,7 @@ function _gCleanupDragBars(){
       el.classList.remove('is-dragging');
     });
   }
-  document.querySelectorAll('.g-sbar[data-sid]').forEach(el=>{
+  document.querySelectorAll('[data-sid].g-sbar,[data-sid].g-smilestone').forEach(el=>{
     el.style.transform='';
     el.style.transition='';
     el.style.opacity='';

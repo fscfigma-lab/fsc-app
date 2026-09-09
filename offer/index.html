@@ -49,6 +49,12 @@
 body{margin:0;background:var(--ui-bg);color:var(--ui-ink);font:400 13px/1.45 var(--text);-webkit-font-smoothing:antialiased}
 button,input,textarea,select{font-family:inherit}
 
+#alertbar{position:sticky;top:0;z-index:40;display:flex;flex-wrap:wrap;align-items:center;gap:10px;
+  padding:10px 16px;background:#fdf3e4;border-bottom:1px solid #e7cf9c;color:#6b5220;font-size:12.5px}
+#alertbar b{font-weight:600}
+#alertbar .btn{padding:6px 10px;font-size:10px;border-color:#dcc38d;background:#fff;color:#6b5220}
+#alertbar .btn:hover{border-color:#a8873f;color:#8e7343}
+
 /* ── шапка ─────────────────────────────────────────── */
 .topbar{
   position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px;
@@ -250,6 +256,8 @@ ul.it li::before{content:"";position:absolute;left:0;top:1.7mm;width:1.8mm;heigh
 }
 </style>
 
+<div id="alertbar" hidden></div>
+
 <div class="topbar">
   <div class="brand"><b>FSC Offer Builder</b><i>Stone · v1.0</i></div>
   <span class="state" id="state">Сохранено</span>
@@ -374,10 +382,18 @@ function newDraft(doc){
 }
 function loadDB(){
   try{const r=localStorage.getItem(DKEY);if(r){const o=JSON.parse(r);
-    if(o&&o.items&&Object.keys(o.items).length)return o;}}catch(e){}
+    if(o&&o.items&&Object.keys(o.items).length){
+      for(const id in o.items){
+        const it=o.items[id];
+        if(!it||typeof it!=="object"||!it.doc){delete o.items[id];continue}
+        it.doc=normalize(it.doc);
+        it.updatedAt=typeof it.updatedAt==="string"?it.updatedAt:new Date(0).toISOString();
+      }
+      if(Object.keys(o.items).length)return o;
+    }}}catch(e){}
   try{const r=localStorage.getItem(OLDKEY);if(r){const doc=JSON.parse(r);
-    if(doc&&doc.v===1){const id=uid();
-      return {current:id,items:{[id]:{doc,updatedAt:new Date().toISOString()}}};}}}catch(e){}
+    if(doc&&typeof doc==="object"){const id=uid();
+      return {current:id,items:{[id]:{doc:normalize(doc),updatedAt:new Date().toISOString()}}};}}}catch(e){}
   return null;
 }
 let DB=loadDB();
@@ -420,6 +436,26 @@ function ruDate(iso){
   if(!iso)return"";
   const [y,m,d]=iso.split("-");return `${d}.${m}.${y}`;
 }
+
+/* ── приведение документа к схеме ────────────────── */
+function conform(tpl,val){
+  if(Array.isArray(tpl)){
+    const proto=tpl[0];
+    if(!Array.isArray(val))return clone(tpl);
+    return val.slice(0,200).map(x=>(proto&&typeof proto==="object")?conform(proto,x)
+      :(typeof x==="string"?x:(typeof x==="number"?String(x):clone(proto))));
+  }
+  if(tpl&&typeof tpl==="object"){
+    const out={};
+    for(const k in tpl)out[k]=conform(tpl[k],(val&&typeof val==="object")?val[k]:undefined);
+    return out;
+  }
+  if(typeof tpl==="boolean")return typeof val==="boolean"?val:tpl;
+  if(typeof val==="string")return val;
+  if(typeof val==="number")return String(val);
+  return tpl;
+}
+function normalize(doc){const d=conform(DEF,doc);d.v=1;return d}
 
 /* ── редактор ────────────────────────────────────── */
 function acc(title,note,body,open){
@@ -578,47 +614,119 @@ function paginate(u){
   const g=document.getElementById("gauge");
   g.style.width=TEXTW+"mm";
   const GAP=2.6*MM;
-  const hs=u.map(x=>{g.innerHTML=x.html;return g.firstElementChild.getBoundingClientRect().height;});
-  g.innerHTML="";
+  const measure=html=>{g.innerHTML=html;return g.firstElementChild.getBoundingClientRect().height};
+  const hs=u.map(x=>measure(x.html));
 
+  // блоки: цепочки «держать вместе»
   const chunks=[];let cur=null;
   u.forEach((x,i)=>{
-    if(!cur)cur={html:"",h:0,n:0};
-    cur.html+=x.html;cur.h+=hs[i]+(cur.n?GAP:0);cur.n++;
+    if(!cur)cur={html:"",h:0,units:[]};
+    cur.html+=x.html;cur.h+=hs[i]+(cur.units.length?GAP:0);
+    cur.units.push({html:x.html,h:hs[i]});
     if(!x.keep){chunks.push(cur);cur=null;}
   });
   if(cur)chunks.push(cur);
 
-  const over=chunks.some(c=>c.h>USABLE);
+  // деление одного юнита, который выше листа — по элементам внутри
+  const SPLIT=".tasks, ul.it, .terms, .pay, .u--head";
+  function splitHTML(html,avail){
+    g.innerHTML=html;
+    const probe=g.firstElementChild.querySelector(SPLIT)||
+      (g.firstElementChild.matches(SPLIT)?g.firstElementChild:null);
+    if(!probe||probe.children.length<2)return null;
+    const total=probe.children.length;
+    for(let keep=total-1;keep>=1;keep--){
+      g.innerHTML=html;
+      const c=g.firstElementChild.querySelector(SPLIT)||g.firstElementChild;
+      [...c.children].slice(keep).forEach(x=>x.remove());
+      if(g.firstElementChild.getBoundingClientRect().height>avail)continue;
+      const head=g.firstElementChild.outerHTML;
+      g.innerHTML=html;
+      const c2=g.firstElementChild.querySelector(SPLIT)||g.firstElementChild;
+      [...c2.children].slice(0,keep).forEach(x=>x.remove());
+      const sec=g.firstElementChild.querySelector(".sec");
+      if(sec){
+        sec.classList.add("sec--cont");
+        const hd=sec.querySelector("h2");if(hd)hd.remove();
+        const ix=sec.querySelector(".idx");if(ix)ix.textContent="";
+        sec.querySelectorAll(":scope > div > p").forEach(p=>{if(!p.className)p.remove()});
+      }
+      return [head,g.firstElementChild.outerHTML];
+    }
+    return null;
+  }
 
-  const fill=limit=>{
+  let over=false;
+  function fill(limit){
+    over=false;
     const pages=[[]];let h=0;
-    chunks.forEach(c=>{
-      const cur=pages[pages.length-1];
-      const add=(cur.length?GAP:0)+c.h;
+    const queue=chunks.map(c=>({html:c.html,h:c.h,units:c.units}));
+    let guard=0;
+    while(queue.length&&guard++<4000){
+      const c=queue.shift();
+      const page=pages[pages.length-1];
       const cap=Math.min(USABLE,Math.max(limit,c.h));
-      if(cur.length&&h+add>cap+1){pages.push([c]);h=c.h;}
-      else{cur.push(c);h+=add;}
-    });
-    return pages;
-  };
+      const add=(page.length?GAP:0)+c.h;
+      if(h+add<=cap+1){page.push(c);h+=add;continue}
+
+      // 1) блок из нескольких юнитов — разложить и пробовать поштучно
+      if(c.units&&c.units.length>1){
+        queue.unshift(...c.units.map(x=>({html:x.html,h:x.h,units:null})));
+        continue;
+      }
+      // 2) один юнит выше листа — делим внутри
+      if(c.h>USABLE){
+        const avail=page.length?USABLE-h-GAP:USABLE;
+        const parts=avail>USABLE*.2?splitHTML(c.html,avail):null;
+        if(parts){
+          queue.unshift({html:parts[0],h:measure(parts[0]),units:null},
+                        {html:parts[1],h:measure(parts[1]),units:null});
+          continue;
+        }
+        if(!page.length){over=true;page.push(c);h+=c.h;continue}
+        // на текущем листе места для деления нет — начать новый и поделить там
+        pages.push([]);h=0;queue.unshift(c);continue;
+      }
+      // 3) переносим на новый лист
+      pages.push([c]);h=c.h;
+    }
+    g.innerHTML="";
+    return pages.filter(p=>p.length);
+  }
 
   let pages=fill(USABLE);
   if(pages.length>1){
     const total=chunks.reduce((a,c)=>a+c.h,0)+GAP*(chunks.length-pages.length);
+    const wasOver=over;
     const bal=fill(total/pages.length);
-    if(bal.length===pages.length)pages=bal;
+    if(bal.length===pages.length&&!over)pages=bal;else over=wasOver;
   }
   return {pages,over};
 }
 
+function fail(msg){
+  const bar=document.getElementById("alertbar");
+  bar.innerHTML=`<b>${esc(msg)}</b><span>Черновик сохранён — выгрузите его и перезагрузите страницу.</span>`+
+    `<button class="btn" type="button" id="failexp">Скачать JSON</button>`+
+    `<button class="btn" type="button" onclick="location.reload()">Перезагрузить</button>`;
+  bar.hidden=false;
+  const b=document.getElementById("failexp");if(b)b.onclick=exportJSON;
+}
+addEventListener("error",e=>fail("Что-то сломалось: "+(e.message||"ошибка скрипта")));
+addEventListener("unhandledrejection",()=>fail("Что-то сломалось при фоновой операции"));
+
 function render(){
+  try{ renderInner() }catch(e){ fail("Не удалось построить предпросмотр: "+e.message) }
+}
+function renderInner(){
   const {pages,over}=paginate(units());
   document.getElementById("stack").innerHTML=pages.map((p,i)=>
     `<article class="sheet"><div class="sheet-in">${p.map(c=>c.html).join("")}</div>
      <div class="pfoot"><span>Five Stone Construction · Job Offer</span><span>Лист ${i+1} / ${pages.length}</span></div></article>`).join("");
   document.getElementById("pages").textContent=pages.length+(pages.length===1?" лист":pages.length<5?" листа":" листов");
-  document.getElementById("warn").hidden=!over;
+  const w=document.getElementById("warn");
+  w.hidden=!over;
+  if(over)w.textContent="Один блок не делится и выше листа — сократите текст, иначе он обрежется при печати";
   fit();
 }
 
@@ -627,7 +735,8 @@ let mode="fit";
 function fit(){
   const stack=document.getElementById("stack"),stage=document.getElementById("stage");
   const w=210*MM, avail=stage.clientWidth-48;
-  const k=mode==="fit"?Math.min(1,avail/w):1;
+  // масштаб всегда положительный: в узком окне лист не должен вывернуться
+  const k=mode==="fit"?Math.max(.25,Math.min(1,avail/w)):1;
   stack.style.transform=`scale(${k})`;
   stack.style.marginBottom=(k<1?-(1-k)*stack.scrollHeight:0)+"px";
 }
@@ -720,21 +829,22 @@ document.getElementById("dpanel").addEventListener("click",e=>{
 
 /* ── шапка ───────────────────────────────────────── */
 document.getElementById("pdf").onclick=()=>window.print();
-document.getElementById("exp").onclick=()=>{
-  const nm=(S.name||"offer").replace(/[^\wА-Яа-яЁё-]+/g,"_");
+function exportJSON(){
+  const nm=(S.name||"offer").replace(/[^\wА-Яа-яЁё-]+/g,"_").slice(0,60);
   const a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,2)],{type:"application/json"}));
   a.download=`FSC_Offer_${nm}_${S.date||""}.json`;a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-};
+}
+document.getElementById("exp").onclick=exportJSON;
 document.getElementById("imp").onclick=()=>document.getElementById("file").click();
 document.getElementById("file").onchange=async e=>{
   const f=e.target.files[0];if(!f)return;
   try{
     const o=JSON.parse(await f.text());
-    if(o.v!==1)throw new Error("Другая версия файла");
-    saveDB();newDraft(Object.assign(clone(DEF),o));S=DB.items[DB.current].doc;buildEditor();render();renderDrafts();
-  }catch(err){alert("Не удалось прочитать файл: "+err.message)}
+    if(!o||typeof o!=="object")throw new Error("это не оффер FSC");
+    saveDB();newDraft(normalize(o));S=DB.items[DB.current].doc;buildEditor();render();renderDrafts();
+  }catch(err){alert("Не удалось прочитать файл: "+err.message+"\n\nНужен JSON, выгруженный кнопкой «Экспорт JSON».")}
   e.target.value="";
 };
 document.getElementById("preset").onchange=e=>{
@@ -752,6 +862,16 @@ function sync(){
 }
 
 /* ── старт ───────────────────────────────────────── */
+(function storageProbe(){
+  try{localStorage.setItem("fsc_probe","1");localStorage.removeItem("fsc_probe")}
+  catch(e){
+    const bar=document.getElementById("alertbar");
+    bar.innerHTML="<b>Браузер не сохраняет черновики</b><span>Похоже, это приватное окно или запрет на данные сайтов. "+
+      "Работать можно, но перед закрытием вкладки выгрузите оффер кнопкой «Экспорт JSON».</span>";
+    bar.hidden=false;
+  }
+})();
+
 buildEditor();
 renderDrafts();
 (document.fonts?document.fonts.ready:Promise.resolve()).then(render);

@@ -304,7 +304,7 @@ const MM=1123/297, USABLE=(297-13-11)*MM, TEXTW=210-36;
 const DEF={
   v:1,
   name:"Имя кандидата", greetTail:"мы приглашаем вас управлять **производством камня** Five Stone.",
-  role:"Технолог производства", roleSub:"Заместитель начальника производства · производственная база FSC",
+  role:"Технолог производства",
   date:new Date().toISOString().slice(0,10),
   lead:"Мы строим международный бизнес на камне: раскрой, ЧПУ, сборка, полировка, ОТК. Ваш опыт и точность нужны нам там, где решается срок выпуска и качество изделия — в цехах.\nЭто предложение персональное: условия ниже мы обсуждали именно для вас.",
   facts:[
@@ -344,7 +344,7 @@ const DEF={
 
 const PRESETS={
   office:{
-    role:"Менеджер проектов",roleSub:"Проектный офис · офис Five Stone Construction",
+    role:"Менеджер проектов",
     greetTail:"мы приглашаем вас в **проектный офис** Five Stone.",
     lead:"Мы строим международный бизнес на камне. Ваш опыт нужен нам там, где проект превращается в сроки, бюджет и результат для клиента.\nЭто предложение персональное: условия ниже мы обсуждали именно для вас.",
     route:{on:false,steps:"Брифинг, Смета, Согласование, Производство, Монтаж, Сдача"},
@@ -359,7 +359,7 @@ const PRESETS={
     ]}
   },
   executive:{
-    role:"Руководитель производства",roleSub:"Производственный блок · Five Stone Construction",
+    role:"Руководитель производства",
     greetTail:"мы предлагаем вам возглавить **производство** Five Stone.",
     lead:"Мы строим международный бизнес на камне и готовы передать вам производственный блок целиком: люди, оборудование, сроки, себестоимость.",
     about:{on:false,h:"Что вас ждёт в команде",t:""},
@@ -480,7 +480,7 @@ function normalize(doc){const d=conform(DEF,doc);d.v=1;return d}
 
 /* ── редактор ────────────────────────────────────── */
 function acc(title,note,body,open){
-  return `<details class="acc"${open?" open":""}><summary>${esc(title)}<span class="num">${esc(note||"")}</span></summary><div class="acc-body">${body}</div></details>`;
+  return `<details class="acc" data-acc="${esc(title)}"${open?" open":""}><summary>${esc(title)}<span class="num">${esc(note||"")}</span></summary><div class="acc-body">${body}</div></details>`;
 }
 function fText(path,label,hint){
   return `<div class="f"><label for="i_${path}">${esc(label)}</label>
@@ -512,13 +512,12 @@ function repHead(list,i,label){
   <button class="mini mini--del" type="button" data-del="${list}:${i}" title="Удалить">×</button></div>`;
 }
 
-function buildEditor(){
+function renderEditor(){
   const e=[];
   e.push(acc("Кандидат и должность","",[
     fText("name","Обращение по имени"),
     fArea("greetTail","Продолжение приветствия","**жирные звёздочки** — золотой курсив в заголовке",2),
     fText("role","Должность"),
-    fText("roleSub","Подзаголовок должности"),
     fDate("date","Дата предложения"),
     fArea("lead","Вступление","Каждая строка — отдельный абзац",4)
   ].join(""),true));
@@ -569,6 +568,22 @@ function buildEditor(){
   document.getElementById("editor").innerHTML=e.join("");
 }
 
+// пересборка редактора не должна закрывать разделы и терять место прокрутки
+function buildEditor(){
+  const ed=document.getElementById("editor");
+  const wasOpen={},scroll=ed.scrollTop;
+  ed.querySelectorAll("details.acc").forEach(d=>{wasOpen[d.dataset.acc]=d.open});
+  renderEditor();
+  ed.querySelectorAll("details.acc").forEach(d=>{
+    if(d.dataset.acc in wasOpen)d.open=wasOpen[d.dataset.acc];
+  });
+  ed.scrollTop=scroll;
+}
+function focusSel(sel){
+  const el=document.querySelector("#editor "+sel);
+  if(el)el.focus({preventScroll:true});
+}
+
 /* ── блоки документа ─────────────────────────────── */
 function units(){
   const u=[];const push=(html,keep,cls)=>u.push({html:`<div class="u ${cls||""}">${html}</div>`,keep:!!keep});
@@ -578,7 +593,7 @@ function units(){
     <div class="mk"><b>JOB OFFER</b><i>предложение о сотрудничестве</i></div></div>
     <p class="eyeb">Персональное предложение · ${esc(ruDate(S.date))}</p>
     <h1 class="hi">${esc(S.name)}${S.name?", ":""}${rich(S.greetTail)}</h1>
-    <p class="role">${esc(S.role)}${S.roleSub?`<small>${esc(S.roleSub)}</small>`:""}</p>
+    <p class="role">${esc(S.role)}</p>
     ${lines(S.lead).map(p=>`<p class="lead">${esc(p)}</p>`).join("")}
     ${S.facts.length?`<dl class="facts">${S.facts.map(f=>`<div><dt>${esc(f.l)}</dt><dd>${esc(f.v)}${f.n?`<span>${esc(f.n)}</span>`:""}</dd></div>`).join("")}</dl>`:""}`,false,"u--head");
 
@@ -825,7 +840,10 @@ ED.addEventListener("input",e=>{
   touch();
 });
 ED.addEventListener("change",e=>{
-  if(e.target.dataset.bool){buildEditor();touch();}
+  if(e.target.dataset.bool){
+    const p=e.target.dataset.path;
+    buildEditor();touch();focusSel(`[data-path="${p}"]`);
+  }
 });
 ED.addEventListener("click",e=>{
   const b=e.target.closest("button");if(!b)return;
@@ -835,17 +853,20 @@ ED.addEventListener("click",e=>{
       "terms.items":{l:"Поле",v:"Значение"},"probation.items":{t:"Задача",d:""},
       "pay.periods":{w:"Период",s:"0",u:"",p:"",pn:""}}[b.dataset.add];
     list.push(clone(blank));buildEditor();touch();
+    focusSel(`[data-path^="${b.dataset.add}.${list.length-1}."]`);
   }
   if(b.dataset.del){
     const [p,i]=b.dataset.del.split(":");const list=get(p);
     if(list.length<=1){alert("Последний элемент удалить нельзя — отключите раздел целиком.");return;}
     if(!confirm("Удалить элемент?"))return;
     list.splice(+i,1);buildEditor();touch();
+    focusSel(`[data-del="${p}:${Math.min(+i,list.length-1)}"]`);
   }
   if(b.dataset.move){
     const [p,i,d]=b.dataset.move.split(":");const list=get(p);const j=+i+ +d;
     if(j<0||j>=list.length)return;
     [list[+i],list[j]]=[list[j],list[+i]];buildEditor();touch();
+    focusSel(`[data-move="${p}:${j}:${d}"]`);   // кнопка едет вместе с пунктом
   }
 });
 

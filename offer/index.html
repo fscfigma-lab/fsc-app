@@ -408,6 +408,7 @@ let saveT,renderT,quotaWarned=false;
 function saveDB(){
   try{
     DB.items[DB.current]={doc:S,updatedAt:new Date().toISOString()};
+    mergeForeign();                       // не затираем черновики из другой вкладки
     localStorage.setItem(DKEY,JSON.stringify(DB));
     const st=document.getElementById("state");st.textContent="Сохранено";st.classList.remove("dirty");
   }catch(e){
@@ -416,6 +417,23 @@ function saveDB(){
       alert("Браузер не даёт сохранить черновик — вероятно, кончилось место. Удалите ненужные черновики или выгрузите их в JSON.");}
   }
 }
+function mergeForeign(){
+  try{
+    const raw=localStorage.getItem(DKEY);if(!raw)return;
+    const o=JSON.parse(raw);if(!o||!o.items)return;
+    for(const id in o.items){
+      const it=o.items[id];
+      if(!DB.items[id]&&it&&it.doc)
+        DB.items[id]={doc:normalize(it.doc),updatedAt:typeof it.updatedAt==="string"?it.updatedAt:new Date(0).toISOString()};
+    }
+  }catch(e){}
+}
+addEventListener("storage",e=>{
+  if(e.key!==DKEY)return;
+  mergeForeign();
+  try{renderDrafts()}catch(err){}
+});
+
 function touch(){
   const st=document.getElementById("state");
   st.textContent="Есть изменения";st.classList.add("dirty");
@@ -927,6 +945,18 @@ function sync(){
       "Работать можно, но перед закрытием вкладки выгрузите оффер кнопкой «Экспорт JSON».</span>";
     bar.hidden=false;
   }
+})();
+
+(function browserNote(){
+  const ua=navigator.userAgent;
+  const chromium=/Chrome\/|Chromium\/|Edg\//.test(ua)&&!/OPR\//.test(ua);
+  if(chromium)return;
+  const bar=document.getElementById("alertbar");
+  if(!bar.hidden)return;
+  bar.innerHTML="<b>PDF лучше сохранять из Chrome или Edge</b>"+
+    "<span>В этом браузере поля и фон в готовом файле могут отличаться. Заполнять оффер здесь можно, "+
+    "но для кнопки «Скачать PDF» откройте ссылку в Chrome.</span>";
+  bar.hidden=false;
 })();
 
 buildEditor();

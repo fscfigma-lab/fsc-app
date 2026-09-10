@@ -109,6 +109,18 @@ details.acc[open] > summary::before{content:"–"}
 details.acc > summary .num{font:500 10px/1 var(--mono);color:var(--ui-warm);margin-left:auto}
 .acc-body{padding:2px 16px 16px;display:flex;flex-direction:column;gap:11px}
 
+.simple{padding:14px 16px 16px;border-bottom:1px solid var(--ui-line);background:#fdfcfa;
+  display:flex;flex-direction:column;gap:11px}
+.simple h3{margin:0;font:600 12.5px/1.2 var(--text)}
+.simple .sub{margin:-6px 0 2px;font-size:11.5px;color:var(--ui-warm)}
+.simple .grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.advanced > summary{display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none;
+  padding:12px 16px;font:500 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ui-warm);
+  border-bottom:1px solid var(--ui-line)}
+.advanced > summary::-webkit-details-marker{display:none}
+.advanced > summary::before{content:"+";font:400 13px/1 var(--mono);color:var(--gold);width:10px}
+.advanced[open] > summary::before{content:"–"}
+.advanced > summary:hover{color:var(--gold)}
 .f{display:flex;flex-direction:column;gap:5px}
 .f > label{font:500 10px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ui-warm)}
 .f input[type=text],.f input[type=date],.f textarea,.f select{
@@ -146,7 +158,6 @@ details.acc > summary .num{font:500 10px/1 var(--mono);color:var(--ui-warm);marg
 .stagebar span{font:400 10px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:#a9a49a}
 .stagebar .warn{color:#e0a24a}
 .stagebar .sp{margin-left:auto}
-.stagebar #tip{color:#8d877c}
 .zoom{background:transparent;border:1px solid #636057;color:#e8e4db;border-radius:3px;padding:6px 8px;font:400 11px/1 var(--mono);cursor:pointer}
 .zoom[aria-pressed=true]{border-color:var(--gold);color:#e5c485}
 
@@ -264,12 +275,6 @@ ul.it li::before{content:"";position:absolute;left:0;top:1.7mm;width:1.8mm;heigh
 <div class="topbar">
   <div class="brand"><b>FSC Offer Builder</b><i>Stone · v1.0</i></div>
   <span class="state" id="state">Сохранено</span>
-  <select class="btn" id="preset" aria-label="Шаблон содержания">
-    <option value="">Пресет содержания…</option>
-    <option value="production">Производство</option>
-    <option value="office">Офис</option>
-    <option value="executive">Руководитель</option>
-  </select>
   <div class="dwrap">
     <button class="btn" id="dbtn" type="button" aria-expanded="false" aria-controls="dpanel">Черновики · <b id="dcount">1</b></button>
     <div class="panel" id="dpanel" hidden></div>
@@ -286,7 +291,6 @@ ul.it li::before{content:"";position:absolute;left:0;top:1.7mm;width:1.8mm;heigh
     <div class="stagebar">
       <span id="pages">— листов</span>
       <span class="warn" id="warn" hidden>Блок не влезает в лист — сократите текст</span>
-      <span id="tip">Печать: включите «Фоновая графика», поля — «Нет»</span>
       <span class="sp"></span>
       <button class="zoom" id="zfit" type="button" aria-pressed="true">По ширине</button>
       <button class="zoom" id="z100" type="button" aria-pressed="false">100%</button>
@@ -303,15 +307,17 @@ const MM=1123/297, USABLE=(297-13-11)*MM, TEXTW=210-36;
 /* ── данные ──────────────────────────────────────── */
 const DEF={
   v:1,
+  position:"tehnolog",
+  simple:{startDate:"",probMonths:"3",salaryProb:"",salaryMain:"",kpiMax:""},
   name:"Имя кандидата", greetTail:"мы приглашаем вас управлять **производством камня** Five Stone.",
   role:"Технолог производства",
   date:new Date().toISOString().slice(0,10),
   lead:"Мы строим международный бизнес на камне: раскрой, ЧПУ, сборка, полировка, ОТК. Ваш опыт и точность нужны нам там, где решается срок выпуска и качество изделия — в цехах.\nЭто предложение персональное: условия ниже мы обсуждали именно для вас.",
   facts:[
-    {l:"Оклад",v:"000 000 ₽",n:"на руки, основной период"},
-    {l:"KPI-бонус",v:"до 00 000 ₽",n:"ежемесячно, по плану цехов"},
+    {l:"Оклад",v:"{окладПослеИС}",n:"на руки, основной период"},
+    {l:"KPI-бонус",v:"до {кпи}",n:"ежемесячно, по плану цехов"},
     {l:"График",v:"5/2",n:"09:00 — 18:00"},
-    {l:"Оформление",v:"ТК РФ",n:"испытательный срок 3 месяца"}
+    {l:"Дата выхода",v:"{датаВыхода}",n:"испытательный срок {ис}"}
   ],
   about:{on:true,h:"Что вас ждёт в команде",t:"Мы строим глобальный высококлассный бизнес на принципах единства, инициативы и честности. Нам важно, чтобы каждый сотрудник был значимой частью команды, где уважают экспертное мнение, поощряют смелую инициативу и дают свободу профессионального развития."},
   duties:{on:true,h:"Ваш функционал",groups:[
@@ -323,10 +329,10 @@ const DEF={
   terms:{on:true,h:"Условия работы и оформление",items:[
     {l:"График работы",v:"**5/2, с 09:00 до 18:00** по производственному календарю, работа на производственной базе компании."},
     {l:"Трудоустройство",v:"Официальное **по ТК РФ** после испытательного срока. Возможно оформление на более раннем этапе по согласованию с руководителем."},
-    {l:"Испытательный срок",v:"**3 месяца** с фиксированным окладом и задачами, перечисленными ниже."},
+    {l:"Испытательный срок",v:"**{ис}** с фиксированным окладом и задачами, перечисленными ниже."},
     {l:"Место работы",v:"Производственная база FSC: цеха ЧПУ, сборки и полировки."}
   ]},
-  probation:{on:true,h:"Задачи на испытательный срок",intro:"Мы не оставляем испытательный срок на усмотрение обстоятельств — вот четыре фокусные задачи, по которым сверимся через три месяца.",items:[
+  probation:{on:true,h:"Задачи на испытательный срок",intro:"Мы не оставляем испытательный срок на усмотрение обстоятельств — вот четыре фокусные задачи, по которым сверимся через {ис}.",items:[
     {t:"Погружение в производство и продукт",d:"Изучить номенклатуру изделий из камня, материалы и технологические маршруты: раскрой, ЧПУ, сборка, полировка, ОТК, упаковка."},
     {t:"Понимание производственного цикла",d:"Освоить взаимодействие между ключевыми службами: производство, ОТК, склад, руководители проектов."},
     {t:"Освоение цеховых постов",d:"Взять под операционный контроль участок ЧПУ и пост полировщиков / сборщиков: загрузка смен, программы, инструмент, узкие места, сроки выпуска и дисциплина."},
@@ -334,16 +340,18 @@ const DEF={
   ]},
   pay:{on:true,h:"Мотивация и финансовые условия",intro:"Мы предлагаем прозрачную систему оплаты, привязанную к результату цеховой работы и выполнению производственного плана.",
     periods:[
-      {w:"Испытательный срок · 3 месяца",s:"000 000",u:"Фиксированный оклад на руки, ежемесячно.",p:"",pn:""},
-      {w:"Основной период · после ИС",s:"000 000",u:"Фиксированный оклад на руки, ежемесячно.",p:"до 00 000 ₽",pn:"KPI-бонус за план выпуска, качество и дисциплину цехов"}
+      {w:"Испытательный срок · {ис}",s:"{окладДоИС}",u:"Фиксированный оклад на руки, ежемесячно.",p:"",pn:""},
+      {w:"Основной период · после ИС",s:"{окладПослеИС}",u:"Фиксированный оклад на руки, ежемесячно.",p:"до {кпи}",pn:"KPI-бонус за план выпуска, качество и дисциплину цехов"}
     ],
     note:"Размер бонуса определяется по итогам месяца: соблюдение сроков по ГПР, отсутствие системного брака, работоспособность ЧПУ и выполнение сменного плана. В дальнейшем мотивация производства будет меняться в сторону сокращения фиксированной части и увеличения процента от выработки — с сохранением обозначенного уровня дохода."},
   expect:{on:true,h:"Наши ожидания",items:"Высокий уровень личной ответственности, системность и внимательность к деталям и качеству изделий.\nСпособность оперативно погружаться в цеховые процессы, управлять персоналом и держать под контролем несколько участков одновременно.\nГотовность отвечать за цеховую работу «под ключ»: сроки выпуска, качество изделий, взаимодействие с руководителем производства, ОТК и смежными службами."},
   sign:{on:true,accept:"С условиями официального предложения ознакомлен(а) и согласен(а):",rules:"Дата выхода, ФИО, Подпись"}
 };
 
+const POS_LABELS={tehnolog:"Технолог производства",office:"Менеджер проектов (черновик)",executive:"Руководитель производства (черновик)"};
 const PRESETS={
-  office:{
+  tehnolog:{},
+  office:{role:"Менеджер проектов",
     role:"Менеджер проектов",
     greetTail:"мы приглашаем вас в **проектный офис** Five Stone.",
     lead:"Мы строим международный бизнес на камне. Ваш опыт нужен нам там, где проект превращается в сроки, бюджет и результат для клиента.\nЭто предложение персональное: условия ниже мы обсуждали именно для вас.",
@@ -358,7 +366,7 @@ const PRESETS={
       {t:"Прозрачность",d:"Выстроить регулярную отчётность по срокам и бюджетам своих проектов."}
     ]}
   },
-  executive:{
+  executive:{role:"Руководитель производства",
     role:"Руководитель производства",
     greetTail:"мы предлагаем вам возглавить **производство** Five Stone.",
     lead:"Мы строим международный бизнес на камне и готовы передать вам производственный блок целиком: люди, оборудование, сроки, себестоимость.",
@@ -447,6 +455,33 @@ function openDraft(id){
   buildEditor();render();renderDrafts();
 }
 
+/* ── переменные кандидата: подстановка в текст должности ── */
+function money(v){
+  const d=String(v??"").replace(/\D+/g,"");
+  if(!d)return "—";
+  return d.replace(/\B(?=(\d{3})+(?!\d))/g," ")+" ₽";
+}
+function monthsWord(n){
+  const k=parseInt(String(n??"").replace(/\D+/g,""),10);
+  if(!k)return "—";
+  const last=k%10,two=k%100;
+  const w=(two>=11&&two<=14)?"месяцев":(last===1?"месяц":(last>=2&&last<=4?"месяца":"месяцев"));
+  return k+" "+w;
+}
+function fillVars(str){
+  const v=S.simple||{};
+  return String(str??"")
+    .split("{окладДоИС}").join(money(v.salaryProb))
+    .split("{окладПослеИС}").join(money(v.salaryMain))
+    .split("{кпи}").join(money(v.kpiMax))
+    .split("{ис}").join(monthsWord(v.probMonths))
+    .split("{датаВыхода}").join(ruDate(v.startDate)||"по согласованию");
+}
+
+const txt=s=>esc(fillVars(s));
+const btxt=s=>bold(fillVars(s));
+const sumHtml=v=>{const t=fillVars(v),m=t.match(/^(.*?)\s*₽$/);return m?`${esc(m[1])} <small>₽</small>`:esc(t)};
+
 /* ── утилиты ─────────────────────────────────────── */
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const rich=s=>esc(s).replace(/\*\*(.+?)\*\*/g,"<em>$1</em>");
@@ -513,8 +548,26 @@ function repHead(list,i,label){
 }
 
 function renderEditor(){
+  const posOpts=Object.keys(POS_LABELS).map(k=>
+    `<option value="${k}"${S.position===k?" selected":""}>${esc(POS_LABELS[k])}</option>`).join("");
+  const simple=`<div class="simple">
+    <h3>Оффер под кандидата</h3>
+    <p class="sub">Выберите должность и заполните пять полей — остальной текст уже готов.</p>
+    <div class="f"><label for="i_position">Должность</label>
+      <select id="i_position" data-position="1">${posOpts}</select></div>
+    ${fText("name","ФИО кандидата")}
+    <div class="grid">
+      ${fDate("simple.startDate","Дата выхода")}
+      ${fText("simple.probMonths","Испытательный срок, месяцев")}
+    </div>
+    <div class="grid">
+      ${fText("simple.salaryProb","Оклад на испытательный срок, ₽")}
+      ${fText("simple.salaryMain","Оклад после испытательного срока, ₽")}
+    </div>
+    ${fText("simple.kpiMax","KPI-бонус, ₽ (если есть)","Оставьте пустым, если бонуса нет")}
+  </div>`;
   const e=[];
-  e.push(acc("Кандидат и должность","",[
+  e.push(acc("Кандидат и приветствие","",[
     fText("name","Обращение по имени"),
     fArea("greetTail","Продолжение приветствия","**жирные звёздочки** — золотой курсив в заголовке",2),
     fText("role","Должность"),
@@ -565,12 +618,16 @@ function renderEditor(){
   e.push(acc("Подписи",S.sign.on?"вкл":"выкл",
     fVis("sign.on","Показывать блок")+fArea("sign.accept","Текст принятия","",2)+fText("sign.rules","Строки для заполнения через запятую")));
 
-  document.getElementById("editor").innerHTML=e.join("");
+  document.getElementById("editor").innerHTML=simple+
+    `<details class="advanced"${advOpen?" open":""}><summary>Все поля шаблона</summary>${e.join("")}</details>`;
 }
 
 // пересборка редактора не должна закрывать разделы и терять место прокрутки
+let advOpen=false;
 function buildEditor(){
   const ed=document.getElementById("editor");
+  const adv=ed.querySelector("details.advanced");
+  if(adv)advOpen=adv.open;
   const wasOpen={},scroll=ed.scrollTop;
   ed.querySelectorAll("details.acc").forEach(d=>{wasOpen[d.dataset.acc]=d.open});
   renderEditor();
@@ -594,19 +651,19 @@ function units(){
     <p class="eyeb">Персональное предложение · ${esc(ruDate(S.date))}</p>
     <h1 class="hi">${esc(S.name)}${S.name?", ":""}${rich(S.greetTail)}</h1>
     <p class="role">${esc(S.role)}</p>
-    ${lines(S.lead).map(p=>`<p class="lead">${esc(p)}</p>`).join("")}
-    ${S.facts.length?`<dl class="facts">${S.facts.map(f=>`<div><dt>${esc(f.l)}</dt><dd>${esc(f.v)}${f.n?`<span>${esc(f.n)}</span>`:""}</dd></div>`).join("")}</dl>`:""}`,false,"u--head");
+    ${lines(S.lead).map(p=>`<p class="lead">${txt(p)}</p>`).join("")}
+    ${S.facts.length?`<dl class="facts">${S.facts.map(f=>`<div><dt>${esc(f.l)}</dt><dd>${txt(f.v)}${f.n?`<span>${txt(f.n)}</span>`:""}</dd></div>`).join("")}</dl>`:""}`,false,"u--head");
 
   const sec=(i,h,body,cont)=>`<section class="sec${cont?" sec--cont":""}"><div class="idx">${i}</div><div>${h?`<h2>${esc(h)}</h2>`:""}${body}</div></section>`;
 
   if(S.about.on&&(S.about.t||"").trim())
-    push(sec(idx(),S.about.h,lines(S.about.t).map(p=>`<p>${esc(p)}</p>`).join("")));
+    push(sec(idx(),S.about.h,lines(S.about.t).map(p=>`<p>${txt(p)}</p>`).join("")));
 
   if(S.duties.on&&S.duties.groups.length){
     const i=idx();const L="АБВГДЕЖЗИК";
     S.duties.groups.forEach((g,k)=>{
       const body=`<div class="grp"><h3><b>${L[k]||k+1}</b>${esc(g.t)}</h3>
-        <ul class="it">${lines(g.items).map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`;
+        <ul class="it">${lines(g.items).map(x=>`<li>${txt(x)}</li>`).join("")}</ul></div>`;
       push(sec(k?"":i,k?"":S.duties.h,body,!!k),k<S.duties.groups.length-1);
     });
     if(S.route.on&&commas(S.route.steps).length)
@@ -614,27 +671,27 @@ function units(){
   }
 
   if(S.terms.on&&S.terms.items.length)
-    push(sec(idx(),S.terms.h,`<dl class="terms">${S.terms.items.map(t=>`<div><dt>${esc(t.l)}</dt><dd>${bold(t.v)}</dd></div>`).join("")}</dl>`));
+    push(sec(idx(),S.terms.h,`<dl class="terms">${S.terms.items.map(t=>`<div><dt>${esc(t.l)}</dt><dd>${btxt(t.v)}</dd></div>`).join("")}</dl>`));
 
   if(S.probation.on&&S.probation.items.length){
     const i=idx();
-    push(sec(i,S.probation.h,(S.probation.intro?`<p style="margin-bottom:3mm">${esc(S.probation.intro)}</p>`:"")+
-      `<div class="tasks">${S.probation.items.map(t=>`<div class="task"><div><h4>${esc(t.t)}</h4><p>${esc(t.d)}</p></div></div>`).join("")}</div>`));
+    push(sec(i,S.probation.h,(S.probation.intro?`<p style="margin-bottom:3mm">${txt(S.probation.intro)}</p>`:"")+
+      `<div class="tasks">${S.probation.items.map(t=>`<div class="task"><div><h4>${txt(t.t)}</h4><p>${txt(t.d)}</p></div></div>`).join("")}</div>`));
   }
 
   if(S.pay.on&&S.pay.periods.length){
     const i=idx();
     push(sec(i,S.pay.h,(S.pay.intro?`<p style="margin-bottom:3.4mm">${esc(S.pay.intro)}</p>`:"")+
       `<div class="pay" style="grid-template-columns:repeat(${Math.min(S.pay.periods.length,2)},1fr)">${
-        S.pay.periods.map(p=>`<div class="pay-card"><p class="when">${esc(p.w)}</p>
-          <p class="sum">${esc(p.s)} <small>₽</small></p>
-          ${p.u?`<p class="unit">${esc(p.u)}</p>`:""}
-          ${p.p?`<p class="plus"><i>+</i><span>${esc(p.p)}</span>${p.pn?`<em>${esc(p.pn)}</em>`:""}</p>`:""}</div>`).join("")}</div>`+
-      (S.pay.note?`<p class="pnote">${esc(S.pay.note)}</p>`:"")));
+        S.pay.periods.map(p=>`<div class="pay-card"><p class="when">${txt(p.w)}</p>
+          <p class="sum">${sumHtml(p.s)}</p>
+          ${p.u?`<p class="unit">${txt(p.u)}</p>`:""}
+          ${p.p?`<p class="plus"><i>+</i><span>${txt(p.p)}</span>${p.pn?`<em>${txt(p.pn)}</em>`:""}</p>`:""}</div>`).join("")}</div>`+
+      (S.pay.note?`<p class="pnote">${txt(S.pay.note)}</p>`:"")));
   }
 
   if(S.expect.on&&lines(S.expect.items).length)
-    push(sec(idx(),S.expect.h,`<ul class="it">${lines(S.expect.items).map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`));
+    push(sec(idx(),S.expect.h,`<ul class="it">${lines(S.expect.items).map(x=>`<li>${txt(x)}</li>`).join("")}</ul>`));
 
   if(S.sign.on)
     push(`<div class="sign"><div><p class="cap">От компании</p>
@@ -791,6 +848,16 @@ function paginate(u){
     const bal=fill(total/pages.length);
     if(bal.length===pages.length&&!over)pages=bal;else over=wasOver;
   }
+  // последний лист не должен нести один сиротливый блок — стягиваем к нему предыдущий
+  const pageH=p=>p.reduce((a,c)=>a+c.h,0)+GAP*(p.length-1);
+  for(let pass=0;pass<3;pass++){
+    const last=pages[pages.length-1],prev=pages[pages.length-2];
+    if(!prev||last.length!==1||prev.length<2)break;
+    if(pageH(last)>USABLE*0.35)break;
+    const moved=prev[prev.length-1];
+    if(pageH(last)+GAP+moved.h>USABLE)break;
+    prev.pop();last.unshift(moved);
+  }
   return {pages,over};
 }
 
@@ -943,12 +1010,17 @@ document.getElementById("file").onchange=async e=>{
   }catch(err){alert("Не удалось прочитать файл: "+err.message+"\n\nНужен JSON, выгруженный кнопкой «Экспорт JSON».")}
   e.target.value="";
 };
-document.getElementById("preset").onchange=e=>{
-  const p=e.target.value;e.target.value="";
-  if(!p)return;
-  if(!confirm("Заменить содержание пресетом «"+p+"»? Текущий текст будет потерян."))return;
-  S=Object.assign(clone(DEF),clone(PRESETS[p]||{}));buildEditor();touch();
-};
+ED.addEventListener("change",e=>{
+  if(!e.target.dataset.position)return;
+  const k=e.target.value;
+  if(!confirm(`Заменить текст оффера на должность «${POS_LABELS[k]}»? Внесённые правки текста будут потеряны, а ФИО, даты и суммы сохранятся.`)){
+    e.target.value=S.position;return;
+  }
+  const keep={position:k,simple:clone(S.simple),name:S.name,date:S.date};
+  S=Object.assign(normalize(clone(DEF)),clone(PRESETS[k]||{}),keep);
+  buildEditor();render();touch();
+});
+
 document.getElementById("zfit").onclick=()=>{mode="fit";sync()};
 document.getElementById("z100").onclick=()=>{mode="100";sync()};
 function sync(){

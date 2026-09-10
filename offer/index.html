@@ -246,11 +246,11 @@ ul.it li::before{content:"";position:absolute;left:0;top:1.7mm;width:1.8mm;heigh
 @page{size:A4 portrait;margin:0}
 @media print{
   html,body{background:#fff}
-  .topbar,.editor,.stagebar{display:none!important}
+  .topbar,.editor,.stagebar,#alertbar{display:none!important}
   .app{display:block;height:auto}
   .stage{background:#fff;overflow:visible;padding:0}
   .stack{display:block;transform:none!important}
-  .sheet{box-shadow:none;margin:0;break-after:page;page-break-after:always}
+  .sheet{box-shadow:none;margin:0;break-after:page;page-break-after:always;break-inside:avoid}
   .sheet:last-child{break-after:auto;page-break-after:auto}
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
